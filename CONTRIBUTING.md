@@ -2,30 +2,17 @@
 
 ## Branch strategy
 
-| Branch | Mục đích | Nguồn tạo | Merge vào |
-|---|---|---|---|
-| `main` | Bản ổn định, có thể demo/release | `dev` | - |
-| `dev` | Tích hợp công việc trong sprint | `main` lúc khởi tạo | `main` |
-| `feature/<slug>` | Tính năng hoặc thuật toán mới | `dev` | `dev` |
-| `fix/<slug>` | Sửa lỗi thông thường | `dev` | `dev` |
-| `docs/<slug>` | Tài liệu | `dev` | `dev` |
-| `experiment/<slug>` | Thử nghiệm chưa cam kết | `dev` | thường không merge trực tiếp |
-| `hotfix/<slug>` | Lỗi khẩn cấp trên bản ổn định | `main` | `main`, sau đó đồng bộ `dev` |
+| Branch              | Mục đích                         | Nguồn tạo           | Merge vào                    |
+| ------------------- | -------------------------------- | ------------------- | ---------------------------- |
+| `main`              | Bản ổn định, có thể demo/release | `dev`               | -                            |
+| `dev`               | Tích hợp công việc trong sprint  | `main` lúc khởi tạo | `main`                       |
+| `feature/<slug>`    | Tính năng hoặc thuật toán mới    | `dev`               | `dev`                        |
+| `fix/<slug>`        | Sửa lỗi thông thường             | `dev`               | `dev`                        |
+| `docs/<slug>`       | Tài liệu                         | `dev`               | `dev`                        |
+| `experiment/<slug>` | Thử nghiệm chưa cam kết          | `dev`               | thường không merge trực tiếp |
+| `hotfix/<slug>`     | Lỗi khẩn cấp trên bản ổn định    | `main`              | `main`, sau đó đồng bộ `dev` |
 
 Tên branch viết thường, dùng dấu gạch ngang, không dùng tên cá nhân. Ví dụ: `feature/bfs-search-events`, `feature/gps-location-api`, `fix/one-way-edge-cost`.
-
-## Khởi tạo `dev` lần đầu
-
-Sau khi commit khung repository lên `main`, Tech Lead tạo nhánh tích hợp:
-
-```bash
-git switch main
-git pull --ff-only origin main
-git switch -c dev
-git push -u origin dev
-```
-
-Trên GitHub, bật branch protection cho `main` và `dev`: yêu cầu pull request, ít nhất một approval, conversation đã resolve và status checks chạy thành công.
 
 ## Luồng làm việc cho một task
 
