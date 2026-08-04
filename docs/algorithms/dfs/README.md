@@ -2,9 +2,8 @@
 
 - **Owner**: Kiên
 - **Branch**: `feature/dfs-search`
-- **Test folder**: `backend/tests/unit/algorithms/graph_search/dfs/`
-- **Docs folder**: `docs/algorithms/dfs/`
-- **Flowchart file**: [flowchart.mmd](file:///d:/RescueRoute/backend/app/algorithms/graph_search/dfs/flowchart.mmd)
+- **Source location**: `backend/app/algorithms/graph_search/dfs/`
+- **Flowchart file**: [flowchart.mmd](file:///d:/RescueRoute/docs/algorithms/dfs/flowchart.mmd)
 
 ---
 
@@ -99,7 +98,7 @@ def solve_dfs(graph, start_node_id, goal_node_id, cost_profile) -> SearchResult:
 
 ## Algo4: Flowchart
 
-> File nguồn sơ đồ Mermaid tách riêng: [flowchart.mmd](file:///d:/RescueRoute/backend/app/algorithms/graph_search/dfs/flowchart.mmd)
+> File nguồn sơ đồ Mermaid tách riêng: [flowchart.mmd](file:///d:/RescueRoute/docs/algorithms/dfs/flowchart.mmd)
 
 ```mermaid
 flowchart TD
