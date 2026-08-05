@@ -11,19 +11,30 @@ __pycache__/
 *.py[cod]
 *$py.class
 .Python
+.python-version
 .venv/
 venv/
 env/
 ENV/
+.direnv/
+.envrc
 .pytest_cache/
+.hypothesis/
 .mypy_cache/
+.pyright/
+.pytype/
 .ruff_cache/
+.tox/
+.nox/
 .coverage
 .coverage.*
 htmlcov/
 coverage.xml
+junit.xml
+*.prof
 *.egg-info/
 .eggs/
+pip-wheel-metadata/
 build/
 dist/
 
@@ -85,4 +96,3 @@ test-results/
 # Deployment providers
 .vercel/
 .render/
-
