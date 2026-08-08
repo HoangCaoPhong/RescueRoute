@@ -86,3 +86,7 @@ test-results/
 .vercel/
 .render/
 
+# temp data
+pois.csv
+pois_with_labels.csv
+full_processed_train.csv
