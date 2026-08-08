@@ -9,7 +9,7 @@ from scipy.spatial import cKDTree
 
 # load dataset
 def read():
-    dataset_path = os.path.join(os.path.dirname(__file__), 'dataset')
+    dataset_path = os.path.join(os.path.dirname(__file__), '../data/processed')
 
     df_nodes = pd.read_csv(os.path.join(dataset_path, 'nodes.csv'))
     df_segment_status = pd.read_csv(os.path.join(dataset_path, 'segment_status.csv'))
@@ -135,48 +135,3 @@ def A_Star_Search(graph, start, goal, heuristic):
     return None
 
 
-print(df_nodes[['long', 'lat']].drop_duplicates().reset_index(drop=True).shape)
-print(df_segment_status[df_segment_status['velocity'] == max(df_segment_status['velocity'])])
-print(df_streets.shape)
-print(df_segments.shape)
-
-
-
-
-# 1. Download HCMC POIs & Traffic Features from OpenStreetMap
-tags = {
-    'amenity': True,   # Schools, hospitals, banks, parking
-    'building': True,  # Offices, commercial plazas
-    'tourism': True,   # Landmarks, parks
-    'highway': ['traffic_signals', 'motorway_junction', 'bus_stop'] # Relevant for traffic data
-}
-print("Downloading HCMC POIs from OSM...")
-pois_gdf = ox.features_from_place("Ho Chi Minh City, Vietnam", tags=tags)
-pois_gdf = pois_gdf[pois_gdf['name'].notnull()][['name', 'geometry']].copy()
-
-# 2. Project POIs to UTM Zone 48N (EPSG:32648) for accurate meter-based distances in HCMC
-pois_gdf = pois_gdf.to_crs(epsg=32648)
-poi_coords = np.array([(geom.centroid.x, geom.centroid.y) for geom in pois_gdf.geometry])
-poi_names = pois_gdf['name'].values
-
-# 3. Build 2D Spatial KD-Tree in memory
-tree = cKDTree(poi_coords)
-
-# 4. Real nodes dataset
-df_nodes
-
-# Convert node coordinates to meters (EPSG:32648)
-nodes_gdf = gpd.GeoDataFrame(
-    df_nodes, geometry=gpd.points_from_xy(df_nodes['long'], df_nodes['lat']), crs="EPSG:4326"
-).to_crs(epsg=32648)
-
-node_coords = np.array([(geom.x, geom.y) for geom in nodes_gdf.geometry])
-
-# 5. Query nearest POI for all 570,000 nodes in parallel (~1-2 seconds)
-distances, indices = tree.query(node_coords, k=1)
-
-# 6. Assign nearest landmark & exact distance in meters back to DataFrame
-df_nodes['nearest_location'] = poi_names[indices]
-df_nodes['distance_meters'] = np.round(distances, 2)
-
-print(df_nodes.head())
