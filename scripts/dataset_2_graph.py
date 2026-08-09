@@ -156,7 +156,9 @@ def A_Star_Search(graph, start, goal, heuristic):
 # Example usage
 def main():
     # enrich data
-    enrich_data.enrich_segments()
+    if not os.path.exists(os.path.join(os.path.dirname(__file__), '../data/processed/base_segments.csv')):
+        print("Base segments data not found. Enriching data...")
+        enrich_data.enrich_segments()
 
     df_nodes, df_train, df_base = read()
 
@@ -169,13 +171,16 @@ def main():
         print("Not enough nodes in the graph for the current period.")
         return
 
-    for i in range(len(valid_nodes)):
-        start_node = valid_nodes[i]
-        for j in range(len(valid_nodes)):
-            if i != j:
-                goal_node = valid_nodes[j]
-                path = Breadth_First_Search(graph, start_node, goal_node)
-                print(f"BFS Path from {start_node} to {goal_node}:", path)
+    # for i in range(len(valid_nodes)):
+    #     start_node = valid_nodes[i]
+    #     for j in range(len(valid_nodes)):
+    #         if i != j:
+    #             goal_node = valid_nodes[j]
+    #             path = Breadth_First_Search(graph, start_node, goal_node)
+    #             print(f"BFS Path from {start_node} to {goal_node}:", path)
+
+    start_node = valid_nodes[0]
+    goal_node = valid_nodes[20]
 
     path = Breadth_First_Search(graph, start_node, goal_node)
     print("BFS Path:", path)
