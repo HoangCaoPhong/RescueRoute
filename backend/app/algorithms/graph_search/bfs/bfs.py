@@ -1,153 +1,152 @@
-import csv
 from collections import deque
-from pathlib import Path
 from time import perf_counter
 
 
-def load_graph(edges_file):
-    """
-    Convert edges.csv to directed adjacency list.
-
-    graph[u] = [v1, v2, ...]
-    """
-
-    graph = {}
-
-    with open(edges_file, "r", encoding="utf-8-sig") as file:
-        reader = csv.DictReader(file)
-
-        for row in reader:
-            u = row["source_node_id"]
-            v = row["target_node_id"]
-
-            graph.setdefault(u, []).append(v)
-            graph.setdefault(v, [])
-
-    return graph
-
-
-def reconstruct_path(parent, goal):
-    """Reconstruct path from start to goal."""
-
+def reconstruct_path(parent, goal_node_id):
+    """Reconstruct path from start node to goal node."""
     path = []
-    current = goal
+    current = goal_node_id
 
     while current is not None:
         path.append(current)
         current = parent[current]
 
-    return path[::-1]   #đảo ngược để truy tìm đường đi
+    return path[::-1]
 
 
-def bfs(graph, start, goal):
+def get_neighbors(graph, node_id):
+    """Get neighbors in deterministic order."""
+
+    # Temporary support for adjacency-dict graph used in unit tests
+    if isinstance(graph, dict):
+        neighbors = graph.get(node_id, [])
+        return sorted(str(node) for node in neighbors)
+
+    # Common Graph abstraction
+    edges = graph.get_neighbors(node_id)
+    return sorted(str(edge.v) for edge in edges)
+
+
+def has_node(graph, node_id):
+    """Check whether node exists in graph."""
+    if isinstance(graph, dict):
+        return node_id in graph
+
+    return graph.has_node(node_id)
+
+
+def calculate_path_metrics(graph, path, cost_profile):
     """
-    Breadth-First Search.
-
-    BFS finds a path with the minimum number of edges (hops).
-    It does not optimize distance, time, congestion, or cost.
+    Calculate route metrics after BFS has found a path.
+    BFS does not use these metrics to choose which node to explore.
     """
 
-    start = str(start)
-    goal = str(goal)
+    if hasattr(graph, "calculate_path_metrics"):
+        return graph.calculate_path_metrics(path, cost_profile)
 
-    if start not in graph or goal not in graph:
-        return None
+    # Adjacency-dict graph used in current unit tests
+    # does not contain edge attributes.
+    return None, None, None
 
-    queue = deque([start])
-    visited = {start}
 
-    parent = {
-        start: None
-    }
+def solve_bfs(
+    graph,
+    start_node_id,
+    goal_node_id,
+    cost_profile=None
+):
+    """
+    Breadth-First Search (BFS).
 
-    explored_order = []
-    frontier_steps = []
+    BFS uses a FIFO queue and explores the graph level by level.
 
+    It guarantees a minimum-hop path when all edges are treated equally.
+    It does not optimize distance, travel time, congestion, or traffic cost.
+    """
+
+    start_node_id = str(start_node_id)
+    goal_node_id = str(goal_node_id)
     start_time = perf_counter()
 
+    # Validate input
+    if (
+        not has_node(graph, start_node_id)
+        or not has_node(graph, goal_node_id)
+    ):
+        raise ValueError(
+            f"Start node '{start_node_id}' or "
+            f"goal node '{goal_node_id}' does not exist."
+        )
+
+    # BFS initialization
+    queue = deque([start_node_id])
+    visited = {start_node_id}
+    parent = {start_node_id: None}
+    
+    visited_order = []
+    frontier_steps = []
+
+    # BFS search
     while queue:
-        current = queue.popleft()
 
-        explored_order.append(current)
+        # Record frontier before expanding current node
+        frontier_steps.append(list(queue))
+        current_node = queue.popleft()
+        visited_order.append(current_node)
 
-        if current == goal:
-            frontier_steps.append({
-                "current": current,
-                "frontier": list(queue),
-                "explored": explored_order.copy()
-            })
-            path = reconstruct_path(parent, goal)
+        # Goal found
+        if current_node == goal_node_id:
 
-            processing_time_ms = (
-                perf_counter() - start_time
-            ) * 1000
+            path = reconstruct_path(parent,goal_node_id)
+            (total_distance,estimated_time,total_cost) = calculate_path_metrics(graph,path,cost_profile)
+
+            processing_time_ms = (perf_counter() - start_time) * 1000.0
 
             return {
                 "path": path,
-                "hop_count": len(path) - 1,
-                "explored_order": explored_order,
-                "explored_count": len(explored_order),
-                "processing_time_ms": processing_time_ms
+                "visited_order": visited_order,
+                "frontier_steps": frontier_steps,
+
+                "total_distance": total_distance,
+                "estimated_time": estimated_time,
+                "total_cost": total_cost,
+
+                "explored_nodes": len(visited_order),
+                "processing_time_ms": processing_time_ms,
+
+                # BFS is optimal for minimum number of hops.
+                "is_optimal": True,
+
+                "explanation_data": {
+                    "algorithm": "BFS",
+                    "optimality": "minimum_hops",
+                    "message": (
+                        "BFS finds a path with the minimum number "
+                        "of edges when all edges are treated equally. "
+                        "It does not guarantee minimum distance, "
+                        "travel time, or traffic cost."
+                    )
+                },
+
+                # BFS-specific additional metric
+                "hop_count": len(path) - 1
             }
 
-        for neighbor in graph[current]:
+        # Expand neighbors
+        for neighbor_node in get_neighbors(
+            graph,
+            current_node
+        ):
+            if neighbor_node not in visited:
 
-            if neighbor not in visited:
-                visited.add(neighbor)
+                # Mark visited when inserted into queue
+                # to prevent duplicate entries.
+                visited.add(neighbor_node)
+                parent[neighbor_node] = current_node
+                queue.append(neighbor_node)
 
-                parent[neighbor] = current
-
-                queue.append(neighbor)
-
-        # Save BFS state after expanding current node
-        frontier_steps.append({
-            "current": current,
-            "frontier": list(queue),
-            "explored": explored_order.copy()
-        })
-    processing_time_ms = (perf_counter() - start_time) * 1000
-    return {
-        "path": None,
-        "hop_count": None,
-        "explored_order": explored_order,
-        "explored_count": len(explored_order),
-        "frontier_steps": frontier_steps,
-        "processing_time_ms": processing_time_ms
-    }
-
-#demo test
-if __name__ == "__main__":
-
-    project_root = Path(__file__).resolve().parents[5]
-
-    edges_file = (
-        project_root
-        / "data"
-        / "samples"
-        / "simulated_vietnamese_traffic"
-        / "edges.csv"
+    # No route found
+    raise ValueError(
+        f"No route found from "
+        f"'{start_node_id}' to '{goal_node_id}'."
     )
-
-    graph = load_graph(edges_file)
-
-    print("Number of nodes:", len(graph))
-
-    number_of_edges = sum(
-        len(neighbors)
-        for neighbors in graph.values()
-    )
-
-    print("Number of edges:", number_of_edges)
-
-    start = "4658499310"
-    goal = "366453620"
-
-    result = bfs(graph, start, goal)
-
-    print("Path:", result["path"])
-    print("Hop count:", result["hop_count"])
-    print("Explored:", result["explored_order"])
-    print("Explored count:", result["explored_count"])
-    print("Processing time:", result["processing_time_ms"], "ms")  
-
-     
