@@ -11,32 +11,15 @@ from scipy.spatial import cKDTree
 def read():
     dataset_path = os.path.join(os.path.dirname(__file__), '../data/processed')
 
-    df_nodes = pd.read_csv(os.path.join(dataset_path, 'nodes.csv'))
-    df_segment_status = pd.read_csv(os.path.join(dataset_path, 'segment_status.csv'))
-    df_segments = pd.read_csv(os.path.join(dataset_path, 'segments.csv'))
-    df_streets = pd.read_csv(os.path.join(dataset_path, 'streets.csv'))
-    df_train = pd.read_csv(os.path.join(dataset_path, 'train.csv'))
+    df_nodes = pd.read_csv(os.path.join(dataset_path, 'nodes_with_poi_labels.csv'))
+    df_train = pd.read_csv(os.path.join(dataset_path, 'processed_train.csv'))
 
-    return df_nodes, df_segment_status, df_segments, df_streets, df_train
-
-
-# LOS dictionary
-LOS_dict = {
-    'A': 1.0,
-    'B': 1.0,
-    'C': 2.0,
-    'D': 3.0,
-    'E': 5.0,
-    'F': 8.0
-}
+    return df_nodes, df_train
 
 
 # cost function
-def calc_actual_velocity(df_train, LOS_dict):
-    return 70.0 / LOS_dict[df_train['LOS']]
-
-def calc_cost(time, congestion, risk):
-    return 0.5*time + 0.3*(congestion**2) + 0.2*(risk**2)
+def calc_cost(time, congestion, risk, parameters=(0.648, 0.23, 0.122)):
+    return parameters[0]*time + parameters[1]*(congestion**2) + parameters[2]*(risk**2)
 
 
 # datetime.now() to period
@@ -53,13 +36,11 @@ def time2period():
         next_hour = (hour + 1) % 24
         return f"period_{next_hour}_00"
 
-# raw data to graph data
+# processed data to graph data
 def build_graph(df_train, LOS_dict):
     period_now = time2period()
     df_train = df_train[df_train['period'] == period_now]
-    df_train['actual_velocity'] = df_train.apply(calc_actual_velocity, axis=1, LOS_dict=LOS_dict)
-    df_train['time'] = df_train['length'] / df_train['actual_velocity']
-    df_train['cost'] = df_train.apply(lambda row: calc_cost(row['time'], LOS_dict[row['LOS']], row['street_level']), axis=1)
+    df_train['cost'] = df_train.apply(lambda row: calc_cost(row['time'], LOS_dict[row['congestion_factor']], row['risk_factor']), axis=1)
 
     graph = defaultdict(dict)
     for _, row in df_train.iterrows():
