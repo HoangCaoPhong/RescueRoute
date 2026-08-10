@@ -520,13 +520,19 @@
             let multiLines = {
                 normal: [], // Level <= 2
                 heavy: [],  // Level 3
-                severe: []  // Level >= 4
+                severe: [], // Level 4
+                level5: [], // Level 5
+                level6: []  // Level 6
             };
 
             // Group edges by congestion level for batch rendering
             edgesData.forEach(edge => {
                 let coords = [[edge.u_lat, edge.u_lng], [edge.v_lat, edge.v_lng]];
-                if (edge.congestion_level >= 4) {
+                if (edge.congestion_level === 6) {
+                    multiLines.level6.push(coords);
+                } else if (edge.congestion_level === 5) {
+                    multiLines.level5.push(coords);
+                } else if (edge.congestion_level >= 4) {
                     multiLines.severe.push(coords);
                 } else if (edge.congestion_level == 3) {
                     multiLines.heavy.push(coords);
@@ -535,7 +541,7 @@
                 }
             });
 
-            // Render as 3 large MultiPolylines (drastically improves Canvas performance)
+            // Render as large MultiPolylines (drastically improves Canvas performance)
             if (multiLines.normal.length > 0) {
                 edgePolylines['normal'] = L.polyline(multiLines.normal, {
                     color: '#38bdf8', weight: 2, opacity: 0.3, interactive: false
@@ -549,6 +555,16 @@
             if (multiLines.severe.length > 0) {
                 edgePolylines['severe'] = L.polyline(multiLines.severe, {
                     color: '#f43f5e', weight: 4, opacity: 0.95, interactive: false
+                }).addTo(map);
+            }
+            if (multiLines.level5.length > 0) {
+                edgePolylines['level5'] = L.polyline(multiLines.level5, {
+                    color: '#eab308', weight: 4, opacity: 0.95, interactive: false
+                }).addTo(map);
+            }
+            if (multiLines.level6.length > 0) {
+                edgePolylines['level6'] = L.polyline(multiLines.level6, {
+                    color: '#ff0000', weight: 5, opacity: 1.0, interactive: false
                 }).addTo(map);
             }
         }
