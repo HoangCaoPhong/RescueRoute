@@ -4,6 +4,7 @@ from collections import defaultdict, deque
 from datetime import datetime
 import geopandas as gpd
 import enrich_data
+import json
 
 # load dataset
 def read():
@@ -18,7 +19,7 @@ def read():
 
 # cost function
 def calc_cost(time, congestion, risk, parameters=(0.648, 0.23, 0.122)):
-    return parameters[0]*time + parameters[1]*(congestion**2) + parameters[2]*(risk**2)
+    return parameters[0]*time + parameters[1]*congestion + parameters[2]*risk
 
 def map_congestion_to_level(factor):
     if factor < 1.4: return 1
@@ -60,16 +61,23 @@ def get_nearby_periods():
     periods = [f"period_{h}_{m:02d}" for h, m in slots]
     return periods
 
+
 # processed data to graph data
 def build_graph(df_base, df_train):
     nearby_periods = get_nearby_periods()
     print(f"Filtering traffic data for nearby periods: {nearby_periods}")
     
+    params_path = os.path.join(os.path.dirname(__file__), '../data/processed/cost_parameters.json')
+    if os.path.exists(params_path):
+        with open(params_path, 'r') as f:
+            data = json.load(f)
+            parameters = (data.get('a', 0.648), data.get('b', 0.23), data.get('c', 0.122))
+    
     df_train_filtered = df_train[df_train['period'].isin(nearby_periods)].copy()
     
     if not df_train_filtered.empty:
         df_train_filtered['cost'] = df_train_filtered.apply(
-            lambda row: calc_cost(row['time'], row['congestion_factor'], row['risk_factor']), axis=1
+            lambda row: calc_cost(row['time'], row['congestion_factor'], row['risk_factor'], parameters), axis=1
         )
         agg_train = df_train_filtered.groupby(['s_node_id', 'e_node_id']).agg({'cost': 'mean', 'congestion_factor': 'mean'}).reset_index()
     else:
@@ -83,8 +91,7 @@ def build_graph(df_base, df_train):
         v = row['e_node_id']
         w = row['base_cost']
         length = row['length']
-        name = f"Đoạn {u} -> {v}"
-        graph[u][v] = [w, 1, length, name]
+        graph[u][v] = [w, 1, length]
         
     # 2. Overwrite with dynamic traffic cost where available
     for _, row in agg_train.iterrows():
