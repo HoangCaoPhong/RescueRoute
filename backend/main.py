@@ -38,6 +38,7 @@ class GraphManager:
         self.kdtree = None
         self.road_node_ids_array = np.array([])
         self.hospitals = []
+        self.pois = []
         self.dynamic_edges_count = 0
         self.ambulance_lat = 10.7735
         self.ambulance_lng = 106.6980
@@ -71,7 +72,7 @@ class GraphManager:
                 v_node = self.road_nodes.get(v)
                 if u_node and v_node:
                     item = {
-                        "edge_id": edge_id, "name": edge_data[3], "distance": edge_data[2],
+                        "edge_id": edge_id, "name": f"Đoạn {u}-{v}", "distance": edge_data[2],
                         "congestion_level": edge_data[1], "congestion_factor": 1.0,
                         "current_cost": round(edge_data[0], 2), "base_cost": round(edge_data[0], 2),
                         "u_lat": u_node["lat"], "u_lng": u_node["lng"], "v_lat": v_node["lat"], "v_lng": v_node["lng"]
@@ -92,6 +93,7 @@ class GraphManager:
             self.kdtree = cKDTree(coords_rad)
             
         hospitals_list = []
+        pois_list = []
         for _, row in df_nodes.iterrows():
             p_name = str(row["poi_name"]) if pd.notna(row["poi_name"]) and str(row["poi_name"]) != "None" else None
             p_label = str(row["poi_label"]) if pd.notna(row["poi_label"]) else "Background"
@@ -104,9 +106,15 @@ class GraphManager:
                 target_node_id = nearest_road_node["id"] if nearest_road_node else n_id
                 hospitals_list.append({
                     "node_id": target_node_id, "poi_node_id": n_id, "name": p_name,
-                    "type": p_label if p_label != "Background" else "Bệnh viện / Cơ sở Y tế", "lat": lat, "lng": lng
+                    "type": p_label if p_label != "Background" else "Bệnh viện / Cơ sở Y tế", "lat": lat, "lng": lng, "is_hospital": True
+                })
+            elif p_name or p_label != "Background":
+                pois_list.append({
+                    "node_id": n_id, "poi_node_id": n_id, "name": p_name,
+                    "type": p_label, "lat": lat, "lng": lng, "is_hospital": False
                 })
         self.hospitals = hospitals_list
+        self.pois = pois_list
         self.nodes = self.road_nodes # Alias cho tương thích
         self.is_loaded = True
         
@@ -352,21 +360,13 @@ async def health():
 
 @app.get("/api/nodes")
 @app.get("/api/v1/nodes")
-async def get_nodes(poi_type: Optional[str] = Query("hospital"), limit: int = Query(500)):
-    """Hiển thị danh sách các bệnh viện/trạm y tế trên bản đồ"""
+async def get_nodes(poi_type: Optional[str] = Query("hospital"), limit: int = Query(570000)):
+    """Hiển thị danh sách các bệnh viện/trạm y tế và POI trên bản đồ"""
     if not poi_type or poi_type == "hospital":
         return graph_mgr.hospitals[:limit]
-    return [
-        {
-            "node_id": n["id"],
-            "name": n["poi_name"] or f"POI #{n['id']}",
-            "type": n["poi_label"],
-            "lat": n["lat"],
-            "lng": n["lng"]
-        }
-        for n in graph_mgr.nodes.values()
-        if n["poi_label"] and poi_type.lower() in n["poi_label"].lower()
-    ][:limit]
+    if poi_type == "all":
+        return (graph_mgr.hospitals + graph_mgr.pois)[:limit]
+    return [p for p in graph_mgr.pois if p["type"] and poi_type.lower() in p["type"].lower()][:limit]
 
 @app.get("/api/edges")
 @app.get("/api/v1/edges")

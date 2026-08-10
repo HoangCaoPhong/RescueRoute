@@ -258,6 +258,10 @@
                             <span class="metric-value" id="statLatency" style="color: var(--accent-emerald);">&lt; 3.0 ms</span>
                         </div>
                     </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px solid var(--border-color); margin-top: 6px;">
+                        <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">🏥 Icon POI Y Tế:</span>
+                        <button id="btnTogglePOIIcon" class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3); cursor: pointer; padding: 4px 10px; font-size: 0.75rem;" onclick="togglePOIIcons()">Đang Bật 🟢</button>
+                    </div>
                 </div>
             </div>
 
@@ -352,10 +356,12 @@
     <script>
         let map;
         let hospitalsData = [];
+        let poisData = [];
         let edgesData = [];
         let currentAmbulanceData = { lat: 10.773, lng: 106.698, mapped_nearest_node: {} };
         let ambulanceMarker = null;
         let hospitalMarkers = {};
+        let showPOIIcons = true;
         let edgePolylines = {};
         let activeRoutePolyline = null;
         let routeNodeMarkers = [];
@@ -381,13 +387,14 @@
         async function loadInitialData() {
             try {
                 const [nodesRes, edgesRes, gpsRes, healthRes] = await Promise.all([
-                    fetch('/api/nodes?poi_type=hospital&limit=500'),
+                    fetch('/api/nodes?poi_type=all&limit=10000'),
                     fetch('/api/edges?limit=2000'),
                     fetch('/api/ambulance/location'),
                     fetch('/api/health')
                 ]);
 
-                hospitalsData = await nodesRes.json();
+                poisData = await nodesRes.json();
+                hospitalsData = poisData.filter(p => p.is_hospital);
                 edgesData = await edgesRes.json();
                 currentAmbulanceData = await gpsRes.json();
                 const healthData = await healthRes.json();
@@ -445,30 +452,62 @@
             Object.values(hospitalMarkers).forEach(m => map.removeLayer(m));
             hospitalMarkers = {};
 
-            hospitalsData.forEach(h => {
-                const isHospital = h.type.toLowerCase().includes('hospital') || h.type.toLowerCase().includes('bệnh_viện');
-                const iconClass = isHospital ? 'icon-hospital' : 'icon-clinic';
-                const emoji = isHospital ? '🏥' : '🩺';
+            poisData.forEach(h => {
+                let marker;
+                if (h.is_hospital) {
+                    if (showPOIIcons) {
+                        const isHospital = h.type.toLowerCase().includes('hospital') || h.type.toLowerCase().includes('bệnh_viện');
+                        const iconClass = isHospital ? 'icon-hospital' : 'icon-clinic';
+                        const emoji = isHospital ? '🏥' : '🩺';
 
-                const icon = L.divIcon({
-                    className: `custom-div-icon ${iconClass}`,
-                    html: `<span>${emoji}</span>`,
-                    iconSize: [34, 34], iconAnchor: [17, 17]
-                });
+                        const icon = L.divIcon({
+                            className: `custom-div-icon ${iconClass}`,
+                            html: `<span>${emoji}</span>`,
+                            iconSize: [34, 34], iconAnchor: [17, 17]
+                        });
 
-                const marker = L.marker([h.lat, h.lng], { icon: icon, zIndexOffset: 1000 }).addTo(map);
-                marker.bindPopup(`
-                    <div style="font-family: Outfit, sans-serif; min-width: 180px;">
-                        <b style="color: #38bdf8; font-size: 0.95rem;">${emoji} ${h.name}</b><br>
-                        <span style="font-size: 0.8rem; color: #94a3b8;">Loại: ${h.type}</span><br>
-                        <span style="font-size: 0.75rem; color: #cbd5e1;">Mã Node: <code>${h.node_id}</code></span><br>
-                        <button onclick="setDestination(${h.node_id})" style="margin-top: 6px; width: 100%; padding: 4px; font-size: 0.75rem; font-weight: bold; background: #6366f1; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                            🎯 Chọn làm đích đến
-                        </button>
-                    </div>
-                `);
-                hospitalMarkers[h.node_id] = marker;
+                        marker = L.marker([h.lat, h.lng], { icon: icon, zIndexOffset: 1000 }).addTo(map);
+                        marker.bindPopup(`
+                            <div style="font-family: Outfit, sans-serif; min-width: 180px;">
+                                <b style="color: #38bdf8; font-size: 0.95rem;">${emoji} ${h.name}</b><br>
+                                <span style="font-size: 0.8rem; color: #94a3b8;">Loại: ${h.type}</span><br>
+                                <span style="font-size: 0.75rem; color: #cbd5e1;">Mã Node: <code>${h.node_id}</code></span><br>
+                                <button onclick="setDestination(${h.node_id})" style="margin-top: 6px; width: 100%; padding: 4px; font-size: 0.75rem; font-weight: bold; background: #6366f1; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                    🎯 Chọn làm đích đến
+                                </button>
+                            </div>
+                        `);
+                    } else {
+                        marker = L.circleMarker([h.lat, h.lng], {
+                            radius: 4, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.9, weight: 1
+                        }).addTo(map);
+                        marker.bindPopup(`<b>🏥 ${h.name}</b><br>Loại: ${h.type}<br>Mã Node: ${h.node_id}<br><button onclick="setDestination(${h.node_id})" style="margin-top: 6px; width: 100%; padding: 4px; font-size: 0.75rem; font-weight: bold; background: #6366f1; color: white; border: none; border-radius: 4px; cursor: pointer;">🎯 Chọn làm đích đến</button>`);
+                    }
+                } else {
+                    marker = L.circleMarker([h.lat, h.lng], {
+                        radius: 2, color: '#38bdf8', fillColor: '#38bdf8', fillOpacity: 0.8, weight: 0
+                    }).addTo(map);
+                    marker.bindPopup(`<b style="color: #38bdf8;">📍 ${h.name || 'POI'}</b><br><span style="font-size: 0.8rem;">Loại: ${h.type || 'N/A'}</span>`);
+                }
+                hospitalMarkers[h.poi_node_id + '_' + Math.random()] = marker;
             });
+        }
+
+        function togglePOIIcons() {
+            showPOIIcons = !showPOIIcons;
+            const btn = document.getElementById('btnTogglePOIIcon');
+            if (showPOIIcons) {
+                btn.textContent = 'Đang Bật 🟢';
+                btn.style.background = 'rgba(16, 185, 129, 0.15)';
+                btn.style.color = '#34d399';
+                btn.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+            } else {
+                btn.textContent = 'Đang Tắt 🔴';
+                btn.style.background = 'rgba(244, 63, 94, 0.15)';
+                btn.style.color = '#f43f5e';
+                btn.style.borderColor = 'rgba(244, 63, 94, 0.3)';
+            }
+            renderHospitalsOnMap();
         }
 
         function renderEdgesOnMap() {
