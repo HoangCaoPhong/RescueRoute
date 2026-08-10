@@ -21,13 +21,6 @@ def read():
 def calc_cost(time, congestion, risk, parameters=(0.648, 0.23, 0.122)):
     return parameters[0]*time + parameters[1]*congestion + parameters[2]*risk
 
-def map_congestion_to_level(factor):
-    if factor < 1.4: return 1
-    elif factor < 2.0: return 2
-    elif factor < 3.2: return 3
-    elif factor < 5.5: return 4
-    else: return 5
-
 
 # get 3 nearby periods (prev, current, next)
 def get_nearby_periods():
@@ -79,9 +72,10 @@ def build_graph(df_base, df_train):
         df_train_filtered['cost'] = df_train_filtered.apply(
             lambda row: calc_cost(row['time'], row['congestion_factor'], row['risk_factor'], parameters), axis=1
         )
-        agg_train = df_train_filtered.groupby(['s_node_id', 'e_node_id']).agg({'cost': 'mean', 'congestion_factor': 'mean'}).reset_index()
+        # Pick the most recent cost directly instead of averaging
+        agg_train = df_train_filtered.drop_duplicates(subset=['s_node_id', 'e_node_id'], keep='last')
     else:
-        agg_train = pd.DataFrame(columns=['s_node_id', 'e_node_id', 'cost', 'congestion_factor'])
+        agg_train = pd.DataFrame(columns=['s_node_id', 'e_node_id', 'cost', 'LOS'])
 
     graph = defaultdict(dict)
     
@@ -94,11 +88,12 @@ def build_graph(df_base, df_train):
         graph[u][v] = [w, 1, length]
         
     # 2. Overwrite with dynamic traffic cost where available
+    los_map = {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6}
     for _, row in agg_train.iterrows():
         u = row['s_node_id']
         v = row['e_node_id']
         w = row['cost']
-        cong = map_congestion_to_level(row['congestion_factor'])
+        cong = los_map.get(row['LOS'], 1) if pd.notna(row['LOS']) else 1
         if u in graph and v in graph[u]:
             graph[u][v][0] = w
             graph[u][v][1] = cong
