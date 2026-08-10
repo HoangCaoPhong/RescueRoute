@@ -20,6 +20,13 @@ def read():
 def calc_cost(time, congestion, risk, parameters=(0.648, 0.23, 0.122)):
     return parameters[0]*time + parameters[1]*(congestion**2) + parameters[2]*(risk**2)
 
+def map_congestion_to_level(factor):
+    if factor < 1.4: return 1
+    elif factor < 2.0: return 2
+    elif factor < 3.2: return 3
+    elif factor < 5.5: return 4
+    else: return 5
+
 
 # get 3 nearby periods (prev, current, next)
 def get_nearby_periods():
@@ -64,9 +71,9 @@ def build_graph(df_base, df_train):
         df_train_filtered['cost'] = df_train_filtered.apply(
             lambda row: calc_cost(row['time'], row['congestion_factor'], row['risk_factor']), axis=1
         )
-        agg_train = df_train_filtered.groupby(['s_node_id', 'e_node_id'])['cost'].mean().reset_index()
+        agg_train = df_train_filtered.groupby(['s_node_id', 'e_node_id']).agg({'cost': 'mean', 'congestion_factor': 'mean'}).reset_index()
     else:
-        agg_train = pd.DataFrame(columns=['s_node_id', 'e_node_id', 'cost'])
+        agg_train = pd.DataFrame(columns=['s_node_id', 'e_node_id', 'cost', 'congestion_factor'])
 
     graph = defaultdict(dict)
     
@@ -75,14 +82,19 @@ def build_graph(df_base, df_train):
         u = row['s_node_id']
         v = row['e_node_id']
         w = row['base_cost']
-        graph[u][v] = w
+        length = row['length']
+        name = f"Đoạn {u} -> {v}"
+        graph[u][v] = [w, 1, length, name]
         
     # 2. Overwrite with dynamic traffic cost where available
     for _, row in agg_train.iterrows():
         u = row['s_node_id']
         v = row['e_node_id']
         w = row['cost']
-        graph[u][v] = w
+        cong = map_congestion_to_level(row['congestion_factor'])
+        if u in graph and v in graph[u]:
+            graph[u][v][0] = w
+            graph[u][v][1] = cong
         
     return graph
 
@@ -104,21 +116,6 @@ def Breadth_First_Search(graph, start, goal):
     return path
 
 
-def Depth_First_Search(graph, start, goal):
-    visited = set()
-    stack = [(start, [start])]
-
-    while stack:
-        (vertex, path) = stack.pop()
-        if vertex not in visited:
-            if vertex == goal:
-                return path
-            visited.add(vertex)
-            for neighbor in graph[vertex]:
-                stack.append((neighbor, path + [neighbor]))
-    return None
-
-
 def Uniform_Cost_Search(graph, start, goal):
     visited = set()
     queue = [(0, start, [start])]
@@ -131,24 +128,7 @@ def Uniform_Cost_Search(graph, start, goal):
                 return path
             visited.add(vertex)
             for neighbor in graph[vertex]:
-                total_cost = cost + graph[vertex][neighbor]
-                queue.append((total_cost, neighbor, path + [neighbor]))
-    return None
-
-
-def A_Star_Search(graph, start, goal, heuristic):
-    visited = set()
-    queue = [(0 + heuristic[start], start, [start])]
-
-    while queue:
-        (cost, vertex, path) = min(queue)
-        queue.remove((cost, vertex, path))
-        if vertex not in visited:
-            if vertex == goal:
-                return path
-            visited.add(vertex)
-            for neighbor in graph[vertex]:
-                total_cost = cost - heuristic[vertex] + graph[vertex][neighbor] + heuristic[neighbor]
+                total_cost = cost + graph[vertex][neighbor][0]
                 queue.append((total_cost, neighbor, path + [neighbor]))
     return None
 
