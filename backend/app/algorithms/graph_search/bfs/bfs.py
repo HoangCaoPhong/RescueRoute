@@ -17,14 +17,14 @@ def reconstruct_path(parent, goal_node_id):
 def get_neighbors(graph, node_id):
     """Get neighbors in deterministic order."""
 
-    # Temporary support for adjacency-dict graph used in unit tests
     if isinstance(graph, dict):
-        neighbors = graph.get(node_id, [])
-        return sorted(str(node) for node in neighbors)
+        # Our defaultdict structure: graph[node_id] is a dict where keys are neighbors
+        neighbors = graph.get(node_id, {}).keys()
+        return sorted(list(neighbors))
 
     # Common Graph abstraction
     edges = graph.get_neighbors(node_id)
-    return sorted(str(edge.v) for edge in edges)
+    return sorted([edge.v for edge in edges])
 
 
 def has_node(graph, node_id):
@@ -64,8 +64,8 @@ def solve_bfs(
     It does not optimize distance, travel time, congestion, or traffic cost.
     """
 
-    start_node_id = str(start_node_id)
-    goal_node_id = str(goal_node_id)
+    start_node_id = int(start_node_id)
+    goal_node_id = int(goal_node_id)
     start_time = perf_counter()
 
     # Validate input
@@ -146,7 +146,8 @@ def solve_bfs(
                 queue.append(neighbor_node)
 
     # No route found
-    raise ValueError(
-        f"No route found from "
-        f"'{start_node_id}' to '{goal_node_id}'."
-    )
+    return {
+        "found": False,
+        "path": [],
+        "message": f"No route found from '{start_node_id}' to '{goal_node_id}'."
+    }
