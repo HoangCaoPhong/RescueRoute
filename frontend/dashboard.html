@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RescueRoute - AI Ambulance Dispatcher Dashboard</title>
+    <!-- Google Fonts & Leaflet CSS -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+
+    <header>
+        <div class="brand">
+            <div class="brand-icon">&#x1f691;</div>
+            <div>
+                <div class="brand-title">RescueRoute Dispatcher & Graph AI</div>
+                <div class="brand-subtitle">Hệ Thống Tìm Đường Cấp Cứu Tối Ưu • Tích Hợp Dataset Giao Thông Thực Tế</div>
+            </div>
+        </div>
+        <div>
+            <a href="/docs" target="_blank" class="btn-docs">📜 Swagger OpenAPI (/docs)</a>
+        </div>
+    </header>
+
+    <div class="workspace">
+        <div class="sidebar">
+            
+            <!-- SECTION 1: DATASET & GRAPH STATS -->
+            <div>
+                <div class="section-title">📊 1. Dữ Liệu Đồ Thị & Trạng Thái RAM</div>
+                <div class="feature-card">
+                    <div class="feature-title">🗺️ Đồ Thị Giao Thông Thực Tế TP.HCM</div>
+                    <div id="datasetSummary" style="font-size: 0.8rem; color: var(--text-muted);">Đang tải dữ liệu đồ thị...</div>
+                    <div class="metrics-grid">
+                        <div class="metric-item">
+                            <span class="metric-label">Tổng Số Nodes:</span>
+                            <span class="metric-value" id="statNodes">577,967</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Cạnh Đồ Thị (Edges):</span>
+                            <span class="metric-value" id="statEdges">84,633</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Điểm Cấp Cứu/Bệnh Viện:</span>
+                            <span class="metric-value" id="statHospitals" style="color: var(--accent-rose);">135</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Độ Trễ KDTree:</span>
+                            <span class="metric-value" id="statLatency" style="color: var(--accent-emerald);">&lt; 3.0 ms</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px solid var(--border-color); margin-top: 6px;">
+                        <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">🏥 Icon POI Y Tế:</span>
+                        <button id="btnTogglePOIIcon" class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3); cursor: pointer; padding: 4px 10px; font-size: 0.75rem;" onclick="togglePOIIcons()">Đang Bật 🟢</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 2: AMBULANCE GPS TRACKER -->
+            <div>
+                <div class="section-title">📡 2. Định Vị GPS Xe Cấp Cứu (KDTree Fast Lookup)</div>
+                <div class="feature-card" style="border-color: rgba(244, 63, 94, 0.4);">
+                    <div class="feature-title" style="color: var(--accent-rose);">&#x1f691; Vị Trí Xe Cấp Cứu Hiện Tại</div>
+                    <div class="code-block" id="gpsCodeDisplay">GPS: (10.7730, 106.6980)</div>
+                    <div style="font-size: 0.8rem; color: var(--accent-cyan);" id="nearestDisplay">Node gần nhất: Đang tải...</div>
+                    <div style="display: flex; gap: 6px;">
+                        <button class="btn-action" style="flex: 1; background: linear-gradient(135deg, #f43f5e, #e11d48);" onclick="getDeviceLocation()">📱 GPS Thiết Bị</button>
+                        <button class="btn-action" style="flex: 1; background: var(--bg-card-hover);" onclick="showToast('📌 Click điểm bất kỳ trên bản đồ để di chuyển xe cấp cứu!')">📍 Click Bản Đồ</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 3: ROUTE SEARCHING -->
+            <div>
+                <div class="section-title">🧠 3. Tìm Đường Cấp Cứu Tối Ưu (AI Search)</div>
+                <div class="feature-card" style="border-color: rgba(99, 102, 241, 0.4);">
+                    <div class="feature-title" style="color: var(--accent-indigo);">⚡ Thuật Toán Tìm Tuyến Đường</div>
+                    
+                    <label style="font-size: 0.75rem; color: var(--text-muted);">Bệnh Viện / Trạm Cứu Hộ Đích:</label>
+                    <select id="selectHospital" onchange="onHospitalSelectChange()"></select>
+
+                    <label style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Thuật Toán AI:</label>
+                    <select id="selectAlgorithm">
+                        <option value="astar">A* Search (Haversine Heuristic - Tối ưu nhất)</option>
+                        <option value="dijkstra">Dijkstra / UCS (Uniform Cost Search)</option>
+                        <option value="bfs">BFS (Breadth-First Search)</option>
+                        <option value="dfs">DFS (Depth-First Search)</option>
+                    </select>
+
+                    <button class="btn-action" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); margin-top: 4px;" onclick="calculateRoute()">
+                        🚀 Tìm Tuyến Cấp Cứu Tối Ưu
+                    </button>
+
+                    <div id="routeResultPanel" style="display: none; margin-top: 6px;">
+                        <div class="metrics-grid">
+                            <div class="metric-item">
+                                <span class="metric-label">Tổng Chi Phí (Cost):</span>
+                                <span class="metric-value" id="resCost">-</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Quãng Đường Ước Tính:</span>
+                                <span class="metric-value" id="resDistance">-</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Số Nodes Đã Mở:</span>
+                                <span class="metric-value" id="resExpanded">-</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Thời Gian Thuật Toán:</span>
+                                <span class="metric-value" id="resTime">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 4: CONGESTION VISUALIZATION -->
+            <div>
+                <div class="section-title">🚦 4. Trạng Thái Kẹt Xe</div>
+                <div class="feature-card" style="border-color: rgba(6, 182, 212, 0.4);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px solid var(--border-color);">
+                        <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">🚦 Thể hiện kẹt xe (Đồ thị đường):</span>
+                        <button id="btnToggleTraffic" class="status-badge" style="background: rgba(6, 182, 212, 0.15); color: #22d3ee; border-color: rgba(6, 182, 212, 0.3); cursor: pointer; padding: 4px 10px; font-size: 0.75rem;" onclick="toggleTrafficLayer()">Đang Bật 🟢</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 5: HEALTH BENCHMARK -->
+            <div>
+                <div class="section-title">🛡️ 5. An Toàn & Health Benchmark</div>
+                <div class="feature-card" style="border-color: rgba(16, 185, 129, 0.4);">
+                    <div class="feature-title" style="color: var(--accent-emerald);">⚡ Kiểm Tra Benchmark Server</div>
+                    <button class="btn-action" style="background: var(--accent-emerald); color: #060911;" onclick="checkSystemHealth()">
+                        🔍 Ping GET /api/health
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <div id="map"></div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="dashboard.js"></script>
+</body>
+</html>
