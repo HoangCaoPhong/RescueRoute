@@ -23,9 +23,7 @@ DASHBOARD_FILE = os.path.join(BASE_DIR, "dashboard.html")
 DATA_DIR = os.path.abspath(os.path.join(BASE_DIR, "../data/processed"))
 
 # ==========================================
-import sys
-sys.path.append(os.path.abspath(os.path.join(BASE_DIR, "../scripts")))
-import dataset_2_graph
+from scripts import dataset_2_graph
 
 # ==========================================
 # 3. Quản lý Đồ thị & Dữ liệu trong RAM (Tối ưu cho 512MB)
@@ -167,7 +165,7 @@ class CongestionRequest(BaseModel):
 # ==========================================
 # 5. Thuật toán Tìm đường trên Đồ thị
 # ==========================================
-from app.services.routing_service import run_search
+from backend.app.services.routing_service import run_search
 
 # ==========================================
 # 6. Các API Endpoints

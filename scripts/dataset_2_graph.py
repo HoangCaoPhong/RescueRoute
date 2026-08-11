@@ -3,7 +3,7 @@ import pandas as pd
 from collections import defaultdict, deque
 from datetime import datetime
 import geopandas as gpd
-import enrich_data
+from scripts import enrich_data
 import json
 
 # load dataset

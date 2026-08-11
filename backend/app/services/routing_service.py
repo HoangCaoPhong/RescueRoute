@@ -4,7 +4,7 @@ import heapq
 from collections import deque
 from typing import Dict, Any, Optional
 
-from app.algorithms.graph_search.bfs.bfs import solve_bfs
+from backend.app.algorithms.graph_search.bfs.bfs import solve_bfs
 
 def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     R = 6371000.0
