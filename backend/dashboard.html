@@ -286,10 +286,27 @@
                     <div class="feature-title" style="color: var(--accent-indigo);">⚡ Thuật Toán Tìm Tuyến Đường</div>
                     
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; margin-bottom: 2px;">
-                        <label style="font-size: 0.75rem; color: var(--text-muted);">Bệnh Viện / Trạm Cứu Hộ Đích:</label>
-                        <button type="button" style="background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.4); color: #fda4af; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-weight: 600;" onclick="selectNearestHospital()">🏥 BV Gần Nhất</button>
+                        <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Bệnh Viện / Trạm Cứu Hộ Đích:</label>
+                        <button type="button" style="background: rgba(244, 63, 94, 0.2); border: 1px solid rgba(244, 63, 94, 0.5); color: #fda4af; font-size: 0.75rem; padding: 3px 10px; border-radius: 6px; cursor: pointer; font-weight: 700; display: flex; align-items: center; gap: 4px;" onclick="selectNearestHospital()">
+                            🚨 BV Gần Nhất
+                        </button>
                     </div>
-                    <select id="selectHospital" onchange="onHospitalSelectChange()"></select>
+                    
+                    <!-- Search bar & Emergency filter -->
+                    <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 4px;">
+                        <input type="text" id="inputSearchHospital" placeholder="🔍 Gõ tìm BV (VD: Chợ Rẫy, 115, Bình Tân...)" 
+                               style="width: 100%; box-sizing: border-box; padding: 6px 10px; background: rgba(0,0,0,0.35); border: 1px solid var(--border-color); border-radius: 6px; color: #fff; font-size: 0.75rem;" 
+                               oninput="populateHospitalSelect()" />
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; padding: 2px 2px;">
+                            <label style="color: #fda4af; cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: 600;">
+                                <input type="checkbox" id="chkEmergencyOnly" checked onchange="populateHospitalSelect()" style="cursor: pointer; accent-color: var(--accent-rose);" />
+                                🚨 Lọc BV Cấp Cứu / Đa Khoa
+                            </label>
+                            <span id="hospitalCountBadge" style="color: var(--text-muted); font-family: monospace;">(Đang tải...)</span>
+                        </div>
+                    </div>
+
+                    <select id="selectHospital" onchange="onHospitalSelectChange()" style="margin-top: 4px;"></select>
 
                     <label style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Thuật Toán AI:</label>
                     <select id="selectAlgorithm">
@@ -429,13 +446,36 @@
         function populateHospitalSelect() {
             const select = document.getElementById('selectHospital');
             if (!select) return;
+            
+            const emergencyOnly = document.getElementById('chkEmergencyOnly') ? document.getElementById('chkEmergencyOnly').checked : false;
+            const query = (document.getElementById('inputSearchHospital') ? document.getElementById('inputSearchHospital').value : '').toLowerCase().trim();
+
             select.innerHTML = '';
+            let count = 0;
+
             hospitalsData.forEach(h => {
+                if (emergencyOnly && !h.is_emergency) return;
+                if (query && !h.name.toLowerCase().includes(query) && !h.type.toLowerCase().includes(query)) return;
+
                 const opt = document.createElement('option');
                 opt.value = h.node_id;
-                opt.textContent = `${h.name} (${h.type})`;
+                const emoji = h.is_emergency ? '🚨' : '🏥';
+                opt.textContent = `${emoji} ${h.name} (${h.category || h.type})`;
                 select.appendChild(opt);
+                count++;
             });
+
+            const badgeElem = document.getElementById('hospitalCountBadge');
+            if (badgeElem) {
+                badgeElem.textContent = `(${count} BV)`;
+            }
+
+            if (count === 0) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = '-- Không tìm thấy bệnh viện phù hợp --';
+                select.appendChild(opt);
+            }
         }
 
         function populateEdgeSelect() {
@@ -644,15 +684,24 @@
 
         async function selectNearestHospital() {
             try {
-                showToast('🔍 Đang tìm bệnh viện gần nhất qua KD-Tree...');
-                const res = await fetch('/api/hospitals/nearest');
+                const emergencyOnly = document.getElementById('chkEmergencyOnly') ? document.getElementById('chkEmergencyOnly').checked : true;
+                showToast('🔍 Đang tìm bệnh viện cấp cứu gần nhất qua KD-Tree...');
+                const res = await fetch(`/api/hospitals/nearest?emergency_only=${emergencyOnly}`);
                 const data = await res.json();
                 if (data.status === 'success' && data.nearest_hospital) {
                     const h = data.nearest_hospital;
+                    
+                    // Reset ô tìm kiếm nếu đang lọc để hiển thị bệnh viện này
+                    const searchInput = document.getElementById('inputSearchHospital');
+                    if (searchInput && searchInput.value) {
+                        searchInput.value = '';
+                        populateHospitalSelect();
+                    }
+
                     const select = document.getElementById('selectHospital');
                     select.value = h.node_id;
                     onHospitalSelectChange();
-                    showToast(`🏥 Đã chọn: ${h.name} (${data.distance_km} km)`);
+                    showToast(`🚨 Đã chọn BV Cấp cứu: ${h.name} (~${data.distance_km} km)`);
                 } else {
                     showToast('Không tìm thấy bệnh viện gần nhất!');
                 }
