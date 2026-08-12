@@ -5,6 +5,7 @@ from collections import deque
 from typing import Dict, Any, Optional
 
 from backend.app.algorithms.graph_search.bfs.bfs import solve_bfs
+from backend.app.algorithms.graph_search.ucs.ucs import solve_ucs
 
 def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     R = 6371000.0
@@ -111,6 +112,21 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
                     parent[nbr] = curr
                     stack.append(nbr)
 
+    elif algo == "ucs":
+        result = solve_ucs(graph_mgr.adj, start_id, goal_id)
+        exec_time = (time.perf_counter() - t0) * 1000
+        
+        if not result.get("found", True) or not result.get("path"):
+            return {
+                "found": False,
+                "nodes_expanded": result.get("explored_nodes", 0),
+                "execution_time_ms": round(exec_time, 2)
+            }
+            
+        path = result["path"]
+        expanded = result.get("explored_nodes", len(result.get("visited_order", [])))
+        return build_path_response(path, exec_time, expanded)
+
     elif algo == "dijkstra":
         pq = [(0.0, start_id)]
         best_dist = {start_id: 0.0}
@@ -129,10 +145,8 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
                     parent[nbr] = curr
                     heapq.heappush(pq, (new_d, nbr))
 
-    else:  # Mặc định A* và UCS
+    else:  # Mặc định A*
         def h(n_id: int) -> float:
-            if algo == "ucs":
-                return 0.0
             node = graph_mgr.road_nodes.get(n_id)
             if not node:
                 return 0.0
