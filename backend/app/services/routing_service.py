@@ -5,6 +5,7 @@ from collections import deque
 from typing import Dict, Any, Optional
 
 from backend.app.algorithms.graph_search.bfs.bfs import solve_bfs
+from backend.app.algorithms.graph_search.dfs.dfs import solve_dfs
 from backend.app.services.search_trace import build_search_trace
 
 def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -108,19 +109,27 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
         return response
 
     elif algo == "dfs":
-        stack = [start_id]
-        visited = {start_id}
-        while stack:
-            curr = stack.pop()
-            nodes_expanded += 1
-            if curr == goal_id:
-                found = True
-                break
-            for nbr in graph_mgr.adj.get(curr, {}):
-                if nbr not in visited:
-                    visited.add(nbr)
-                    parent[nbr] = curr
-                    stack.append(nbr)
+        try:
+            result = solve_dfs(graph_mgr.adj, start_id, goal_id)
+            exec_time = (time.perf_counter() - t0) * 1000
+
+            if not result.get("found", True) or not result.get("path"):
+                return {
+                    "found": False,
+                    "nodes_expanded": result.get("explored_nodes", 0),
+                    "execution_time_ms": round(exec_time, 2)
+                }
+
+            path = result["path"]
+            expanded = result.get("explored_nodes", len(result.get("visited_order", [])))
+            return build_path_response(path, exec_time, expanded)
+        except ValueError:
+            exec_time = (time.perf_counter() - t0) * 1000
+            return {
+                "found": False,
+                "nodes_expanded": 0,
+                "execution_time_ms": round(exec_time, 2)
+            }
 
     elif algo == "dijkstra":
         pq = [(0.0, start_id)]
