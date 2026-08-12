@@ -285,7 +285,10 @@
                 <div class="feature-card" style="border-color: rgba(99, 102, 241, 0.4);">
                     <div class="feature-title" style="color: var(--accent-indigo);">⚡ Thuật Toán Tìm Tuyến Đường</div>
                     
-                    <label style="font-size: 0.75rem; color: var(--text-muted);">Bệnh Viện / Trạm Cứu Hộ Đích:</label>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; margin-bottom: 2px;">
+                        <label style="font-size: 0.75rem; color: var(--text-muted);">Bệnh Viện / Trạm Cứu Hộ Đích:</label>
+                        <button type="button" style="background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.4); color: #fda4af; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-weight: 600;" onclick="selectNearestHospital()">🏥 BV Gần Nhất</button>
+                    </div>
                     <select id="selectHospital" onchange="onHospitalSelectChange()"></select>
 
                     <label style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Thuật Toán AI:</label>
@@ -637,6 +640,25 @@
         function setDestination(nodeId) {
             document.getElementById('selectHospital').value = nodeId;
             calculateRoute();
+        }
+
+        async function selectNearestHospital() {
+            try {
+                showToast('🔍 Đang tìm bệnh viện gần nhất qua KD-Tree...');
+                const res = await fetch('/api/hospitals/nearest');
+                const data = await res.json();
+                if (data.status === 'success' && data.nearest_hospital) {
+                    const h = data.nearest_hospital;
+                    const select = document.getElementById('selectHospital');
+                    select.value = h.node_id;
+                    onHospitalSelectChange();
+                    showToast(`🏥 Đã chọn: ${h.name} (${data.distance_km} km)`);
+                } else {
+                    showToast('Không tìm thấy bệnh viện gần nhất!');
+                }
+            } catch (err) {
+                showToast('Lỗi khi tra cứu bệnh viện gần nhất!');
+            }
         }
 
         function onHospitalSelectChange() {
