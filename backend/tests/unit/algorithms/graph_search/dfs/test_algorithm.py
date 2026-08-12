@@ -158,3 +158,19 @@ def test_dfs_invalid_node():
             "UNKNOWN_NODE",
             "D"
         )
+
+
+def test_dfs_reconstructs_actual_traversed_path():
+    # Graph where node B can be reached from A directly or via C.
+    # DFS explores branch C -> B -> D.
+    graph = {
+        "A": ["B", "C"],
+        "C": ["B"],
+        "B": ["D"],
+        "D": []
+    }
+    result = solve_dfs(graph, "A", "D")
+    path = result["path"]
+    # Verify each edge in reconstructed path actually exists in graph
+    for u, v in zip(path[:-1], path[1:]):
+        assert v in graph[u], f"Edge ({u} -> {v}) in path does not exist in graph"
