@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 
 from backend.app.algorithms.graph_search.bfs.bfs import solve_bfs
 from backend.app.algorithms.graph_search.dfs.dfs import solve_dfs
+from backend.app.services.search_trace import build_search_trace
 
 def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     R = 6371000.0
@@ -82,27 +83,30 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
         }
 
     if algo == "bfs":
-        try:
-            result = solve_bfs(graph_mgr.adj, start_id, goal_id)
-            exec_time = (time.perf_counter() - t0) * 1000
-            
-            if not result.get("found", True) or not result.get("path"):
-                return {
-                    "found": False,
-                    "nodes_expanded": result.get("explored_nodes", 0),
-                    "execution_time_ms": round(exec_time, 2)
-                }
-                
-            path = result["path"]
-            expanded = result.get("explored_nodes", len(result.get("visited_order", [])))
-            return build_path_response(path, exec_time, expanded)
-        except ValueError:
-            exec_time = (time.perf_counter() - t0) * 1000
+        result = solve_bfs(graph_mgr.adj, start_id, goal_id)
+        exec_time = (time.perf_counter() - t0) * 1000
+        
+        if not result.get("found", True) or not result.get("path"):
             return {
                 "found": False,
-                "nodes_expanded": 0,
-                "execution_time_ms": round(exec_time, 2)
+                "algorithm": "bfs",
+                "nodes_expanded": result.get("explored_nodes", 0),
+                "execution_time_ms": round(exec_time, 2),
+                "message": result.get(
+                    "message",
+                    f"No route found from '{start_id}' to '{goal_id}'."
+                )
             }
+            
+        # BFS was successful
+        path = result["path"]
+        expanded = result.get("explored_nodes", len(result.get("visited_order", [])))
+        response = build_path_response(path, exec_time, expanded)
+        response["search_trace"] = build_search_trace(graph_mgr, result, "bfs")
+        response["explanation_data"] = result.get("explanation_data", {})
+        response["hop_count"] = result.get("hop_count")
+        response["is_optimal"] = result.get("is_optimal")
+        return response
 
     elif algo == "dfs":
         try:
