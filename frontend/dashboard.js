@@ -1,15 +1,94 @@
+const API_BASE = "/api";
+const MAX_WAYPOINTS = 5;
+const DEFAULT_SPEED_KPH = 30;
+const MAX_MAP_TRACE_NODES = 250;
+const MAX_TRACE_TOKENS = 48;
+const SEARCH_COLORS = {
+    visited: "#facc15",
+    current: "#f97316",
+    frontier: "#38bdf8",
+    route: "#9e77ff",
+};
+
+const ALGORITHM_SPECS = {
+    astar: {
+        label: "A* Search",
+        objective: "chi phí giao thông tổng hợp với heuristic Haversine",
+        compatibleCriteria: ["cost", "time"],
+        optimality: "Có điều kiện",
+        badgeClass: "neutral",
+        explanation:
+            "A* ưu tiên tổng chi phí đã đi và ước lượng Haversine tới đích. Tính tối ưu chỉ được bảo đảm khi heuristic là admissible và consistent với cost.",
+    },
+    ucs: {
+        label: "Uniform Cost Search",
+        objective: "chi phí giao thông tổng hợp",
+        compatibleCriteria: ["cost", "time"],
+        optimality: "Tối ưu theo cost",
+        badgeClass: "success",
+        explanation:
+            "UCS luôn mở đường đi có tổng cost nhỏ nhất trước và tối ưu khi mọi chi phí cạnh không âm.",
+    },
+    dijkstra: {
+        label: "Dijkstra",
+        objective: "tổng quãng đường",
+        compatibleCriteria: ["distance"],
+        optimality: "Tối ưu khoảng cách",
+        badgeClass: "success",
+        explanation:
+            "Dijkstra trong backend hiện dùng độ dài cạnh, vì vậy tối ưu tổng quãng đường khi mọi độ dài không âm.",
+    },
+    bfs: {
+        label: "Breadth-First Search",
+        objective: "số cạnh / số chặng",
+        compatibleCriteria: ["hops"],
+        optimality: "Tối ưu số chặng",
+        badgeClass: "success",
+        explanation:
+            "BFS duyệt theo từng lớp và tìm đường có ít cạnh nhất trên đồ thị không trọng số; đường đó không nhất thiết ngắn nhất theo khoảng cách hay cost.",
+    },
+    dfs: {
+        label: "Depth-First Search",
+        objective: "thứ tự duyệt sâu",
+        compatibleCriteria: [],
+        optimality: "Không bảo đảm",
+        badgeClass: "warning",
+        explanation:
+            "DFS đi sâu theo một nhánh trước. Thuật toán phù hợp để minh họa hành vi tìm kiếm nhưng không bảo đảm route tối ưu.",
+    },
+};
+
+const CRITERION_LABELS = {
+    cost: "Chi phí giao thông tổng hợp",
+    time: "Thời gian di chuyển ước tính",
+    distance: "Tổng quãng đường",
+    hops: "Số chặng đường",
+};
+
 let map;
 let hospitalsData = [];
 let poisData = [];
 let edgesData = [];
-let currentAmbulanceData = { lat: 10.773, lng: 106.698, mapped_nearest_node: {} };
+let edgeIndex = new Map();
+let graphEdgeCount = 0;
+let fullRoadNodeCoords = new Map();
+let fullCoordinateLoadPromise = null;
+let allEdgeCoordinatesLoaded = false;
+let currentAmbulanceData = {
+    lat: 10.773,
+    lng: 106.698,
+    mapped_nearest_node: {},
+};
 let ambulanceMarker = null;
-let hospitalMarkers = {};
+let hospitalMarkers = new Map();
 let showPOIIcons = true;
+let showTraffic = true;
 let edgePolylines = {};
 let activeRoutePolyline = null;
 let routeNodeMarkers = [];
-let showTraffic = true;
+let routeRequestCache = new Map();
+let toastTimer = null;
+
 let searchVisualizationData = null;
 let searchStepIndex = 0;
 let searchAnimationTimer = null;
@@ -17,53 +96,147 @@ let searchVisitedLayer = null;
 let searchFrontierLayer = null;
 let searchCurrentLayer = null;
 
+function byId(id) {
+    return document.getElementById(id);
+}
+
+function setText(id, value) {
+    const element = byId(id);
+    if (element) element.textContent = value;
+}
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+async function fetchJson(url, options = {}) {
+    const response = await fetch(url, options);
+    const contentType = response.headers.get("content-type") || "";
+    const data = contentType.includes("application/json")
+        ? await response.json()
+        : { detail: await response.text() };
+
+    if (!response.ok) {
+        const detail =
+            typeof data?.detail === "string"
+                ? data.detail
+                : JSON.stringify(data?.detail || "");
+        throw new Error(detail || data?.message || `HTTP ${response.status}`);
+    }
+    return data;
+}
+
+function setConnectionStatus(mode, text) {
+    const badge = byId("connectionStatus");
+    if (!badge) return;
+    badge.className = `connection-badge is-${mode}`;
+    badge.innerHTML = '<span class="status-dot" aria-hidden="true"></span>';
+    badge.append(document.createTextNode(text));
+}
+
+function setOperationStatus(message = "", isError = false) {
+    const status = byId("operationStatus");
+    if (!status) return;
+    status.textContent = message;
+    status.classList.toggle("is-visible", Boolean(message));
+    status.classList.toggle("is-error", isError);
+}
+
+function setButtonBusy(buttonId, isBusy, busyLabel, idleLabel) {
+    const button = byId(buttonId);
+    if (!button) return;
+    button.disabled = isBusy;
+    button.textContent = isBusy ? busyLabel : idleLabel;
+    button.setAttribute("aria-busy", String(isBusy));
+}
+
 function initMap() {
-    map = L.map('map', { center: [10.778, 106.692], zoom: 13, zoomControl: false, renderer: L.canvas() });
+    if (typeof L === "undefined") {
+        setConnectionStatus("offline", "Không tải được Leaflet");
+        setOperationStatus(
+            "Không thể khởi tạo bản đồ. Hãy kiểm tra kết nối tới thư viện Leaflet.",
+            true,
+        );
+        return;
+    }
 
-    // CartoDB Dark/Voyager Tile Layer
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19, attribution: '&copy; OpenStreetMap &copy; CARTO'
-    }).addTo(map);
+    map = L.map("map", {
+        center: [10.778, 106.692],
+        zoom: 13,
+        zoomControl: false,
+        renderer: L.canvas(),
+    });
 
-    L.control.zoom({ position: 'topright' }).addTo(map);
+    L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+        {
+            maxZoom: 19,
+            attribution: "&copy; OpenStreetMap &copy; CARTO",
+        },
+    ).addTo(map);
+
+    L.control.zoom({ position: "topright" }).addTo(map);
+
+    createMapPane("finalRoutePane", 430);
+    createMapPane("searchVisitedPane", 440);
+    createMapPane("searchFrontierPane", 450);
+    createMapPane("searchCurrentPane", 460);
 
     searchVisitedLayer = L.layerGroup().addTo(map);
     searchFrontierLayer = L.layerGroup().addTo(map);
     searchCurrentLayer = L.layerGroup().addTo(map);
 
-    map.on('click', function(e) {
-        updateAmbulanceGPS(e.latlng.lat, e.latlng.lng);
-    });
-
+    map.on("click", (event) =>
+        updateAmbulanceGPS(event.latlng.lat, event.latlng.lng),
+    );
+    onAlgorithmChange();
     loadInitialData();
 }
 
+function createMapPane(name, zIndex) {
+    const pane = map.createPane(name);
+    pane.style.zIndex = String(zIndex);
+    pane.style.pointerEvents = "none";
+}
+
 async function loadInitialData() {
+    setConnectionStatus("loading", "Đang kết nối API");
     try {
-        const [nodesRes, edgesRes, gpsRes, healthRes] = await Promise.all([
-            fetch('/api/nodes?poi_type=all&limit=10000'),
-            fetch('/api/edges?limit=2000'),
-            fetch('/api/ambulance/location'),
-            fetch('/api/health')
+        const [nodes, edges, gps, health] = await Promise.all([
+            fetchJson(`${API_BASE}/nodes?poi_type=all&limit=10000`),
+            fetchJson(`${API_BASE}/edges?limit=2000`),
+            fetchJson(`${API_BASE}/ambulance/location`),
+            fetchJson(`${API_BASE}/health`),
         ]);
 
-        poisData = await nodesRes.json();
-        hospitalsData = poisData.filter(p => p.is_hospital);
-        edgesData = await edgesRes.json();
-        currentAmbulanceData = await gpsRes.json();
-        const healthData = await healthRes.json();
+        poisData = Array.isArray(nodes) ? nodes : [];
+        hospitalsData = poisData.filter((item) => item?.is_hospital);
+        edgesData = Array.isArray(edges) ? edges : [];
+        currentAmbulanceData = gps || currentAmbulanceData;
+        rebuildEdgeIndex();
 
-        // Update UI Stats safely
-        const elNodes = document.getElementById('statNodes');
-        if (elNodes) elNodes.textContent = healthData.nodes_count.toLocaleString();
-        const elEdges = document.getElementById('statEdges');
-        if (elEdges) elEdges.textContent = healthData.edges_count.toLocaleString();
-        const elHosp = document.getElementById('statHospitals');
-        if (elHosp) elHosp.textContent = hospitalsData.length;
-        const elLat = document.getElementById('statLatency');
-        if (elLat) elLat.textContent = healthData.latency_ms + ' ms';
-        const elSummary = document.getElementById('datasetSummary');
-        if (elSummary) elSummary.textContent = `Đồ thị RAM: ${healthData.nodes_count.toLocaleString()} nodes, ${healthData.edges_count.toLocaleString()} edges sẵn sàng.`;
+        setText(
+            "statNodes",
+            Number(health.nodes_count || 0).toLocaleString("vi-VN"),
+        );
+        setText(
+            "statEdges",
+            Number(health.edges_count || 0).toLocaleString("vi-VN"),
+        );
+        setText("statHospitals", hospitalsData.length.toLocaleString("vi-VN"));
+        setText("statLatency", `${Number(health.latency_ms || 0).toFixed(2)} ms`);
+        setText(
+            "datasetSummary",
+            `Đồ thị đã sẵn sàng với ${Number(health.nodes_count || 0).toLocaleString("vi-VN")} nút và ${Number(health.edges_count || 0).toLocaleString("vi-VN")} cạnh có hướng.`,
+        );
+        setText("datasetBadge", "Sẵn sàng");
+        byId("datasetBadge")?.classList.replace("neutral", "success");
+        graphEdgeCount = Number(health.edges_count || edgesData.length);
 
         populateHospitalSelect();
         populateEdgeSelect();
@@ -72,103 +245,833 @@ async function loadInitialData() {
         renderHospitalsOnMap();
         renderEdgesOnMap();
         updateAmbulanceDisplay(currentAmbulanceData);
-
-    } catch (err) {
-        console.error('Error in loadInitialData:', err);
-        showToast('Lỗi khi kết nối Backend API!');
+        setConnectionStatus("online", "Backend trực tuyến");
+    } catch (error) {
+        console.error("loadInitialData failed:", error);
+        setConnectionStatus("offline", "Mất kết nối API");
+        setText(
+            "datasetSummary",
+            "Không thể tải dữ liệu. Hãy chạy backend và mở dashboard từ cùng origin.",
+        );
+        setText("datasetBadge", "Lỗi kết nối");
+        byId("datasetBadge")?.classList.replace("neutral", "warning");
+        setOperationStatus(`Không thể tải dữ liệu backend: ${error.message}`, true);
+        showToast("Không thể kết nối Backend API.", true);
     }
 }
 
 function populateHospitalSelect() {
-    const select = document.getElementById('selectHospital');
+    const select = byId("selectHospital");
     if (!select) return;
-    select.innerHTML = '';
-    hospitalsData.forEach(h => {
-        const opt = document.createElement('option');
-        opt.value = h.node_id;
-        opt.textContent = `${h.name} (${h.type})`;
-        select.appendChild(opt);
-    });
+    select.replaceChildren();
+
+    if (!hospitalsData.length) {
+        const option = document.createElement("option");
+        option.textContent = "Không có cơ sở y tế trong dữ liệu";
+        option.value = "";
+        select.append(option);
+        select.disabled = true;
+        return;
+    }
+
+    hospitalsData
+        .slice()
+        .sort((a, b) =>
+            String(a.name || "").localeCompare(String(b.name || ""), "vi"),
+        )
+        .forEach((hospital) => {
+            const option = document.createElement("option");
+            option.value = hospital.node_id;
+            option.textContent = `${hospital.name || "Cơ sở y tế"} · node ${hospital.node_id}`;
+            select.append(option);
+        });
+    select.disabled = false;
 }
 
 function populateEdgeSelect() {
-    const select = document.getElementById('selectEdge');
+    const select = byId("selectEdge");
     if (!select) return;
-    select.innerHTML = '';
-    edgesData.slice(0, 50).forEach(e => {
-        const opt = document.createElement('option');
-        opt.value = e.edge_id;
-        opt.textContent = `[${e.edge_id}] ${e.name} (${e.distance}m, Lv ${e.congestion_level})`;
-        select.appendChild(opt);
+    select.replaceChildren();
+
+    edgesData.slice(0, 100).forEach((edge) => {
+        const option = document.createElement("option");
+        option.value = edge.edge_id;
+        option.textContent = `${edge.name || edge.edge_id} · ${Number(edge.distance || 0).toFixed(0)} m · mức ${edge.congestion_level}`;
+        select.append(option);
     });
+    select.disabled = edgesData.length === 0;
 }
 
 function populateStartControls() {
-    const startInput = document.getElementById('inputStartNode');
-    if (startInput && currentAmbulanceData?.mapped_nearest_node?.nearest_node_id) {
-        startInput.value = currentAmbulanceData.mapped_nearest_node.nearest_node_id;
+    const nodeId = currentAmbulanceData?.mapped_nearest_node?.nearest_node_id;
+    if (Number.isInteger(nodeId) && byId("inputStartNode")) {
+        byId("inputStartNode").value = nodeId;
     }
 }
 
 function onStartModeChange() {
-    const mode = document.getElementById('selectStartMode')?.value || 'current';
-    const input = document.getElementById('inputStartNode');
+    const customMode = byId("selectStartMode")?.value === "custom";
+    const input = byId("inputStartNode");
     if (!input) return;
-    input.style.display = mode === 'custom' ? 'block' : 'none';
+    input.hidden = !customMode;
+    input.required = customMode;
+}
+
+function onAlgorithmChange() {
+    updateCriterionNotice();
+}
+
+function onCriterionChange() {
+    updateCriterionNotice();
+}
+
+function updateCriterionNotice() {
+    const algorithm = byId("selectAlgorithm")?.value || "astar";
+    const criterion = byId("selectCriterion")?.value || "cost";
+    const spec = ALGORITHM_SPECS[algorithm];
+    const compatible = spec.compatibleCriteria.includes(criterion);
+    const compatibilityText = compatible
+        ? "Cặp lựa chọn này phù hợp."
+        : `Lưu ý: ${spec.label} thực tế tối ưu ${spec.objective}, không trực tiếp tối ưu “${CRITERION_LABELS[criterion]}”.`;
+    setText(
+        "criterionNotice",
+        `${compatibilityText} Tiêu chí được frontend dùng để đánh giá kết quả và tối ưu thứ tự nhiều địa điểm; mục tiêu tìm đường thực tế do thuật toán backend quyết định.`,
+    );
 }
 
 function parseNodeIdList(rawValue) {
     if (!rawValue) return [];
-    const seen = new Set();
-    const values = [];
+    const uniqueIds = new Set();
     rawValue
         .split(/[,;\s]+/)
-        .map(v => parseInt(v.trim(), 10))
-        .filter(v => Number.isInteger(v))
-        .forEach(v => {
-            if (!seen.has(v)) {
-                seen.add(v);
-                values.push(v);
-            }
-        });
-    return values;
+        .map((value) => Number.parseInt(value.trim(), 10))
+        .filter(Number.isInteger)
+        .forEach((value) => uniqueIds.add(value));
+    return Array.from(uniqueIds);
+}
+
+function getPlannerInput() {
+    const goalNodeId = Number.parseInt(byId("selectHospital")?.value, 10);
+    const startMode = byId("selectStartMode")?.value || "current";
+    const customStart = Number.parseInt(byId("inputStartNode")?.value, 10);
+    const currentStart =
+        currentAmbulanceData?.mapped_nearest_node?.nearest_node_id;
+    const startNodeId = startMode === "custom" ? customStart : currentStart;
+
+    if (!Number.isInteger(startNodeId)) {
+        throw new Error("Vui lòng chọn hoặc nhập điểm xuất phát hợp lệ.");
+    }
+    if (!Number.isInteger(goalNodeId)) {
+        throw new Error("Vui lòng chọn một cơ sở y tế đích hợp lệ.");
+    }
+
+    const waypointIds = parseNodeIdList(
+        byId("inputWaypoints")?.value || "",
+    ).filter((nodeId) => nodeId !== startNodeId && nodeId !== goalNodeId);
+    if (waypointIds.length > MAX_WAYPOINTS) {
+        throw new Error(
+            `Chỉ nên dùng tối đa ${MAX_WAYPOINTS} điểm trung gian để tránh quá tải khi demo.`,
+        );
+    }
+
+    return {
+        startNodeId,
+        goalNodeId,
+        waypointIds,
+        algorithm: byId("selectAlgorithm")?.value || "astar",
+        criterion: byId("selectCriterion")?.value || "cost",
+        visitOrderMode: byId("selectVisitOrder")?.value || "input",
+    };
 }
 
 function getNodeLabel(nodeId) {
-    if (!Number.isInteger(nodeId)) return '-';
+    if (!Number.isInteger(Number(nodeId))) return "Không xác định";
+    const numericId = Number(nodeId);
     const ambulanceNode = currentAmbulanceData?.mapped_nearest_node;
-    if (ambulanceNode && ambulanceNode.nearest_node_id === nodeId) {
-        return ambulanceNode.nearest_node_name || String(nodeId);
+    if (ambulanceNode?.nearest_node_id === numericId) {
+        return ambulanceNode.nearest_node_name || `Node ${numericId}`;
     }
-    const hospital = hospitalsData.find(h => h.node_id === nodeId || h.poi_node_id === nodeId);
-    if (hospital) return hospital.name || String(nodeId);
-    const poi = poisData.find(p => p.node_id === nodeId || p.poi_node_id === nodeId);
-    if (poi) return poi.name || String(nodeId);
-    return String(nodeId);
+    const point =
+        hospitalsData.find(
+            (item) => item.node_id === numericId || item.poi_node_id === numericId,
+        ) ||
+        poisData.find(
+            (item) => item.node_id === numericId || item.poi_node_id === numericId,
+        );
+    return point?.name || `Node ${numericId}`;
 }
 
-function getCriterionLabel(value) {
-    const labels = {
-        time: 'Thời gian di chuyển ngắn nhất',
-        distance: 'Quãng đường ngắn nhất',
-        cost: 'Chi phí lộ trình thấp nhất',
-        hops: 'Ít bước nhảy nhất'
-    };
-    return labels[value] || value || '-';
+function rebuildEdgeIndex() {
+    edgeIndex = new Map();
+    edgesData.forEach((edge) => {
+        edgeIndex.set(String(edge.edge_id), edge);
+        indexEdgeNodeCoords(fullRoadNodeCoords, edge);
+    });
 }
 
-function getCriterionHint(criterion, algorithm) {
-    const mapping = {
-        time: 'Ưu tiên tuyến đường nhanh nhất theo thời gian/chi phí ước lượng.',
-        distance: 'Ưu tiên tổng quãng đường ngắn nhất giữa các điểm.',
-        cost: 'Ưu tiên tổng chi phí lộ trình thấp nhất theo trọng số cạnh.',
-        hops: 'Ưu tiên số chặng di chuyển ít nhất.'
-    };
-    const base = mapping[criterion] || 'Tiêu chí được dùng để mô tả hướng tối ưu hóa của tuyến đường.';
-    if (algorithm === 'bfs') {
-        return `${base} Bản đồ bước tìm kiếm sẽ hiển thị vì BFS có trace visited/frontier sẵn.`;
+function indexEdgeNodeCoords(target, edge) {
+    const [sourceId, targetId] = String(edge?.edge_id || "").split("_");
+    const sourceCoords = normalizeMapCoords([edge?.u_lat, edge?.u_lng]);
+    const targetCoords = normalizeMapCoords([edge?.v_lat, edge?.v_lng]);
+    if (sourceId && sourceCoords) target.set(sourceId, sourceCoords);
+    if (targetId && targetCoords) target.set(targetId, targetCoords);
+}
+
+function getPathEdge(pathNodes, index) {
+    return edgeIndex.get(`${pathNodes[index]}_${pathNodes[index + 1]}`);
+}
+
+function analyzePathCongestion(response) {
+    const pathNodes = Array.isArray(response.path_nodes)
+        ? response.path_nodes
+        : [];
+    const totalDistance = Number(response.total_distance_m || 0);
+    let knownDistance = 0;
+    let knownTravelSeconds = 0;
+    let levelTotal = 0;
+    let knownEdges = 0;
+    const highCongestionEdges = [];
+    const speedByLevel = { 1: 40, 2: 34, 3: 27, 4: 20, 5: 14, 6: 9 };
+
+    for (let index = 0; index < pathNodes.length - 1; index += 1) {
+        const edge = getPathEdge(pathNodes, index);
+        if (!edge) continue;
+        const distance = Math.max(0, Number(edge.distance || 0));
+        const level = Math.min(6, Math.max(1, Number(edge.congestion_level || 1)));
+        const speed = speedByLevel[level] || DEFAULT_SPEED_KPH;
+        knownDistance += distance;
+        knownTravelSeconds += distance / ((speed * 1000) / 3600);
+        levelTotal += level;
+        knownEdges += 1;
+        if (level >= 4) {
+            highCongestionEdges.push({
+                edgeId: edge.edge_id,
+                name: edge.name || edge.edge_id,
+                level,
+                distance,
+            });
+        }
     }
-    return `${base} Với thuật toán hiện tại, phần giải thích sẽ dựa trên kết quả tính được và trace nếu backend cung cấp.`;
+
+    const unknownDistance = Math.max(
+        0,
+        totalDistance - Math.min(totalDistance, knownDistance),
+    );
+    const estimatedTimeSeconds =
+        knownTravelSeconds + unknownDistance / ((DEFAULT_SPEED_KPH * 1000) / 3600);
+    return {
+        estimatedTimeSeconds,
+        highCongestionEdges,
+        knownEdges,
+        totalEdges: Math.max(0, pathNodes.length - 1),
+        averageKnownLevel: knownEdges ? levelTotal / knownEdges : null,
+    };
+}
+
+function annotateResult(response) {
+    const pathNodes = Array.isArray(response.path_nodes)
+        ? response.path_nodes
+        : [];
+    const congestion = analyzePathCongestion(response);
+    return {
+        ...response,
+        hopCount: Number.isFinite(Number(response.hop_count))
+            ? Number(response.hop_count)
+            : Math.max(0, pathNodes.length - 1),
+        estimatedTimeSeconds: congestion.estimatedTimeSeconds,
+        congestion,
+    };
+}
+
+function scoreResult(response, criterion) {
+    const result =
+        response.estimatedTimeSeconds === undefined
+            ? annotateResult(response)
+            : response;
+    if (criterion === "distance") return finiteMetric(result.total_distance_m);
+    if (criterion === "hops") return finiteMetric(result.hopCount);
+    if (criterion === "time") return finiteMetric(result.estimatedTimeSeconds);
+    return finiteMetric(result.total_cost);
+}
+
+function finiteMetric(value) {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue)
+        ? numericValue
+        : Number.POSITIVE_INFINITY;
+}
+
+async function runRouteSegment(startId, goalId, algorithm) {
+    const cacheKey = `${algorithm}:${startId}:${goalId}`;
+    if (routeRequestCache.has(cacheKey)) return routeRequestCache.get(cacheKey);
+
+    const request = fetchJson(`${API_BASE}/route`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            start_node_id: startId,
+            goal_node_id: goalId,
+            algorithm,
+        }),
+    })
+        .then((data) => {
+            if (!data?.found) {
+                throw new Error(
+                    data?.message ||
+                    `Không tìm thấy đường từ node ${startId} tới node ${goalId}.`,
+                );
+            }
+            return annotateResult(data);
+        })
+        .catch((error) => {
+            routeRequestCache.delete(cacheKey);
+            throw error;
+        });
+
+    routeRequestCache.set(cacheKey, request);
+    return request;
+}
+
+async function runOrderedRoute(
+    nodeOrder,
+    algorithm,
+    progressCallback = () => { },
+) {
+    const segments = [];
+    for (let index = 0; index < nodeOrder.length - 1; index += 1) {
+        progressCallback(index + 1, nodeOrder.length - 1);
+        const start = nodeOrder[index];
+        const goal = nodeOrder[index + 1];
+        const result = await runRouteSegment(start, goal, algorithm);
+        segments.push({ start, goal, result });
+    }
+    return segments;
+}
+
+async function optimizeWaypointOrder(input, progressCallback = () => { }) {
+    const remaining = [...input.waypointIds];
+    const orderedWaypoints = [];
+    const segments = [];
+    let current = input.startNodeId;
+    let requestCount = 0;
+    const expectedRequests = (remaining.length * (remaining.length + 1)) / 2 + 1;
+
+    while (remaining.length) {
+        const candidates = [];
+        for (const candidate of remaining) {
+            requestCount += 1;
+            progressCallback(requestCount, expectedRequests);
+            try {
+                const result = await runRouteSegment(
+                    current,
+                    candidate,
+                    input.algorithm,
+                );
+                candidates.push({
+                    candidate,
+                    result,
+                    score: scoreResult(result, input.criterion),
+                });
+            } catch (error) {
+                console.warn(
+                    `Waypoint ${candidate} is unreachable from ${current}:`,
+                    error,
+                );
+            }
+        }
+
+        if (!candidates.length) {
+            throw new Error(
+                `Không thể đi từ node ${current} tới bất kỳ điểm trung gian còn lại.`,
+            );
+        }
+
+        candidates.sort((a, b) => a.score - b.score || a.candidate - b.candidate);
+        const selected = candidates[0];
+        orderedWaypoints.push(selected.candidate);
+        segments.push({
+            start: current,
+            goal: selected.candidate,
+            result: selected.result,
+        });
+        current = selected.candidate;
+        remaining.splice(remaining.indexOf(selected.candidate), 1);
+    }
+
+    requestCount += 1;
+    progressCallback(requestCount, expectedRequests);
+    const finalResult = await runRouteSegment(
+        current,
+        input.goalNodeId,
+        input.algorithm,
+    );
+    segments.push({
+        start: current,
+        goal: input.goalNodeId,
+        result: finalResult,
+    });
+    return { orderedWaypoints, segments };
+}
+
+function aggregateSegments(segments, visitingOrder) {
+    const pathCoords = [];
+    const pathNodes = [];
+    const highCongestionEdges = [];
+    let totalCost = 0;
+    let totalDistance = 0;
+    let totalExpanded = 0;
+    let totalProcessingTime = 0;
+    let totalTravelTime = 0;
+    let totalHops = 0;
+    let knownEdges = 0;
+    let totalEdges = 0;
+
+    segments.forEach(({ result }, index) => {
+        const coords = Array.isArray(result.path_coords) ? result.path_coords : [];
+        const nodes = Array.isArray(result.path_nodes) ? result.path_nodes : [];
+        pathCoords.push(...(index === 0 ? coords : coords.slice(1)));
+        pathNodes.push(...(index === 0 ? nodes : nodes.slice(1)));
+        totalCost += Number(result.total_cost || 0);
+        totalDistance += Number(result.total_distance_m || 0);
+        totalExpanded += Number(result.nodes_expanded || 0);
+        totalProcessingTime += Number(result.execution_time_ms || 0);
+        totalTravelTime += Number(result.estimatedTimeSeconds || 0);
+        totalHops += Number(result.hopCount || 0);
+        knownEdges += result.congestion?.knownEdges || 0;
+        totalEdges += result.congestion?.totalEdges || 0;
+        highCongestionEdges.push(...(result.congestion?.highCongestionEdges || []));
+    });
+
+    return {
+        segments,
+        visitingOrder,
+        pathCoords,
+        pathNodes,
+        totalCost,
+        totalDistance,
+        totalExpanded,
+        totalProcessingTime,
+        totalTravelTime,
+        totalHops,
+        congestion: { highCongestionEdges, knownEdges, totalEdges },
+    };
+}
+
+async function calculateRoute() {
+    let input;
+    try {
+        input = getPlannerInput();
+    } catch (error) {
+        setOperationStatus(error.message, true);
+        showToast(error.message, true);
+        return;
+    }
+
+    setButtonBusy(
+        "btnCalculateRoute",
+        true,
+        "Đang tìm tuyến…",
+        "Tìm tuyến đường",
+    );
+    byId("btnCompareAlgorithms").disabled = true;
+    setOperationStatus(
+        `${ALGORITHM_SPECS[input.algorithm].label} đang xử lý dữ liệu…`,
+    );
+    byId("routeResultPanel").hidden = true;
+    byId("comparisonPanel").hidden = true;
+    clearFinalRoute();
+    clearSearchVisualization();
+
+    try {
+        const originalOrder = [
+            input.startNodeId,
+            ...input.waypointIds,
+            input.goalNodeId,
+        ];
+        let selectedSegments;
+        let selectedOrder = originalOrder;
+        let originalAggregate = null;
+
+        if (input.visitOrderMode === "nearest" && input.waypointIds.length > 1) {
+            const originalSegments = await runOrderedRoute(
+                originalOrder,
+                input.algorithm,
+                (current, total) => {
+                    setOperationStatus(
+                        `Đang tính thứ tự ban đầu: chặng ${current}/${total}…`,
+                    );
+                },
+            );
+            originalAggregate = aggregateSegments(originalSegments, originalOrder);
+
+            const optimized = await optimizeWaypointOrder(input, (current, total) => {
+                setOperationStatus(
+                    `Nearest Neighbor đang đánh giá tuyến ứng viên ${current}/${total}…`,
+                );
+            });
+            selectedOrder = [
+                input.startNodeId,
+                ...optimized.orderedWaypoints,
+                input.goalNodeId,
+            ];
+            selectedSegments = optimized.segments;
+        } else {
+            selectedSegments = await runOrderedRoute(
+                originalOrder,
+                input.algorithm,
+                (current, total) => {
+                    setOperationStatus(`Đang tìm chặng ${current}/${total}…`);
+                },
+            );
+        }
+
+        const aggregate = aggregateSegments(selectedSegments, selectedOrder);
+        renderRouteResult(aggregate, input, originalAggregate);
+        drawFinalRoute(aggregate);
+
+        const combinedTrace = combineSearchTraces(
+            selectedSegments,
+            input.algorithm,
+        );
+        if (combinedTrace) await startSearchVisualization(combinedTrace);
+        else clearSearchVisualization();
+
+        setOperationStatus(
+            `Hoàn tất ${selectedSegments.length} chặng bằng ${ALGORITHM_SPECS[input.algorithm].label}.`,
+        );
+        showToast(
+            `Đã tìm thấy tuyến: ${aggregate.totalDistance.toFixed(0)} m, ${aggregate.totalExpanded.toLocaleString("vi-VN")} nút mở rộng.`,
+        );
+    } catch (error) {
+        console.error("calculateRoute failed:", error);
+        clearSearchVisualization();
+        setOperationStatus(`Không thể tính tuyến: ${error.message}`, true);
+        showToast(`Không thể tính tuyến: ${error.message}`, true);
+    } finally {
+        setButtonBusy(
+            "btnCalculateRoute",
+            false,
+            "Đang tìm tuyến…",
+            "Tìm tuyến đường",
+        );
+        byId("btnCompareAlgorithms").disabled = false;
+    }
+}
+
+function renderRouteResult(aggregate, input, originalAggregate) {
+    const spec = ALGORITHM_SPECS[input.algorithm];
+    const panel = byId("routeResultPanel");
+    panel.hidden = false;
+
+    setText(
+        "resultTitle",
+        aggregate.segments.length > 1
+            ? "Đã tìm thấy tuyến nhiều chặng"
+            : "Đã tìm thấy tuyến đường",
+    );
+    const badge = byId("optimalityBadge");
+    badge.textContent = spec.optimality;
+    badge.className = `status-badge ${spec.badgeClass}`;
+
+    renderRouteSummary(aggregate, input);
+    setText("resCost", aggregate.totalCost.toFixed(2));
+    setText("resDistance", formatDistance(aggregate.totalDistance));
+    setText("resTravelTime", formatDuration(aggregate.totalTravelTime));
+    setText("resHops", aggregate.totalHops.toLocaleString("vi-VN"));
+    setText("resExpanded", aggregate.totalExpanded.toLocaleString("vi-VN"));
+    setText("resTime", `${aggregate.totalProcessingTime.toFixed(2)} ms`);
+
+    renderVisitingOrder(aggregate.visitingOrder);
+    renderOrderComparison(aggregate, originalAggregate, input.criterion);
+    renderExplanation(aggregate, input, spec);
+    renderCongestionExplanation(aggregate);
+    renderSegmentList(aggregate.segments);
+}
+
+function renderRouteSummary(aggregate, input) {
+    const summary = byId("routeSummary");
+    summary.replaceChildren();
+    const fields = [
+        ["Xuất phát", `${getNodeLabel(input.startNodeId)} (${input.startNodeId})`],
+        ["Đích đến", `${getNodeLabel(input.goalNodeId)} (${input.goalNodeId})`],
+        ["Thuật toán", ALGORITHM_SPECS[input.algorithm].label],
+        ["Tiêu chí đánh giá", CRITERION_LABELS[input.criterion]],
+        [
+            "Số điểm trung gian",
+            String(Math.max(0, aggregate.visitingOrder.length - 2)),
+        ],
+        [
+            "Cách sắp thứ tự",
+            input.visitOrderMode === "nearest"
+                ? "Nearest Neighbor (xấp xỉ)"
+                : "Theo thứ tự nhập",
+        ],
+    ];
+
+    fields.forEach(([label, value]) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "summary-field";
+        const labelElement = document.createElement("span");
+        labelElement.textContent = label;
+        const valueElement = document.createElement("strong");
+        valueElement.textContent = value;
+        wrapper.append(labelElement, valueElement);
+        summary.append(wrapper);
+    });
+}
+
+function renderVisitingOrder(order) {
+    const container = byId("visitingOrder");
+    container.replaceChildren();
+    order.forEach((nodeId, index) => {
+        if (index > 0) {
+            const arrow = document.createElement("span");
+            arrow.className = "path-arrow";
+            arrow.textContent = "→";
+            container.append(arrow);
+        }
+        const chip = document.createElement("span");
+        chip.className = "path-node";
+        chip.textContent = `${getNodeLabel(nodeId)} · ${nodeId}`;
+        container.append(chip);
+    });
+}
+
+function renderOrderComparison(optimized, original, criterion) {
+    const container = byId("orderComparison");
+    if (!original) {
+        container.hidden = true;
+        container.textContent = "";
+        return;
+    }
+
+    const originalScore = scoreAggregate(original, criterion);
+    const optimizedScore = scoreAggregate(optimized, criterion);
+    const difference = originalScore
+        ? ((originalScore - optimizedScore) / originalScore) * 100
+        : 0;
+    const originalOrder = original.visitingOrder.join(" → ");
+    const optimizedOrder = optimized.visitingOrder.join(" → ");
+    const outcome =
+        difference >= 0
+            ? `cải thiện ${difference.toFixed(1)}%`
+            : `cao hơn ${Math.abs(difference).toFixed(1)}%`;
+    container.textContent = `Thứ tự nhập: ${originalOrder}. Thứ tự Nearest Neighbor: ${optimizedOrder}. Theo “${CRITERION_LABELS[criterion]}”, phương án xấp xỉ ${outcome}.`;
+    container.hidden = false;
+}
+
+function renderExplanation(aggregate, input, spec) {
+    const compatible = spec.compatibleCriteria.includes(input.criterion);
+    const criterionSentence = compatible
+        ? `Thuật toán phù hợp với tiêu chí “${CRITERION_LABELS[input.criterion]}” đã chọn.`
+        : `Tiêu chí hiển thị là “${CRITERION_LABELS[input.criterion]}”, nhưng backend của ${spec.label} thực tế tối ưu ${spec.objective}.`;
+    const multiLocationSentence =
+        aggregate.segments.length > 1
+            ? `Tuyến gồm ${aggregate.segments.length} chặng; mỗi chặng được tìm độc lập bằng cùng thuật toán.`
+            : "Đây là bài toán tìm đường giữa hai địa điểm.";
+    const traceSentence = aggregate.segments.some(
+        (segment) => segment.result.search_trace?.steps?.length,
+    )
+        ? "API có trả search trace nên có thể phát lại visited và frontier ở phần mô phỏng."
+        : "API chưa trả search trace cho thuật toán này; frontend chỉ hiển thị final route và không dựng dữ liệu giả.";
+
+    setText(
+        "routeExplanation",
+        `${spec.explanation} ${criterionSentence} ${multiLocationSentence} ${traceSentence} Dùng bảng “So sánh 5 thuật toán” để đối chiếu một route thay thế trên cùng đầu vào.`,
+    );
+}
+
+function renderCongestionExplanation(aggregate) {
+    const congestion = aggregate.congestion;
+    const coverage = congestion.totalEdges
+        ? (congestion.knownEdges / congestion.totalEdges) * 100
+        : 0;
+    const uniqueHighEdges = Array.from(
+        new Map(
+            congestion.highCongestionEdges.map((edge) => [edge.edgeId, edge]),
+        ).values(),
+    );
+
+    if (!congestion.knownEdges) {
+        setText(
+            "congestionExplanation",
+            `API route chưa trả chi tiết congestion theo path và mẫu /api/edges hiện không bao phủ cạnh của tuyến. Thời gian di chuyển được ước tính theo tốc độ đô thị mặc định ${DEFAULT_SPEED_KPH} km/h.`,
+        );
+        return;
+    }
+
+    const highText = uniqueHighEdges.length
+        ? `Phát hiện ${uniqueHighEdges.length} cạnh ùn tắc mức 4–6 trong phần dữ liệu quan sát: ${uniqueHighEdges
+            .slice(0, 4)
+            .map((edge) => `${edge.name} (mức ${edge.level})`)
+            .join(", ")}${uniqueHighEdges.length > 4 ? ", …" : ""}.`
+        : "Không phát hiện cạnh mức ùn tắc 4–6 trong phần dữ liệu quan sát được.";
+    setText(
+        "congestionExplanation",
+        `${highText} Độ phủ dữ liệu cạnh trên path: ${congestion.knownEdges}/${congestion.totalEdges} (${coverage.toFixed(1)}%). Phần chưa có dữ liệu dùng tốc độ mặc định ${DEFAULT_SPEED_KPH} km/h để ước tính thời gian.`,
+    );
+}
+
+function renderSegmentList(segments) {
+    const container = byId("routeSegmentList");
+    container.replaceChildren();
+    segments.forEach((segment, index) => {
+        const item = document.createElement("div");
+        item.className = "route-segment-item";
+        const title = document.createElement("strong");
+        title.textContent = `Chặng ${index + 1}: ${getNodeLabel(segment.start)} → ${getNodeLabel(segment.goal)}`;
+        const metrics = document.createElement("div");
+        metrics.textContent = `Cost ${Number(segment.result.total_cost || 0).toFixed(2)} · ${formatDistance(segment.result.total_distance_m)} · ${formatDuration(segment.result.estimatedTimeSeconds)} · ${segment.result.hopCount} cạnh · ${Number(segment.result.nodes_expanded || 0).toLocaleString("vi-VN")} nút mở rộng · ${Number(segment.result.execution_time_ms || 0).toFixed(2)} ms`;
+        const path = document.createElement("span");
+        path.className = "node-path";
+        path.textContent = summarizeNodePath(segment.result.path_nodes || []);
+        item.append(title, metrics, path);
+        container.append(item);
+    });
+}
+
+function summarizeNodePath(nodes) {
+    if (nodes.length <= 160) return `Path: ${nodes.join(" → ")}`;
+    return `Path (${nodes.length} nodes): ${nodes.slice(0, 80).join(" → ")} → … → ${nodes.slice(-80).join(" → ")}`;
+}
+
+function drawFinalRoute(aggregate) {
+    if (!map) return;
+    clearFinalRoute();
+
+    if (aggregate.pathCoords.length >= 2) {
+        activeRoutePolyline = L.polyline(aggregate.pathCoords, {
+            pane: "finalRoutePane",
+            color: "#9e77ff",
+            weight: 6,
+            opacity: 0.92,
+            lineJoin: "round",
+        }).addTo(map);
+        map.fitBounds(activeRoutePolyline.getBounds(), { padding: [46, 46] });
+    } else if (aggregate.pathCoords.length === 1) {
+        map.setView(aggregate.pathCoords[0], 16);
+    }
+
+    aggregate.visitingOrder.forEach((nodeId, index) => {
+        const pathIndex =
+            index === aggregate.visitingOrder.length - 1
+                ? aggregate.pathNodes.lastIndexOf(nodeId)
+                : aggregate.pathNodes.indexOf(nodeId);
+        const coords = aggregate.pathCoords[pathIndex];
+        if (!coords) return;
+        const color =
+            index === 0
+                ? "#38d996"
+                : index === aggregate.visitingOrder.length - 1
+                    ? "#ff6684"
+                    : "#f5b942";
+        const marker = L.circleMarker(coords, {
+            pane: "searchCurrentPane",
+            radius: 7,
+            color,
+            fillColor: color,
+            fillOpacity: 0.95,
+            weight: 2,
+        }).bindTooltip(
+            `${index === 0 ? "Start" : index === aggregate.visitingOrder.length - 1 ? "Goal" : `Điểm ${index}`}: ${getNodeLabel(nodeId)}`,
+        );
+        marker.addTo(map);
+        routeNodeMarkers.push(marker);
+    });
+}
+
+function clearFinalRoute() {
+    if (!map) return;
+    if (activeRoutePolyline) {
+        map.removeLayer(activeRoutePolyline);
+        activeRoutePolyline = null;
+    }
+    routeNodeMarkers.forEach((marker) => map.removeLayer(marker));
+    routeNodeMarkers = [];
+}
+
+function combineSearchTraces(segments, algorithm) {
+    const tracedSegments = segments.filter(
+        (segment) => segment.result.search_trace?.steps?.length,
+    );
+    if (!tracedSegments.length) return null;
+
+    const steps = [];
+    const visitedOrder = [];
+    const nodeCoords = {};
+    tracedSegments.forEach((segment, segmentIndex) => {
+        const trace = segment.result.search_trace;
+        mergeValidNodeCoords(nodeCoords, trace.node_coords || {});
+        mergePathNodeCoords(
+            nodeCoords,
+            segment.result.path_nodes,
+            segment.result.path_coords,
+        );
+        (trace.visited_order || []).forEach((nodeId) => visitedOrder.push(nodeId));
+        (trace.steps || []).forEach((step) => {
+            steps.push({
+                ...step,
+                legIndex: segmentIndex + 1,
+                legTotal: segments.length,
+                routeStart: segment.start,
+                routeGoal: segment.goal,
+            });
+        });
+    });
+
+    mergeEdgeNodeCoords(nodeCoords, edgesData);
+    fullRoadNodeCoords.forEach((coords, nodeId) => {
+        if (!nodeCoords[nodeId]) nodeCoords[nodeId] = coords;
+    });
+
+    return {
+        algorithm: ALGORITHM_SPECS[algorithm]?.label || algorithm,
+        frontier_kind:
+            tracedSegments[0].result.search_trace.frontier_kind || "frontier",
+        visited_order: visitedOrder,
+        steps,
+        node_coords: nodeCoords,
+    };
+}
+
+function mergeValidNodeCoords(target, source) {
+    Object.entries(source || {}).forEach(([nodeId, rawCoords]) => {
+        const coords = normalizeMapCoords(rawCoords);
+        if (coords) target[String(nodeId)] = coords;
+    });
+}
+
+function mergePathNodeCoords(target, pathNodes = [], pathCoords = []) {
+    const count = Math.min(pathNodes?.length || 0, pathCoords?.length || 0);
+    for (let index = 0; index < count; index += 1) {
+        const coords = normalizeMapCoords(pathCoords[index]);
+        if (coords) target[String(pathNodes[index])] = coords;
+    }
+}
+
+function mergeEdgeNodeCoords(target, edges = []) {
+    edges.forEach((edge) => {
+        const [sourceId, targetId] = String(edge.edge_id || "").split("_");
+        const sourceCoords = normalizeMapCoords([edge.u_lat, edge.u_lng]);
+        const targetCoords = normalizeMapCoords([edge.v_lat, edge.v_lng]);
+        if (sourceId && sourceCoords && !target[sourceId])
+            target[sourceId] = sourceCoords;
+        if (targetId && targetCoords && !target[targetId])
+            target[targetId] = targetCoords;
+    });
+}
+
+function normalizeMapCoords(rawCoords) {
+    if (!Array.isArray(rawCoords) || rawCoords.length < 2) return null;
+    let latitude = Number(rawCoords[0]);
+    let longitude = Number(rawCoords[1]);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+    if (Math.abs(latitude) > 90 && Math.abs(longitude) <= 90) {
+        [latitude, longitude] = [longitude, latitude];
+    }
+    if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
+    return [latitude, longitude];
 }
 
 function stopSearchAnimation() {
@@ -176,118 +1079,304 @@ function stopSearchAnimation() {
         clearInterval(searchAnimationTimer);
         searchAnimationTimer = null;
     }
-    const btn = document.getElementById('btnPlaySearch');
-    if (btn) btn.textContent = '▶ Play';
+    setText("btnPlaySearch", "▶ Phát");
 }
 
 function clearSearchVisualization() {
     stopSearchAnimation();
-    if (searchVisitedLayer) searchVisitedLayer.clearLayers();
-    if (searchFrontierLayer) searchFrontierLayer.clearLayers();
-    if (searchCurrentLayer) searchCurrentLayer.clearLayers();
+    searchVisitedLayer?.clearLayers();
+    searchFrontierLayer?.clearLayers();
+    searchCurrentLayer?.clearLayers();
     searchVisualizationData = null;
     searchStepIndex = 0;
-    const panel = document.getElementById('searchVisualizationPanel');
-    if (panel) panel.style.display = 'none';
+    const panel = byId("searchVisualizationPanel");
+    if (panel) panel.hidden = true;
 }
 
-function renderTraceTokens(containerId, items, cssClass) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-    if (!items || items.length === 0) {
-        container.textContent = '-';
-        return;
-    }
-    container.innerHTML = items
-        .map(item => `<span class="search-viz-token ${cssClass}">${item}</span>`)
-        .join('');
-}
-
-function renderSearchStep(stepIndex) {
-    if (!searchVisualizationData || !searchVisualizationData.steps || searchVisualizationData.steps.length === 0) return;
-
-    const steps = searchVisualizationData.steps;
-    const safeIndex = Math.max(0, Math.min(stepIndex, steps.length - 1));
-    searchStepIndex = safeIndex;
-
-    const step = steps[safeIndex];
-    const visitedOrder = (searchVisualizationData.visited_order || []).slice(0, safeIndex + 1);
-    const frontier = step.frontier || [];
-    const currentNode = step.current_node;
-    const nodeCoords = searchVisualizationData.node_coords || {};
-
-    if (searchVisitedLayer) searchVisitedLayer.clearLayers();
-    if (searchFrontierLayer) searchFrontierLayer.clearLayers();
-    if (searchCurrentLayer) searchCurrentLayer.clearLayers();
-
-    visitedOrder.forEach(nodeId => {
-        const coords = nodeCoords[String(nodeId)];
-        if (!coords) return;
-        L.circleMarker(coords, {
-            radius: 5,
-            color: '#3b82f6',
-            fillColor: '#3b82f6',
-            fillOpacity: 0.35,
-            weight: 1
-        }).bindTooltip(String(nodeId), { permanent: false, direction: 'top' }).addTo(searchVisitedLayer);
-    });
-
-    frontier.forEach(item => {
-        const coords = nodeCoords[String(item.node_id)];
-        if (!coords) return;
-        L.circleMarker(coords, {
-            radius: 6,
-            color: '#f59e0b',
-            fillColor: '#f59e0b',
-            fillOpacity: 0.45,
-            weight: 1
-        }).bindTooltip(String(item.node_id), { permanent: false, direction: 'top' }).addTo(searchFrontierLayer);
-    });
-
-    const currentCoords = nodeCoords[String(currentNode)];
-    if (currentCoords) {
-        L.circleMarker(currentCoords, {
-            radius: 8,
-            color: '#10b981',
-            fillColor: '#10b981',
-            fillOpacity: 0.9,
-            weight: 2
-        }).bindTooltip(String(currentNode), { permanent: false, direction: 'top' }).addTo(searchCurrentLayer);
-    }
-
-    const vizAlgorithm = document.getElementById('vizAlgorithm');
-    const vizStep = document.getElementById('vizStep');
-    const vizCurrentNode = document.getElementById('vizCurrentNode');
-    const vizVisitedCount = document.getElementById('vizVisitedCount');
-    const vizFrontierCount = document.getElementById('vizFrontierCount');
-    const vizExplanation = document.getElementById('vizExplanation');
-
-    if (vizAlgorithm) vizAlgorithm.textContent = searchVisualizationData.algorithm || '-';
-    if (vizStep) vizStep.textContent = `Step ${safeIndex + 1} / ${steps.length}`;
-    if (vizCurrentNode) vizCurrentNode.textContent = currentNode ?? '-';
-    if (vizVisitedCount) vizVisitedCount.textContent = visitedOrder.length.toLocaleString();
-    if (vizFrontierCount) vizFrontierCount.textContent = frontier.length.toLocaleString();
-    if (vizExplanation) {
-        vizExplanation.textContent = `Mỗi bước cho thấy node hiện tại, danh sách visited tích lũy và frontier tại thời điểm mở rộng node đó.`;
-    }
-
-    renderTraceTokens('vizVisitedList', visitedOrder.map(nodeId => String(nodeId)), 'visited');
-    renderTraceTokens('vizFrontierList', frontier.map(item => String(item.node_id)), 'frontier');
-}
-
-function startSearchVisualization(routeData) {
-    if (!routeData?.search_trace?.steps?.length) {
+async function startSearchVisualization(trace) {
+    if (!trace?.steps?.length) {
         clearSearchVisualization();
         return;
     }
-
-    searchVisualizationData = routeData.search_trace;
+    stopSearchAnimation();
+    searchVisualizationData = trace;
     searchStepIndex = 0;
+    byId("searchVisualizationPanel").hidden = false;
 
-    const panel = document.getElementById('searchVisualizationPanel');
-    if (panel) panel.style.display = 'flex';
-
+    const missingNodeIds = getMissingTraceNodeIds(trace);
+    if (missingNodeIds.length) {
+        setMapTraceLoadingStatus(missingNodeIds.length);
+        await ensureTraceCoordinates(trace, missingNodeIds);
+    }
     renderSearchStep(0);
+}
+
+function getMissingTraceNodeIds(trace) {
+    const nodeIds = new Set(trace.visited_order || []);
+    (trace.steps || []).forEach((step) => {
+        if (step.current_node !== null && step.current_node !== undefined)
+            nodeIds.add(step.current_node);
+        (step.frontier || []).forEach((item) => {
+            if (item?.node_id !== null && item?.node_id !== undefined)
+                nodeIds.add(item.node_id);
+        });
+    });
+    return Array.from(nodeIds).filter(
+        (nodeId) => !normalizeMapCoords(trace.node_coords?.[String(nodeId)]),
+    );
+}
+
+function setMapTraceLoadingStatus(missingCount) {
+    const status = byId("vizMapStatus");
+    if (!status) return;
+    status.classList.remove("is-warning");
+    status.textContent = `Đang bổ sung tọa độ cho ${missingCount.toLocaleString("vi-VN")} node tìm kiếm từ dữ liệu cạnh…`;
+}
+
+async function ensureTraceCoordinates(trace, missingNodeIds) {
+    copyIndexedCoordsToTrace(trace, missingNodeIds);
+    let unresolved = getMissingTraceNodeIds(trace);
+    if (!unresolved.length || allEdgeCoordinatesLoaded) return;
+
+    try {
+        await loadAllEdgeCoordinates();
+        copyIndexedCoordsToTrace(trace, unresolved);
+    } catch (error) {
+        console.warn("Unable to load all road-node coordinates:", error);
+        setOperationStatus(
+            `Không thể tải đủ tọa độ mô phỏng: ${error.message}`,
+            true,
+        );
+    }
+}
+
+function copyIndexedCoordsToTrace(trace, nodeIds) {
+    trace.node_coords ||= {};
+    nodeIds.forEach((nodeId) => {
+        const coords = fullRoadNodeCoords.get(String(nodeId));
+        if (coords) trace.node_coords[String(nodeId)] = coords;
+    });
+}
+
+async function loadAllEdgeCoordinates() {
+    if (allEdgeCoordinatesLoaded) return;
+    if (fullCoordinateLoadPromise) return fullCoordinateLoadPromise;
+
+    const limit = Math.max(1, graphEdgeCount || edgesData.length || 2000);
+    fullCoordinateLoadPromise = fetchJson(`${API_BASE}/edges?limit=${limit}`)
+        .then((allEdges) => {
+            if (!Array.isArray(allEdges))
+                throw new Error("API edges không trả về danh sách hợp lệ.");
+            allEdges.forEach((edge) => indexEdgeNodeCoords(fullRoadNodeCoords, edge));
+            allEdgeCoordinatesLoaded =
+                allEdges.length >= limit || allEdges.length >= graphEdgeCount;
+        })
+        .finally(() => {
+            fullCoordinateLoadPromise = null;
+        });
+    return fullCoordinateLoadPromise;
+}
+
+function renderSearchStep(stepIndex) {
+    if (!searchVisualizationData?.steps?.length) return;
+    const steps = searchVisualizationData.steps;
+    const safeIndex = Math.max(0, Math.min(stepIndex, steps.length - 1));
+    searchStepIndex = safeIndex;
+    const step = steps[safeIndex];
+    const expandedOrder = searchVisualizationData.visited_order.slice(
+        0,
+        safeIndex + 1,
+    );
+    const visitedOrder = expandedOrder.filter(
+        (nodeId) => String(nodeId) !== String(step.current_node),
+    );
+    const rawFrontier = Array.isArray(step.frontier) ? step.frontier : [];
+    const frontier = rawFrontier.filter(
+        (item) => String(item.node_id) !== String(step.current_node),
+    );
+    const nodeCoords = searchVisualizationData.node_coords || {};
+    let visitedMarkersDrawn = 0;
+    let frontierMarkersDrawn = 0;
+
+    searchVisitedLayer?.clearLayers();
+    searchFrontierLayer?.clearLayers();
+    searchCurrentLayer?.clearLayers();
+
+    visitedOrder.slice(-MAX_MAP_TRACE_NODES).forEach((nodeId) => {
+        const coords = normalizeMapCoords(nodeCoords[String(nodeId)]);
+        if (!coords) return;
+        L.circleMarker(coords, {
+            pane: "searchVisitedPane",
+            radius: 5.5,
+            color: SEARCH_COLORS.visited,
+            fillColor: SEARCH_COLORS.visited,
+            fillOpacity: 0.7,
+            opacity: 0.9,
+            weight: 1.5,
+        })
+            .bindTooltip(String(nodeId))
+            .addTo(searchVisitedLayer);
+        visitedMarkersDrawn += 1;
+    });
+
+    frontier.slice(0, MAX_MAP_TRACE_NODES).forEach((item) => {
+        const coords = normalizeMapCoords(nodeCoords[String(item.node_id)]);
+        if (!coords) return;
+        L.circleMarker(coords, {
+            pane: "searchFrontierPane",
+            radius: 7,
+            color: SEARCH_COLORS.frontier,
+            fillColor: SEARCH_COLORS.frontier,
+            fillOpacity: 0.72,
+            opacity: 1,
+            weight: 2,
+        })
+            .bindTooltip(formatFrontierItem(item))
+            .addTo(searchFrontierLayer);
+        frontierMarkersDrawn += 1;
+    });
+
+    const currentCoords = normalizeMapCoords(
+        nodeCoords[String(step.current_node)],
+    );
+    if (currentCoords) {
+        L.circleMarker(currentCoords, {
+            pane: "searchCurrentPane",
+            radius: 15,
+            color: SEARCH_COLORS.current,
+            fillColor: SEARCH_COLORS.current,
+            fillOpacity: 0.14,
+            opacity: 0.7,
+            weight: 2,
+        }).addTo(searchCurrentLayer);
+        L.circleMarker(currentCoords, {
+            pane: "searchCurrentPane",
+            radius: 9,
+            color: SEARCH_COLORS.current,
+            fillColor: SEARCH_COLORS.current,
+            fillOpacity: 0.9,
+            opacity: 1,
+            weight: 3,
+        })
+            .bindTooltip(`Đang mở: ${step.current_node}`, {
+                permanent: true,
+                direction: "top",
+            })
+            .addTo(searchCurrentLayer);
+        const currentIcon = L.divIcon({
+            className: "search-current-marker",
+            html: `<span class="current-marker-label">Node ${escapeHtml(step.current_node)}</span><span class="current-marker-core">●</span>`,
+            iconSize: [34, 34],
+            iconAnchor: [17, 17],
+        });
+        L.marker(currentCoords, {
+            icon: currentIcon,
+            pane: "markerPane",
+            interactive: false,
+            keyboard: false,
+            zIndexOffset: 5000,
+        }).addTo(searchCurrentLayer);
+        focusCurrentSearchNode(currentCoords, safeIndex);
+    }
+
+    updateMapTraceStatus(
+        step,
+        currentCoords,
+        visitedMarkersDrawn,
+        frontierMarkersDrawn,
+        visitedOrder.length,
+        frontier.length,
+    );
+
+    setText("vizAlgorithm", searchVisualizationData.algorithm);
+    setText("vizStep", `Bước ${safeIndex + 1} / ${steps.length}`);
+    setText("vizCurrentNode", step.current_node ?? "—");
+    setText("vizVisitedCount", visitedOrder.length.toLocaleString("vi-VN"));
+    setText("vizFrontierCount", frontier.length.toLocaleString("vi-VN"));
+    setText(
+        "vizFrontierLabel",
+        frontierKindLabel(searchVisualizationData.frontier_kind),
+    );
+    renderTraceTokens(
+        "vizVisitedList",
+        visitedOrder.slice(-MAX_TRACE_TOKENS).map(String),
+        "visited",
+    );
+    renderTraceTokens(
+        "vizFrontierList",
+        frontier.slice(0, MAX_TRACE_TOKENS).map(formatFrontierItem),
+        "frontier",
+    );
+
+    const omittedVisited = Math.max(0, visitedOrder.length - MAX_TRACE_TOKENS);
+    const omittedFrontier = Math.max(0, frontier.length - MAX_TRACE_TOKENS);
+    const legText =
+        step.legTotal > 1
+            ? `Chặng ${step.legIndex}/${step.legTotal} (${step.routeStart} → ${step.routeGoal}). `
+            : "";
+    setText(
+        "vizExplanation",
+        `${legText}Màu vàng là các node đã duyệt trước bước hiện tại, cam là node đang mở và xanh dương là frontier đang chờ trong queue.${omittedVisited || omittedFrontier ? ` Danh sách rút gọn ${omittedVisited} visited và ${omittedFrontier} frontier để giao diện không bị quá tải.` : ""}`,
+    );
+}
+
+function updateMapTraceStatus(
+    step,
+    currentCoords,
+    visitedDrawn,
+    frontierDrawn,
+    visitedTotal,
+    frontierTotal,
+) {
+    const status = byId("vizMapStatus");
+    if (!status) return;
+    const missingCurrent = !currentCoords;
+    status.classList.toggle("is-warning", missingCurrent);
+    status.textContent = missingCurrent
+        ? `Không có tọa độ cho node ${step.current_node}; map không thể đặt marker ở bước này. Đã vẽ ${visitedDrawn}/${visitedTotal} visited và ${frontierDrawn}/${frontierTotal} frontier có tọa độ.`
+        : `Map đã vẽ ${visitedDrawn} visited, ${frontierDrawn} frontier và marker xanh lá cho node ${step.current_node}.`;
+}
+
+function focusCurrentSearchNode(coords, stepIndex) {
+    if (!map || !byId("followSearchNode")?.checked) return;
+    const targetZoom = Math.max(map.getZoom(), 15);
+    map.setView(coords, targetZoom, {
+        animate: stepIndex > 0,
+        duration: 0.22,
+    });
+}
+
+function renderTraceTokens(containerId, values, cssClass) {
+    const container = byId(containerId);
+    container.replaceChildren();
+    if (!values.length) {
+        container.textContent = "—";
+        return;
+    }
+    values.forEach((value) => {
+        const token = document.createElement("span");
+        token.className = `search-viz-token ${cssClass}`;
+        token.textContent = value;
+        container.append(token);
+    });
+}
+
+function formatFrontierItem(item) {
+    if (!item || typeof item !== "object") return String(item ?? "—");
+    const costs = ["g", "h", "f", "cost", "priority"]
+        .filter((key) => item[key] !== undefined)
+        .map((key) => `${key}=${Number(item[key]).toFixed(2)}`);
+    return [String(item.node_id ?? "—"), ...costs].join(" · ");
+}
+
+function frontierKindLabel(kind) {
+    const labels = {
+        queue: "Frontier (queue)",
+        stack: "Frontier (stack)",
+        priority_queue: "Open list (priority queue)",
+        candidates: "Ứng viên",
+    };
+    return labels[kind] || "Frontier";
 }
 
 function previousSearchStep() {
@@ -304,425 +1393,427 @@ function nextSearchStep() {
 
 function toggleSearchAnimation() {
     if (!searchVisualizationData) return;
-    const btn = document.getElementById('btnPlaySearch');
-    const speed = parseInt(document.getElementById('searchSpeed')?.value || '80', 10);
-
     if (searchAnimationTimer) {
         stopSearchAnimation();
         return;
     }
-
-    if (btn) btn.textContent = '⏸ Pause';
-    searchAnimationTimer = setInterval(() => {
-        if (!searchVisualizationData) {
+    if (searchStepIndex >= searchVisualizationData.steps.length - 1)
+        renderSearchStep(0);
+    setText("btnPlaySearch", "⏸ Tạm dừng");
+    const speed = Number.parseInt(byId("searchSpeed")?.value || "350", 10);
+    searchAnimationTimer = window.setInterval(() => {
+        if (
+            !searchVisualizationData ||
+            searchStepIndex >= searchVisualizationData.steps.length - 1
+        ) {
             stopSearchAnimation();
             return;
         }
-
-        if (searchStepIndex >= searchVisualizationData.steps.length - 1) {
-            stopSearchAnimation();
-            return;
-        }
-
         renderSearchStep(searchStepIndex + 1);
     }, speed);
 }
 
-function buildRouteSummary(startId, waypointIds, goalId, algorithm, criterion) {
-    const startLabel = getNodeLabel(startId);
-    const goalLabel = getNodeLabel(goalId);
-    const waypointLabels = waypointIds.map(id => getNodeLabel(id));
-    const viaText = waypointLabels.length ? waypointLabels.join(' → ') : 'Không có';
+async function compareAlgorithms() {
+    let input;
+    try {
+        input = getPlannerInput();
+    } catch (error) {
+        setOperationStatus(error.message, true);
+        showToast(error.message, true);
+        return;
+    }
 
-    return `
-        <strong>Xuất phát:</strong> ${startLabel} (${startId})<br>
-        <strong>Trung gian:</strong> ${viaText}<br>
-        <strong>Đích đến:</strong> ${goalLabel} (${goalId})<br>
-        <strong>Thuật toán:</strong> ${algorithm.toUpperCase()}<br>
-        <strong>Tiêu chí tối ưu:</strong> ${getCriterionLabel(criterion)}
-    `;
+    const algorithms = ["bfs", "dfs", "ucs", "astar", "dijkstra"];
+    const nodeOrder = [input.startNodeId, ...input.waypointIds, input.goalNodeId];
+    const results = [];
+    setButtonBusy(
+        "btnCompareAlgorithms",
+        true,
+        "Đang so sánh…",
+        "So sánh 5 thuật toán",
+    );
+    byId("btnCalculateRoute").disabled = true;
+    byId("comparisonPanel").hidden = true;
+
+    try {
+        for (let index = 0; index < algorithms.length; index += 1) {
+            const algorithm = algorithms[index];
+            setOperationStatus(
+                `Đang chạy ${ALGORITHM_SPECS[algorithm].label} (${index + 1}/${algorithms.length})…`,
+            );
+            try {
+                const segments = await runOrderedRoute(nodeOrder, algorithm);
+                results.push({
+                    algorithm,
+                    aggregate: aggregateSegments(segments, nodeOrder),
+                    error: null,
+                });
+            } catch (error) {
+                results.push({ algorithm, aggregate: null, error: error.message });
+            }
+        }
+        renderComparison(results, input);
+        setOperationStatus("Đã hoàn tất bảng so sánh trên cùng đầu vào.");
+        showToast("Đã so sánh xong 5 thuật toán.");
+    } finally {
+        setButtonBusy(
+            "btnCompareAlgorithms",
+            false,
+            "Đang so sánh…",
+            "So sánh 5 thuật toán",
+        );
+        byId("btnCalculateRoute").disabled = false;
+    }
 }
 
-function appendSegmentItem(container, title, response) {
-    if (!container) return;
-    const item = document.createElement('div');
-    item.className = 'route-segment-item';
-    item.innerHTML = `
-        <strong>${title}</strong><br>
-        Path nodes: ${(response.path_nodes || []).join(' → ')}<br>
-        Cost: ${(response.total_cost ?? 0).toFixed(2)} | Distance: ${((response.total_distance_m ?? 0) / 1000).toFixed(2)} km | Expanded: ${(response.nodes_expanded ?? 0).toLocaleString()} | Time: ${(response.execution_time_ms ?? 0).toFixed(2)} ms
-    `;
-    container.appendChild(item);
-}
+function renderComparison(results, input) {
+    const body = byId("comparisonBody");
+    body.replaceChildren();
+    const successful = results.filter((item) => item.aggregate);
+    const bestScore = successful.length
+        ? Math.min(
+            ...successful.map((item) =>
+                scoreAggregate(item.aggregate, input.criterion),
+            ),
+        )
+        : null;
 
-async function runRouteSegment(startId, goalId, algorithm, criterion) {
-    const res = await fetch('/api/route', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            start_node_id: startId,
-            goal_node_id: goalId,
-            algorithm: algorithm,
-            optimization_criterion: criterion
-        })
+    results.forEach((item) => {
+        const row = document.createElement("tr");
+        if (
+            item.aggregate &&
+            scoreAggregate(item.aggregate, input.criterion) === bestScore
+        ) {
+            row.classList.add("best-row");
+        }
+        const spec = ALGORITHM_SPECS[item.algorithm];
+        const cells = item.aggregate
+            ? [
+                spec.label,
+                item.aggregate.totalCost.toFixed(2),
+                formatDistance(item.aggregate.totalDistance),
+                formatDuration(item.aggregate.totalTravelTime),
+                item.aggregate.totalHops.toLocaleString("vi-VN"),
+                item.aggregate.totalExpanded.toLocaleString("vi-VN"),
+                `${item.aggregate.totalProcessingTime.toFixed(2)} ms`,
+                spec.optimality,
+            ]
+            : [
+                spec.label,
+                "Không có route",
+                "—",
+                "—",
+                "—",
+                "—",
+                "—",
+                item.error || "Lỗi",
+            ];
+        cells.forEach((value) => {
+            const cell = document.createElement("td");
+            cell.textContent = value;
+            row.append(cell);
+        });
+        body.append(row);
     });
 
-    const contentType = res.headers.get('content-type') || '';
-    const data = contentType.includes('application/json') ? await res.json() : { detail: await res.text() };
-    if (!res.ok) {
-        throw new Error(data?.detail || data?.message || `HTTP ${res.status}`);
-    }
-    if (!data.found) {
-        throw new Error(data?.message || 'Không tìm thấy đường đi giữa hai điểm trên đồ thị!');
-    }
-    return data;
+    const modeNote =
+        input.visitOrderMode === "nearest" && input.waypointIds.length > 1
+            ? "Bảng so sánh giữ nguyên thứ tự điểm đã nhập để mọi thuật toán nhận cùng điều kiện; không chạy Nearest Neighbor."
+            : "Mọi thuật toán nhận cùng start, destination và thứ tự điểm trung gian.";
+    setText(
+        "comparisonNote",
+        `Hàng màu xanh có metric tốt nhất theo “${CRITERION_LABELS[input.criterion]}”, nhưng mỗi thuật toán vẫn có mục tiêu nội tại khác nhau. Thời gian có dấu * là ước tính frontend. ${modeNote}`,
+    );
+    byId("comparisonPanel").hidden = false;
+    byId("comparisonPanel").scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+    });
+}
+
+function closeComparison() {
+    byId("comparisonPanel").hidden = true;
+}
+
+function scoreAggregate(aggregate, criterion) {
+    if (criterion === "distance") return aggregate.totalDistance;
+    if (criterion === "time") return aggregate.totalTravelTime;
+    if (criterion === "hops") return aggregate.totalHops;
+    return aggregate.totalCost;
 }
 
 function renderHospitalsOnMap() {
-    // First clear existing hospital markers
-    Object.values(hospitalMarkers).forEach(m => map.removeLayer(m));
-    hospitalMarkers = {};
+    if (!map) return;
+    hospitalMarkers.forEach((markers) =>
+        markers.forEach((marker) => map.removeLayer(marker)),
+    );
+    hospitalMarkers = new Map();
+    if (!showPOIIcons) return;
 
-    poisData.forEach(h => {
-        let marker;
-        if (h.is_hospital) {
-            if (showPOIIcons) {
-                const isHospital = h.type.toLowerCase().includes('hospital') || h.type.toLowerCase().includes('bệnh_viện');
-                const iconClass = isHospital ? 'icon-hospital' : 'icon-clinic';
-                const emoji = isHospital ? '🏥' : '🩺';
-
-                const icon = L.divIcon({
-                    className: `custom-div-icon ${iconClass}`,
-                    html: `<span>${emoji}</span>`,
-                    iconSize: [34, 34], iconAnchor: [17, 17]
-                });
-
-                marker = L.marker([h.lat, h.lng], { icon: icon, zIndexOffset: 1000 }).addTo(map);
-                marker.bindPopup(`
-                    <div style="font-family: Outfit, sans-serif; min-width: 180px;">
-                        <b style="color: #38bdf8; font-size: 0.95rem;">${emoji} ${h.name}</b><br>
-                        <span style="font-size: 0.8rem; color: #94a3b8;">Loại: ${h.type}</span><br>
-                        <span style="font-size: 0.75rem; color: #cbd5e1;">Mã Node: <code>${h.node_id}</code></span><br>
-                        <button onclick="setDestination(${h.node_id})" style="margin-top: 6px; width: 100%; padding: 4px; font-size: 0.75rem; font-weight: bold; background: #6366f1; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                            🎯 Chọn làm đích đến
-                        </button>
-                    </div>
-                `);
-            } else {
-                marker = L.circleMarker([h.lat, h.lng], {
-                    radius: 4, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.9, weight: 1
-                }).addTo(map);
-                marker.bindPopup(`<b>🏥 ${h.name}</b><br>Loại: ${h.type}<br>Mã Node: ${h.node_id}<br><button onclick="setDestination(${h.node_id})" style="margin-top: 6px; width: 100%; padding: 4px; font-size: 0.75rem; font-weight: bold; background: #6366f1; color: white; border: none; border-radius: 4px; cursor: pointer;">🎯 Chọn làm đích đến</button>`);
-            }
-        } else {
-            marker = L.circleMarker([h.lat, h.lng], {
-                radius: 2, color: '#38bdf8', fillColor: '#38bdf8', fillOpacity: 0.8, weight: 0
-            }).addTo(map);
-            marker.bindPopup(`<b style="color: #38bdf8;">📍 ${h.name || 'POI'}</b><br><span style="font-size: 0.8rem;">Loại: ${h.type || 'N/A'}</span>`);
-        }
-        hospitalMarkers[h.poi_node_id + '_' + Math.random()] = marker;
+    hospitalsData.forEach((hospital) => {
+        const type = String(hospital.type || "Cơ sở y tế");
+        const isHospital =
+            type.toLowerCase().includes("hospital") ||
+            type.toLowerCase().includes("bệnh viện");
+        const emoji = isHospital ? "🏥" : "✚";
+        const icon = L.divIcon({
+            className: `custom-div-icon ${isHospital ? "icon-hospital" : "icon-clinic"}`,
+            html: `<span>${emoji}</span>`,
+            iconSize: [34, 34],
+            iconAnchor: [17, 17],
+        });
+        const marker = L.marker([hospital.lat, hospital.lng], {
+            icon,
+            zIndexOffset: 1000,
+        }).addTo(map);
+        marker.bindPopup(`
+            <div class="popup-content">
+                <strong>${emoji} ${escapeHtml(hospital.name || "Cơ sở y tế")}</strong>
+                <span>Loại: ${escapeHtml(type)}</span>
+                <span>Road node: ${Number(hospital.node_id)}</span>
+                <button type="button" onclick="setDestination(${Number(hospital.node_id)})">Chọn làm đích đến</button>
+            </div>
+        `);
+        const markers = hospitalMarkers.get(Number(hospital.node_id)) || [];
+        markers.push(marker);
+        hospitalMarkers.set(Number(hospital.node_id), markers);
     });
 }
 
 function togglePOIIcons() {
     showPOIIcons = !showPOIIcons;
-    const btn = document.getElementById('btnTogglePOIIcon');
-    if (showPOIIcons) {
-        btn.textContent = 'Đang Bật 🟢';
-        btn.style.background = 'rgba(16, 185, 129, 0.15)';
-        btn.style.color = '#34d399';
-        btn.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-    } else {
-        btn.textContent = 'Đang Tắt 🔴';
-        btn.style.background = 'rgba(244, 63, 94, 0.15)';
-        btn.style.color = '#f43f5e';
-        btn.style.borderColor = 'rgba(244, 63, 94, 0.3)';
-    }
+    updateToggleButton("btnTogglePOIIcon", showPOIIcons, "Hiển thị cơ sở y tế");
     renderHospitalsOnMap();
 }
 
 function renderEdgesOnMap() {
-    // First, remove existing polylines
-    Object.values(edgePolylines).forEach(poly => map.removeLayer(poly));
+    if (!map) return;
+    Object.values(edgePolylines).forEach((polyline) => map.removeLayer(polyline));
     edgePolylines = {};
-
     if (!showTraffic) return;
 
-    let multiLines = {
-        normal: [], // Level <= 2
-        heavy: [],  // Level 3
-        severe: [], // Level 4
-        level5: [], // Level 5
-        level6: []  // Level 6
-    };
-
-    // Group edges by congestion level for batch rendering
-    edgesData.forEach(edge => {
-        let coords = [[edge.u_lat, edge.u_lng], [edge.v_lat, edge.v_lng]];
-        if (edge.congestion_level === 6) {
-            multiLines.level6.push(coords);
-        } else if (edge.congestion_level === 5) {
-            multiLines.level5.push(coords);
-        } else if (edge.congestion_level >= 4) {
-            multiLines.severe.push(coords);
-        } else if (edge.congestion_level == 3) {
-            multiLines.heavy.push(coords);
-        } else {
-            multiLines.normal.push(coords);
-        }
+    const groups = { normal: [], heavy: [], severe: [] };
+    edgesData.forEach((edge) => {
+        const coords = [
+            [edge.u_lat, edge.u_lng],
+            [edge.v_lat, edge.v_lng],
+        ];
+        const level = Number(edge.congestion_level || 1);
+        if (level >= 4) groups.severe.push(coords);
+        else if (level === 3) groups.heavy.push(coords);
+        else groups.normal.push(coords);
     });
 
-    // Render as large MultiPolylines (drastically improves Canvas performance)
-    if (multiLines.normal.length > 0) {
-        edgePolylines['normal'] = L.polyline(multiLines.normal, {
-            color: '#38bdf8', weight: 2, opacity: 0.3, interactive: false
+    if (groups.normal.length) {
+        edgePolylines.normal = L.polyline(groups.normal, {
+            color: "#39c6d7",
+            weight: 2,
+            opacity: 0.34,
+            interactive: false,
         }).addTo(map);
     }
-    if (multiLines.heavy.length > 0) {
-        edgePolylines['heavy'] = L.polyline(multiLines.heavy, {
-            color: '#f59e0b', weight: 3, opacity: 0.85, interactive: false
+    if (groups.heavy.length) {
+        edgePolylines.heavy = L.polyline(groups.heavy, {
+            color: "#f5b942",
+            weight: 3,
+            opacity: 0.82,
+            interactive: false,
         }).addTo(map);
     }
-    if (multiLines.severe.length > 0) {
-        edgePolylines['severe'] = L.polyline(multiLines.severe, {
-            color: '#f43f5e', weight: 4, opacity: 0.95, interactive: false
-        }).addTo(map);
-    }
-    if (multiLines.level5.length > 0) {
-        edgePolylines['level5'] = L.polyline(multiLines.level5, {
-            color: '#eab308', weight: 4, opacity: 0.95, interactive: false
-        }).addTo(map);
-    }
-    if (multiLines.level6.length > 0) {
-        edgePolylines['level6'] = L.polyline(multiLines.level6, {
-            color: '#ff0000', weight: 5, opacity: 1.0, interactive: false
+    if (groups.severe.length) {
+        edgePolylines.severe = L.polyline(groups.severe, {
+            color: "#ef476f",
+            weight: 4,
+            opacity: 0.92,
+            interactive: false,
         }).addTo(map);
     }
 }
 
 function toggleTrafficLayer() {
     showTraffic = !showTraffic;
-    const btn = document.getElementById('btnToggleTraffic');
-    if (showTraffic) {
-        btn.textContent = 'Đang Bật 🟢';
-        btn.style.background = 'rgba(6, 182, 212, 0.15)';
-        btn.style.color = '#22d3ee';
-        btn.style.borderColor = 'rgba(6, 182, 212, 0.3)';
-    } else {
-        btn.textContent = 'Đang Tắt 🔴';
-        btn.style.background = 'rgba(244, 63, 94, 0.15)';
-        btn.style.color = '#f43f5e';
-        btn.style.borderColor = 'rgba(244, 63, 94, 0.3)';
-    }
+    updateToggleButton("btnToggleTraffic", showTraffic, "Lớp mức độ ùn tắc");
     renderEdgesOnMap();
 }
 
+function updateToggleButton(id, active, label) {
+    const button = byId(id);
+    if (!button) return;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+    button.replaceChildren();
+    const labelSpan = document.createElement("span");
+    labelSpan.textContent = label;
+    const stateSpan = document.createElement("span");
+    stateSpan.textContent = active ? "Bật" : "Tắt";
+    button.append(labelSpan, stateSpan);
+}
+
 function updateAmbulanceDisplay(data) {
-    const lat = data.lat || 10.773;
-    const lng = data.lng || 106.698;
-    const mapped = data.mapped_nearest_node || {};
+    if (!map) return;
+    const lat = Number(data?.lat ?? 10.773);
+    const lng = Number(data?.lng ?? 106.698);
+    const mapped = data?.mapped_nearest_node || {};
+    setText("gpsCodeDisplay", `GPS: (${lat.toFixed(5)}, ${lng.toFixed(5)})`);
+    setText(
+        "nearestDisplay",
+        `Nút gần nhất: [${mapped.nearest_node_id ?? "—"}] ${mapped.nearest_node_name || "Nút đường"} · cách ${Number(mapped.distance_meters || 0).toFixed(1)} m`,
+    );
 
-    document.getElementById('gpsCodeDisplay').textContent = `GPS: (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
-    document.getElementById('nearestDisplay').textContent = `Node gần nhất: [${mapped.nearest_node_id || '-'}] ${mapped.nearest_node_name || 'Nút đường'} (${mapped.distance_meters || 0}m)`;
-
-    const ambIcon = L.divIcon({
-        className: 'custom-div-icon icon-ambulance',
-        html: `<span>🚑</span>`,
-        iconSize: [42, 42], iconAnchor: [21, 21]
+    const icon = L.divIcon({
+        className: "custom-div-icon icon-ambulance",
+        html: "<span>🚑</span>",
+        iconSize: [42, 42],
+        iconAnchor: [21, 21],
     });
-
     if (!ambulanceMarker) {
-        ambulanceMarker = L.marker([lat, lng], { icon: ambIcon, zIndexOffset: 2000 }).addTo(map);
+        ambulanceMarker = L.marker([lat, lng], { icon, zIndexOffset: 2000 }).addTo(
+            map,
+        );
     } else {
         ambulanceMarker.setLatLng([lat, lng]);
     }
-
-    ambulanceMarker.bindPopup(`<b>🚑 Xe Cấp Cứu Đang Trực</b><br>Vị trí GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}<br>Khớp Node: ${mapped.nearest_node_name || ''} (${mapped.distance_meters || 0}m)`);
+    ambulanceMarker.bindPopup(`
+        <div class="popup-content">
+            <strong>🚑 Xe cấp cứu đang trực</strong>
+            <span>GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}</span>
+            <span>Khớp node: ${escapeHtml(mapped.nearest_node_name || mapped.nearest_node_id || "—")}</span>
+        </div>
+    `);
+    populateStartControls();
 }
 
 async function updateAmbulanceGPS(lat, lng) {
+    setOperationStatus("Đang ánh xạ GPS sang nút đường gần nhất…");
     try {
-        const res = await fetch('/api/ambulance/location', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lat: lat, lng: lng })
+        const data = await fetchJson(`${API_BASE}/ambulance/location`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lat, lng }),
         });
-        const data = await res.json();
         currentAmbulanceData = data.current_gps;
+        routeRequestCache.clear();
         updateAmbulanceDisplay(currentAmbulanceData);
-        showToast(`📍 Cập nhật GPS (${lat.toFixed(4)}, ${lng.toFixed(4)}) - Ánh xạ Node trong <3ms!`);
-    } catch (err) {
-        showToast('Lỗi khi gửi tọa độ GPS!');
+        setOperationStatus("Đã cập nhật vị trí xe cấp cứu.");
+        showToast(`Đã cập nhật GPS (${lat.toFixed(4)}, ${lng.toFixed(4)}).`);
+    } catch (error) {
+        setOperationStatus(`Không thể cập nhật GPS: ${error.message}`, true);
+        showToast("Không thể gửi tọa độ GPS tới backend.", true);
     }
 }
 
 function getDeviceLocation() {
-    if (!navigator.geolocation) { showToast('Trình duyệt không hỗ trợ Geolocation!'); return; }
-    showToast('📡 Đang định vị GPS từ thiết bị...');
+    if (!navigator.geolocation) {
+        showToast("Trình duyệt không hỗ trợ Geolocation.", true);
+        return;
+    }
+    showToast("Đang lấy vị trí từ thiết bị…");
     navigator.geolocation.getCurrentPosition(
-        (pos) => updateAmbulanceGPS(pos.coords.latitude, pos.coords.longitude),
-        (err) => showToast('Không thể lấy GPS thiết bị!')
+        (position) =>
+            updateAmbulanceGPS(position.coords.latitude, position.coords.longitude),
+        (error) => showToast(`Không thể lấy GPS thiết bị: ${error.message}`, true),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
     );
 }
 
 function setDestination(nodeId) {
-    document.getElementById('selectHospital').value = nodeId;
-    calculateRoute();
+    const select = byId("selectHospital");
+    if (!select) return;
+    select.value = String(nodeId);
+    onHospitalSelectChange();
+    map?.closePopup();
+    showToast(`Đã chọn ${getNodeLabel(Number(nodeId))} làm đích đến.`);
 }
 
 function onHospitalSelectChange() {
-    const hId = parseInt(document.getElementById('selectHospital').value);
-    const hospital = hospitalsData.find(h => h.node_id === hId);
-    if (hospital) {
-        map.panTo([hospital.lat, hospital.lng]);
-        if (hospitalMarkers[hId]) hospitalMarkers[hId].openPopup();
-    }
-}
-
-async function calculateRoute() {
-    const goalNodeId = parseInt(document.getElementById('selectHospital').value, 10);
-    const algorithm = document.getElementById('selectAlgorithm').value;
-    const criterion = document.getElementById('selectCriterion')?.value || 'time';
-    const startMode = document.getElementById('selectStartMode')?.value || 'current';
-    const customStartNode = parseInt(document.getElementById('inputStartNode')?.value, 10);
-    const currentStartNode = currentAmbulanceData?.mapped_nearest_node?.nearest_node_id;
-    const startNodeId = startMode === 'custom' ? customStartNode : currentStartNode;
-    const waypointIds = parseNodeIdList(document.getElementById('inputWaypoints')?.value || '')
-        .filter(nodeId => nodeId !== startNodeId && nodeId !== goalNodeId);
-    const legs = [startNodeId, ...waypointIds, goalNodeId];
-
-    if (!Number.isInteger(startNodeId)) {
-        showToast('Vui lòng chọn hoặc nhập điểm xuất phát hợp lệ.');
-        return;
-    }
-
-    if (!Number.isInteger(goalNodeId)) {
-        showToast('Vui lòng chọn một điểm đến hợp lệ.');
-        return;
-    }
-
-    showToast(`🧠 Đang chạy ${algorithm.toUpperCase()} với tiêu chí ${criterion.toUpperCase()}...`);
-
-    try {
-        const segmentResults = [];
-        for (let index = 0; index < legs.length - 1; index += 1) {
-            const segmentStart = legs[index];
-            const segmentGoal = legs[index + 1];
-            const segmentResult = await runRouteSegment(segmentStart, segmentGoal, algorithm, criterion);
-            segmentResults.push({ start: segmentStart, goal: segmentGoal, result: segmentResult });
-        }
-
-        const totalCost = segmentResults.reduce((sum, item) => sum + (item.result.total_cost || 0), 0);
-        const totalDistance = segmentResults.reduce((sum, item) => sum + (item.result.total_distance_m || 0), 0);
-        const totalExpanded = segmentResults.reduce((sum, item) => sum + (item.result.nodes_expanded || 0), 0);
-        const totalTime = segmentResults.reduce((sum, item) => sum + (item.result.execution_time_ms || 0), 0);
-        const mergedCoords = [];
-        const mergedNodes = [];
-
-        segmentResults.forEach(({ result }, index) => {
-            const coords = result.path_coords || [];
-            const nodes = result.path_nodes || [];
-            const coordSlice = index === 0 ? coords : coords.slice(1);
-            const nodeSlice = index === 0 ? nodes : nodes.slice(1);
-            mergedCoords.push(...coordSlice);
-            mergedNodes.push(...nodeSlice);
-        });
-
-        const summaryPanel = document.getElementById('routeResultPanel');
-        const summaryBox = document.getElementById('routeSummary');
-        const explanationBox = document.getElementById('routeExplanation');
-        const segmentBox = document.getElementById('routeSegmentList');
-        if (summaryPanel) summaryPanel.style.display = 'block';
-        if (summaryBox) summaryBox.innerHTML = buildRouteSummary(startNodeId, waypointIds, goalNodeId, algorithm, criterion);
-        if (explanationBox) explanationBox.textContent = getCriterionHint(criterion, algorithm);
-        if (segmentBox) segmentBox.innerHTML = '';
-
-        segmentResults.forEach((segment, index) => {
-            appendSegmentItem(
-                segmentBox,
-                `Chặng ${index + 1}: ${getNodeLabel(segment.start)} → ${getNodeLabel(segment.goal)}`,
-                segment.result
-            );
-        });
-
-        document.getElementById('routeResultPanel').style.display = 'block';
-        document.getElementById('resCost').textContent = totalCost.toFixed(2);
-        document.getElementById('resDistance').textContent = `${(totalDistance / 1000).toFixed(2)} km`;
-        document.getElementById('resExpanded').textContent = totalExpanded.toLocaleString();
-        document.getElementById('resTime').textContent = `${totalTime.toFixed(2)} ms`;
-
-        // Draw glowing route on map
-        if (activeRoutePolyline) { map.removeLayer(activeRoutePolyline); }
-        routeNodeMarkers.forEach(m => map.removeLayer(m));
-        routeNodeMarkers = [];
-
-        activeRoutePolyline = L.polyline(mergedCoords, {
-            color: '#a855f7', weight: 6, opacity: 0.9, lineJoin: 'round',
-            dashArray: algorithm === 'astar' ? null : '8, 8'
-        }).addTo(map);
-
-        map.fitBounds(activeRoutePolyline.getBounds(), { padding: [50, 50] });
-
-        if (segmentResults.length === 1 && segmentResults[0].result.search_trace) {
-            startSearchVisualization(segmentResults[0].result);
-        } else {
-            clearSearchVisualization();
-            const explanationBox = document.getElementById('routeExplanation');
-            if (explanationBox) {
-                explanationBox.textContent = `${explanationBox.textContent} Tuyến đi nhiều chặng được ghép từ ${segmentResults.length} lần tính riêng biệt.`;
-            }
-        }
-
-        showToast(`✅ Tuyến đường tìm thấy bằng ${algorithm.toUpperCase()} (${totalExpanded.toLocaleString()} nodes, ${totalTime.toFixed(1)}ms)!`);
-
-    } catch (err) {
-        console.error('Error in calculateRoute:', err);
-        showToast(`Lỗi khi tính toán lộ trình: ${err?.message || err}`);
-    }
+    const nodeId = Number.parseInt(byId("selectHospital")?.value, 10);
+    const hospital = hospitalsData.find((item) => item.node_id === nodeId);
+    if (!hospital || !map) return;
+    map.panTo([hospital.lat, hospital.lng]);
+    const markers = hospitalMarkers.get(nodeId);
+    if (markers?.length) markers[0].openPopup();
 }
 
 async function updateEdgeCongestion() {
-    const edgeId = document.getElementById('selectEdge').value;
-    const level = parseInt(document.getElementById('selectCongestion').value);
+    const edgeId = byId("selectEdge")?.value;
+    const level = Number.parseInt(byId("selectCongestion")?.value, 10);
+    if (!edgeId || !Number.isInteger(level)) {
+        showToast("Vui lòng chọn đoạn đường và mức ùn tắc.", true);
+        return;
+    }
 
+    setButtonBusy("btnUpdateCongestion", true, "Đang cập nhật…", "Cập nhật");
     try {
-        const res = await fetch('/api/edges/congestion', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ edge_id: edgeId, congestion_level: level })
+        await fetchJson(`${API_BASE}/edges/congestion`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ edge_id: edgeId, congestion_level: level }),
         });
-        const data = await res.json();
-        showToast(`🚦 Đã cập nhật mức kẹt xe Level ${level} cho đoạn đường ${edgeId}`);
-        
-        // Refresh edges
-        const edgesRes = await fetch('/api/edges?limit=600');
-        edgesData = await edgesRes.json();
+        edgesData = await fetchJson(`${API_BASE}/edges?limit=2000`);
+        rebuildEdgeIndex();
+        populateEdgeSelect();
         renderEdgesOnMap();
+        routeRequestCache.clear();
+        showToast(`Đã cập nhật ${edgeId} lên mức ùn tắc ${level}.`);
 
-        // Recalculate route if active
-        if (document.getElementById('routeResultPanel').style.display === 'block') {
-            calculateRoute();
+        if (!byId("routeResultPanel").hidden) {
+            setOperationStatus(
+                "Dữ liệu giao thông đã đổi; đang tính lại tuyến hiện tại…",
+            );
+            await calculateRoute();
         }
-    } catch (err) {
-        showToast('Lỗi khi cập nhật kẹt xe!');
+    } catch (error) {
+        setOperationStatus(`Không thể cập nhật ùn tắc: ${error.message}`, true);
+        showToast(`Không thể cập nhật ùn tắc: ${error.message}`, true);
+    } finally {
+        setButtonBusy("btnUpdateCongestion", false, "Đang cập nhật…", "Cập nhật");
     }
 }
 
 async function checkSystemHealth() {
+    setButtonBusy("btnHealth", true, "Đang ping…", "Ping GET /api/health");
+    const startedAt = performance.now();
     try {
-        const res = await fetch('/api/health');
-        const data = await res.json();
-        showToast(`⚡ Health OK: Status ${data.status} | Đồ thị RAM: ${data.nodes_count.toLocaleString()} nodes | Latency: ${data.latency_ms}ms`);
-    } catch (err) {
-        showToast('Lỗi khi ping Health API!');
+        const data = await fetchJson(`${API_BASE}/health`);
+        const roundTrip = performance.now() - startedAt;
+        setConnectionStatus("online", "Backend trực tuyến");
+        showToast(
+            `Health ${data.status}: ${Number(data.nodes_count || 0).toLocaleString("vi-VN")} nodes · API ${data.latency_ms} ms · round trip ${roundTrip.toFixed(1)} ms.`,
+        );
+    } catch (error) {
+        setConnectionStatus("offline", "Mất kết nối API");
+        showToast(`Health check thất bại: ${error.message}`, true);
+    } finally {
+        setButtonBusy("btnHealth", false, "Đang ping…", "Ping GET /api/health");
     }
 }
 
-function showToast(msg) {
-    const toast = document.getElementById('toast');
-    toast.textContent = msg;
-    toast.style.display = 'block';
-    setTimeout(() => { toast.style.display = 'none'; }, 3500);
+function formatDistance(distanceMeters) {
+    const distance = Number(distanceMeters || 0);
+    return distance >= 1000
+        ? `${(distance / 1000).toFixed(2)} km`
+        : `${distance.toFixed(0)} m`;
 }
 
-window.onload = initMap;
+function formatDuration(seconds) {
+    const value = Math.max(0, Number(seconds || 0));
+    if (value < 60) return `${value.toFixed(0)} giây`;
+    const hours = Math.floor(value / 3600);
+    const minutes = Math.round((value % 3600) / 60);
+    if (!hours) return `${minutes} phút`;
+    return `${hours} giờ ${minutes} phút`;
+}
+
+function showToast(message, isError = false) {
+    const toast = byId("toast");
+    if (!toast) return;
+    window.clearTimeout(toastTimer);
+    toast.textContent = message;
+    toast.classList.toggle("is-error", isError);
+    toast.style.display = "block";
+    toastTimer = window.setTimeout(() => {
+        toast.style.display = "none";
+    }, 4200);
+}
+
+window.addEventListener("load", initMap);
