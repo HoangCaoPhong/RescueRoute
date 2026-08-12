@@ -42,3 +42,13 @@ Không để mỗi thuật toán tự định nghĩa một Graph hoặc kiểu k
 
 Backend dự kiến dùng Python 3.10+. Khi branch nền tảng thêm manifest dependency, thành viên sẽ cài theo lệnh được ghi trong README này. Trước thời điểm đó không tự tạo và commit `venv`, `.venv` hoặc dependency manifest riêng trong từng folder thuật toán.
 
+## Cách chạy Server (Quan trọng)
+
+> [!WARNING]
+> Để tránh lỗi `ModuleNotFoundError`, bạn **bắt buộc** phải khởi chạy server từ thư mục gốc của toàn dự án (`RescueRoute/`), **KHÔNG** chạy từ bên trong thư mục `backend/`.
+
+**Lệnh khởi chạy:**
+```bash
+# Đứng tại thư mục gốc RescueRoute
+python -m uvicorn backend.main:app --reload
+```

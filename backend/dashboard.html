@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RescueRoute - AI Ambulance Dispatcher Dashboard</title>
+    <!-- Google Fonts & Leaflet CSS -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+            --bg-main: #0b0f19;
+            --bg-card: rgba(18, 24, 38, 0.92);
+            --bg-card-hover: #1e293b;
+            --accent-cyan: #06b6d4;
+            --accent-emerald: #10b981;
+            --accent-indigo: #6366f1;
+            --accent-amber: #f59e0b;
+            --accent-rose: #f43f5e;
+            --accent-purple: #8b5cf6;
+            --text-primary: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: rgba(51, 65, 85, 0.6);
+            --glass-glow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            background-color: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand-icon { font-size: 2rem; filter: drop-shadow(0 0 8px rgba(6, 182, 212, 0.6)); }
+        .brand-title { font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em; background: linear-gradient(135deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .brand-subtitle { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+
+        .btn-docs {
+            background: rgba(30, 41, 59, 0.8);
+            color: var(--text-primary);
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s;
+        }
+        .btn-docs:hover { background-color: var(--accent-indigo); border-color: var(--accent-indigo); transform: translateY(-1px); }
+
+        .workspace { display: flex; flex: 1; overflow: hidden; position: relative; }
+
+        .sidebar {
+            width: 450px;
+            background-color: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px;
+            overflow-y: auto;
+            z-index: 500;
+        }
+
+        .sidebar::-webkit-scrollbar { width: 6px; }
+        .sidebar::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+        .section-title {
+            font-size: 0.76rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--accent-cyan);
+            font-weight: 700;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .feature-card {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: var(--glass-glow);
+        }
+
+        .feature-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .code-block {
+            background: #060911;
+            border: 1px solid var(--border-color);
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            color: #38bdf8;
+            overflow-x: auto;
+        }
+
+        .btn-action {
+            background: linear-gradient(135deg, var(--accent-indigo), var(--accent-cyan));
+            color: white;
+            font-weight: 700;
+            font-size: 0.85rem;
+            padding: 9px 14px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .btn-action:hover { opacity: 0.92; transform: translateY(-1.5px); box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4); }
+
+        select, input {
+            background-color: #0b1329;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-family: inherit;
+            outline: none;
+            width: 100%;
+        }
+        select:focus, input:focus { border-color: var(--accent-cyan); }
+
+        #map { flex: 1; background-color: #060913; height: 100%; }
+
+        .custom-div-icon {
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; color: white; font-weight: bold;
+            box-shadow: 0 0 16px rgba(0,0,0,0.6);
+        }
+        .icon-hospital { background: radial-gradient(circle, #ef4444 0%, #991b1b 100%); border: 2px solid #fca5a5; font-size: 1.1rem; }
+        .icon-clinic { background: radial-gradient(circle, #10b981 0%, #065f46 100%); border: 2px solid #a7f3d0; font-size: 1.0rem; }
+        .icon-ambulance {
+            background: radial-gradient(circle, #ef4444 0%, #b91c1c 100%);
+            border: 3px solid #fde047; font-size: 1.3rem;
+            animation: ambulancePulse 1.2s infinite;
+        }
+        @keyframes ambulancePulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.9); }
+            70% { box-shadow: 0 0 0 16px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .leaflet-popup-content-wrapper {
+            background: #111827 !important;
+            color: #f9fafb !important;
+            border: 1px solid #374151;
+            border-radius: 10px !important;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5) !important;
+        }
+        .leaflet-popup-tip { background: #111827 !important; }
+
+        #toast {
+            position: fixed; top: 20px; right: 20px;
+            background: var(--accent-emerald); color: #060911;
+            padding: 10px 18px; border-radius: 8px; font-size: 0.85rem; font-weight: 700;
+            z-index: 2000; display: none; box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+        }
+
+        .metrics-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+            background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px;
+        }
+        .metric-item { display: flex; flex-direction: column; }
+        .metric-label { font-size: 0.7rem; color: var(--text-muted); }
+        .metric-value { font-size: 0.85rem; font-weight: 700; color: var(--accent-cyan); font-family: 'JetBrains Mono', monospace; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="brand">
+            <div class="brand-icon">&#x1f691;</div>
+            <div>
+                <div class="brand-title">RescueRoute Dispatcher & Graph AI</div>
+                <div class="brand-subtitle">Hệ Thống Tìm Đường Cấp Cứu Tối Ưu • Tích Hợp Dataset Giao Thông Thực Tế</div>
+            </div>
+        </div>
+        <div>
+            <a href="/docs" target="_blank" class="btn-docs">📜 Swagger OpenAPI (/docs)</a>
+        </div>
+    </header>
+
+    <div class="workspace">
+        <div class="sidebar">
+            
+            <!-- SECTION 1: DATASET & GRAPH STATS -->
+            <div>
+                <div class="section-title">📊 1. Dữ Liệu Đồ Thị & Trạng Thái RAM</div>
+                <div class="feature-card">
+                    <div class="feature-title">🗺️ Đồ Thị Giao Thông Thực Tế TP.HCM</div>
+                    <div id="datasetSummary" style="font-size: 0.8rem; color: var(--text-muted);">Đang tải dữ liệu đồ thị...</div>
+                    <div class="metrics-grid">
+                        <div class="metric-item">
+                            <span class="metric-label">Tổng Số Nodes:</span>
+                            <span class="metric-value" id="statNodes">577,967</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Cạnh Đồ Thị (Edges):</span>
+                            <span class="metric-value" id="statEdges">84,633</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Điểm Cấp Cứu/Bệnh Viện:</span>
+                            <span class="metric-value" id="statHospitals" style="color: var(--accent-rose);">135</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Độ Trễ KDTree:</span>
+                            <span class="metric-value" id="statLatency" style="color: var(--accent-emerald);">&lt; 3.0 ms</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px solid var(--border-color); margin-top: 6px;">
+                        <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">🏥 Icon POI Y Tế:</span>
+                        <button id="btnTogglePOIIcon" class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3); cursor: pointer; padding: 4px 10px; font-size: 0.75rem;" onclick="togglePOIIcons()">Đang Bật 🟢</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 2: AMBULANCE GPS TRACKER -->
+            <div>
+                <div class="section-title">📡 2. Định Vị GPS Xe Cấp Cứu (KDTree Fast Lookup)</div>
+                <div class="feature-card" style="border-color: rgba(244, 63, 94, 0.4);">
+                    <div class="feature-title" style="color: var(--accent-rose);">&#x1f691; Vị Trí Xe Cấp Cứu Hiện Tại</div>
+                    <div class="code-block" id="gpsCodeDisplay">GPS: (10.7730, 106.6980)</div>
+                    <div style="font-size: 0.8rem; color: var(--accent-cyan);" id="nearestDisplay">Node gần nhất: Đang tải...</div>
+                    <div style="display: flex; gap: 6px;">
+                        <button class="btn-action" style="flex: 1; background: linear-gradient(135deg, #f43f5e, #e11d48);" onclick="getDeviceLocation()">📱 GPS Thiết Bị</button>
+                        <button class="btn-action" style="flex: 1; background: var(--bg-card-hover);" onclick="showToast('📌 Click điểm bất kỳ trên bản đồ để di chuyển xe cấp cứu!')">📍 Click Bản Đồ</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 3: ROUTE SEARCHING -->
+            <div>
+                <div class="section-title">🧠 3. Tìm Đường Cấp Cứu Tối Ưu (AI Search)</div>
+                <div class="feature-card" style="border-color: rgba(99, 102, 241, 0.4);">
+                    <div class="feature-title" style="color: var(--accent-indigo);">⚡ Thuật Toán Tìm Tuyến Đường</div>
+                    
+                    <label style="font-size: 0.75rem; color: var(--text-muted);">Bệnh Viện / Trạm Cứu Hộ Đích:</label>
+                    <select id="selectHospital" onchange="onHospitalSelectChange()"></select>
+
+                    <label style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Thuật Toán AI:</label>
+                    <select id="selectAlgorithm">
+                        <option value="astar">A* Search (Haversine Heuristic - Tối ưu nhất)</option>
+                        <option value="dijkstra">Dijkstra / UCS (Uniform Cost Search)</option>
+                        <option value="bfs">BFS (Breadth-First Search)</option>
+                        <option value="dfs">DFS (Depth-First Search)</option>
+                    </select>
+
+                    <button class="btn-action" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); margin-top: 4px;" onclick="calculateRoute()">
+                        🚀 Tìm Tuyến Cấp Cứu Tối Ưu
+                    </button>
+
+                    <div id="routeResultPanel" style="display: none; margin-top: 6px;">
+                        <div class="metrics-grid">
+                            <div class="metric-item">
+                                <span class="metric-label">Tổng Chi Phí (Cost):</span>
+                                <span class="metric-value" id="resCost">-</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Quãng Đường Ước Tính:</span>
+                                <span class="metric-value" id="resDistance">-</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Số Nodes Đã Mở:</span>
+                                <span class="metric-value" id="resExpanded">-</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Thời Gian Thuật Toán:</span>
+                                <span class="metric-value" id="resTime">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 4: CONGESTION VISUALIZATION -->
+            <div>
+                <div class="section-title">🚦 4. Trạng Thái Kẹt Xe</div>
+                <div class="feature-card" style="border-color: rgba(6, 182, 212, 0.4);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px solid var(--border-color);">
+                        <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">🚦 Thể hiện kẹt xe (Đồ thị đường):</span>
+                        <button id="btnToggleTraffic" class="status-badge" style="background: rgba(6, 182, 212, 0.15); color: #22d3ee; border-color: rgba(6, 182, 212, 0.3); cursor: pointer; padding: 4px 10px; font-size: 0.75rem;" onclick="toggleTrafficLayer()">Đang Bật 🟢</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 5: HEALTH BENCHMARK -->
+            <div>
+                <div class="section-title">🛡️ 5. An Toàn & Health Benchmark</div>
+                <div class="feature-card" style="border-color: rgba(16, 185, 129, 0.4);">
+                    <div class="feature-title" style="color: var(--accent-emerald);">⚡ Kiểm Tra Benchmark Server</div>
+                    <button class="btn-action" style="background: var(--accent-emerald); color: #060911;" onclick="checkSystemHealth()">
+                        🔍 Ping GET /api/health
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <div id="map"></div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map;
+        let hospitalsData = [];
+        let poisData = [];
+        let edgesData = [];
+        let currentAmbulanceData = { lat: 10.773, lng: 106.698, mapped_nearest_node: {} };
+        let ambulanceMarker = null;
+        let hospitalMarkers = {};
+        let showPOIIcons = true;
+        let edgePolylines = {};
+        let activeRoutePolyline = null;
+        let routeNodeMarkers = [];
+        let showTraffic = true;
+
+        function initMap() {
+            map = L.map('map', { center: [10.778, 106.692], zoom: 13, zoomControl: false, renderer: L.canvas() });
+
+            // CartoDB Dark/Voyager Tile Layer
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19, attribution: '&copy; OpenStreetMap &copy; CARTO'
+            }).addTo(map);
+
+            L.control.zoom({ position: 'topright' }).addTo(map);
+
+            map.on('click', function(e) {
+                updateAmbulanceGPS(e.latlng.lat, e.latlng.lng);
+            });
+
+            loadInitialData();
+        }
+
+        async function loadInitialData() {
+            try {
+                const [nodesRes, edgesRes, gpsRes, healthRes] = await Promise.all([
+                    fetch('/api/nodes?poi_type=all&limit=10000'),
+                    fetch('/api/edges?limit=2000'),
+                    fetch('/api/ambulance/location'),
+                    fetch('/api/health')
+                ]);
+
+                poisData = await nodesRes.json();
+                hospitalsData = poisData.filter(p => p.is_hospital);
+                edgesData = await edgesRes.json();
+                currentAmbulanceData = await gpsRes.json();
+                const healthData = await healthRes.json();
+
+                // Update UI Stats safely
+                const elNodes = document.getElementById('statNodes');
+                if (elNodes) elNodes.textContent = healthData.nodes_count.toLocaleString();
+                const elEdges = document.getElementById('statEdges');
+                if (elEdges) elEdges.textContent = healthData.edges_count.toLocaleString();
+                const elHosp = document.getElementById('statHospitals');
+                if (elHosp) elHosp.textContent = hospitalsData.length;
+                const elLat = document.getElementById('statLatency');
+                if (elLat) elLat.textContent = healthData.latency_ms + ' ms';
+                const elSummary = document.getElementById('datasetSummary');
+                if (elSummary) elSummary.textContent = `Đồ thị RAM: ${healthData.nodes_count.toLocaleString()} nodes, ${healthData.edges_count.toLocaleString()} edges sẵn sàng.`;
+
+                populateHospitalSelect();
+                populateEdgeSelect();
+                renderHospitalsOnMap();
+                renderEdgesOnMap();
+                updateAmbulanceDisplay(currentAmbulanceData);
+
+            } catch (err) {
+                console.error('Error in loadInitialData:', err);
+                showToast('Lỗi khi kết nối Backend API!');
+            }
+        }
+
+        function populateHospitalSelect() {
+            const select = document.getElementById('selectHospital');
+            if (!select) return;
+            select.innerHTML = '';
+            hospitalsData.forEach(h => {
+                const opt = document.createElement('option');
+                opt.value = h.node_id;
+                opt.textContent = `${h.name} (${h.type})`;
+                select.appendChild(opt);
+            });
+        }
+
+        function populateEdgeSelect() {
+            const select = document.getElementById('selectEdge');
+            if (!select) return;
+            select.innerHTML = '';
+            edgesData.slice(0, 50).forEach(e => {
+                const opt = document.createElement('option');
+                opt.value = e.edge_id;
+                opt.textContent = `[${e.edge_id}] ${e.name} (${e.distance}m, Lv ${e.congestion_level})`;
+                select.appendChild(opt);
+            });
+        }
+
+        function renderHospitalsOnMap() {
+            // First clear existing hospital markers
+            Object.values(hospitalMarkers).forEach(m => map.removeLayer(m));
+            hospitalMarkers = {};
+
+            poisData.forEach(h => {
+                let marker;
+                if (h.is_hospital) {
+                    if (showPOIIcons) {
+                        const isHospital = h.type.toLowerCase().includes('hospital') || h.type.toLowerCase().includes('bệnh_viện');
+                        const iconClass = isHospital ? 'icon-hospital' : 'icon-clinic';
+                        const emoji = isHospital ? '🏥' : '🩺';
+
+                        const icon = L.divIcon({
+                            className: `custom-div-icon ${iconClass}`,
+                            html: `<span>${emoji}</span>`,
+                            iconSize: [34, 34], iconAnchor: [17, 17]
+                        });
+
+                        marker = L.marker([h.lat, h.lng], { icon: icon, zIndexOffset: 1000 }).addTo(map);
+                        marker.bindPopup(`
+                            <div style="font-family: Outfit, sans-serif; min-width: 180px;">
+                                <b style="color: #38bdf8; font-size: 0.95rem;">${emoji} ${h.name}</b><br>
+                                <span style="font-size: 0.8rem; color: #94a3b8;">Loại: ${h.type}</span><br>
+                                <span style="font-size: 0.75rem; color: #cbd5e1;">Mã Node: <code>${h.node_id}</code></span><br>
+                                <button onclick="setDestination(${h.node_id})" style="margin-top: 6px; width: 100%; padding: 4px; font-size: 0.75rem; font-weight: bold; background: #6366f1; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                    🎯 Chọn làm đích đến
+                                </button>
+                            </div>
+                        `);
+                    } else {
+                        marker = L.circleMarker([h.lat, h.lng], {
+                            radius: 4, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.9, weight: 1
+                        }).addTo(map);
+                        marker.bindPopup(`<b>🏥 ${h.name}</b><br>Loại: ${h.type}<br>Mã Node: ${h.node_id}<br><button onclick="setDestination(${h.node_id})" style="margin-top: 6px; width: 100%; padding: 4px; font-size: 0.75rem; font-weight: bold; background: #6366f1; color: white; border: none; border-radius: 4px; cursor: pointer;">🎯 Chọn làm đích đến</button>`);
+                    }
+                } else {
+                    marker = L.circleMarker([h.lat, h.lng], {
+                        radius: 2, color: '#38bdf8', fillColor: '#38bdf8', fillOpacity: 0.8, weight: 0
+                    }).addTo(map);
+                    marker.bindPopup(`<b style="color: #38bdf8;">📍 ${h.name || 'POI'}</b><br><span style="font-size: 0.8rem;">Loại: ${h.type || 'N/A'}</span>`);
+                }
+                hospitalMarkers[h.poi_node_id + '_' + Math.random()] = marker;
+            });
+        }
+
+        function togglePOIIcons() {
+            showPOIIcons = !showPOIIcons;
+            const btn = document.getElementById('btnTogglePOIIcon');
+            if (showPOIIcons) {
+                btn.textContent = 'Đang Bật 🟢';
+                btn.style.background = 'rgba(16, 185, 129, 0.15)';
+                btn.style.color = '#34d399';
+                btn.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+            } else {
+                btn.textContent = 'Đang Tắt 🔴';
+                btn.style.background = 'rgba(244, 63, 94, 0.15)';
+                btn.style.color = '#f43f5e';
+                btn.style.borderColor = 'rgba(244, 63, 94, 0.3)';
+            }
+            renderHospitalsOnMap();
+        }
+
+        function renderEdgesOnMap() {
+            // First, remove existing polylines
+            Object.values(edgePolylines).forEach(poly => map.removeLayer(poly));
+            edgePolylines = {};
+
+            if (!showTraffic) return;
+
+            let multiLines = {
+                normal: [], // Level <= 2
+                heavy: [],  // Level 3
+                severe: [], // Level 4
+                level5: [], // Level 5
+                level6: []  // Level 6
+            };
+
+            // Group edges by congestion level for batch rendering
+            edgesData.forEach(edge => {
+                let coords = [[edge.u_lat, edge.u_lng], [edge.v_lat, edge.v_lng]];
+                if (edge.congestion_level === 6) {
+                    multiLines.level6.push(coords);
+                } else if (edge.congestion_level === 5) {
+                    multiLines.level5.push(coords);
+                } else if (edge.congestion_level >= 4) {
+                    multiLines.severe.push(coords);
+                } else if (edge.congestion_level == 3) {
+                    multiLines.heavy.push(coords);
+                } else {
+                    multiLines.normal.push(coords);
+                }
+            });
+
+            // Render as large MultiPolylines (drastically improves Canvas performance)
+            if (multiLines.normal.length > 0) {
+                edgePolylines['normal'] = L.polyline(multiLines.normal, {
+                    color: '#38bdf8', weight: 2, opacity: 0.3, interactive: false
+                }).addTo(map);
+            }
+            if (multiLines.heavy.length > 0) {
+                edgePolylines['heavy'] = L.polyline(multiLines.heavy, {
+                    color: '#f59e0b', weight: 3, opacity: 0.85, interactive: false
+                }).addTo(map);
+            }
+            if (multiLines.severe.length > 0) {
+                edgePolylines['severe'] = L.polyline(multiLines.severe, {
+                    color: '#f43f5e', weight: 4, opacity: 0.95, interactive: false
+                }).addTo(map);
+            }
+            if (multiLines.level5.length > 0) {
+                edgePolylines['level5'] = L.polyline(multiLines.level5, {
+                    color: '#eab308', weight: 4, opacity: 0.95, interactive: false
+                }).addTo(map);
+            }
+            if (multiLines.level6.length > 0) {
+                edgePolylines['level6'] = L.polyline(multiLines.level6, {
+                    color: '#ff0000', weight: 5, opacity: 1.0, interactive: false
+                }).addTo(map);
+            }
+        }
+
+        function toggleTrafficLayer() {
+            showTraffic = !showTraffic;
+            const btn = document.getElementById('btnToggleTraffic');
+            if (showTraffic) {
+                btn.textContent = 'Đang Bật 🟢';
+                btn.style.background = 'rgba(6, 182, 212, 0.15)';
+                btn.style.color = '#22d3ee';
+                btn.style.borderColor = 'rgba(6, 182, 212, 0.3)';
+            } else {
+                btn.textContent = 'Đang Tắt 🔴';
+                btn.style.background = 'rgba(244, 63, 94, 0.15)';
+                btn.style.color = '#f43f5e';
+                btn.style.borderColor = 'rgba(244, 63, 94, 0.3)';
+            }
+            renderEdgesOnMap();
+        }
+
+        function updateAmbulanceDisplay(data) {
+            const lat = data.lat || 10.773;
+            const lng = data.lng || 106.698;
+            const mapped = data.mapped_nearest_node || {};
+
+            document.getElementById('gpsCodeDisplay').textContent = `GPS: (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+            document.getElementById('nearestDisplay').textContent = `Node gần nhất: [${mapped.nearest_node_id || '-'}] ${mapped.nearest_node_name || 'Nút đường'} (${mapped.distance_meters || 0}m)`;
+
+            const ambIcon = L.divIcon({
+                className: 'custom-div-icon icon-ambulance',
+                html: `<span>🚑</span>`,
+                iconSize: [42, 42], iconAnchor: [21, 21]
+            });
+
+            if (!ambulanceMarker) {
+                ambulanceMarker = L.marker([lat, lng], { icon: ambIcon, zIndexOffset: 2000 }).addTo(map);
+            } else {
+                ambulanceMarker.setLatLng([lat, lng]);
+            }
+
+            ambulanceMarker.bindPopup(`<b>🚑 Xe Cấp Cứu Đang Trực</b><br>Vị trí GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}<br>Khớp Node: ${mapped.nearest_node_name || ''} (${mapped.distance_meters || 0}m)`);
+        }
+
+        async function updateAmbulanceGPS(lat, lng) {
+            try {
+                const res = await fetch('/api/ambulance/location', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lat: lat, lng: lng })
+                });
+                const data = await res.json();
+                currentAmbulanceData = data.current_gps;
+                updateAmbulanceDisplay(currentAmbulanceData);
+                showToast(`📍 Cập nhật GPS (${lat.toFixed(4)}, ${lng.toFixed(4)}) - Ánh xạ Node trong <3ms!`);
+            } catch (err) {
+                showToast('Lỗi khi gửi tọa độ GPS!');
+            }
+        }
+
+        function getDeviceLocation() {
+            if (!navigator.geolocation) { showToast('Trình duyệt không hỗ trợ Geolocation!'); return; }
+            showToast('📡 Đang định vị GPS từ thiết bị...');
+            navigator.geolocation.getCurrentPosition(
+                (pos) => updateAmbulanceGPS(pos.coords.latitude, pos.coords.longitude),
+                (err) => showToast('Không thể lấy GPS thiết bị!')
+            );
+        }
+
+        function setDestination(nodeId) {
+            document.getElementById('selectHospital').value = nodeId;
+            calculateRoute();
+        }
+
+        function onHospitalSelectChange() {
+            const hId = parseInt(document.getElementById('selectHospital').value);
+            const hospital = hospitalsData.find(h => h.node_id === hId);
+            if (hospital) {
+                map.panTo([hospital.lat, hospital.lng]);
+                if (hospitalMarkers[hId]) hospitalMarkers[hId].openPopup();
+            }
+        }
+
+        async function calculateRoute() {
+            const goalNodeId = parseInt(document.getElementById('selectHospital').value);
+            const algorithm = document.getElementById('selectAlgorithm').value;
+            const startNodeId = currentAmbulanceData.mapped_nearest_node ? currentAmbulanceData.mapped_nearest_node.nearest_node_id : null;
+
+            showToast(`🧠 Đang chạy thuật toán ${algorithm.toUpperCase()} trên đồ thị thực tế...`);
+
+            try {
+                const res = await fetch('/api/route', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        start_node_id: startNodeId,
+                        goal_node_id: goalNodeId,
+                        algorithm: algorithm
+                    })
+                });
+
+                const data = await res.json();
+                if (!data.found) {
+                    showToast('⚠️ Không tìm thấy đường đi giữa hai điểm trên đồ thị!');
+                    return;
+                }
+
+                // Display metrics
+                document.getElementById('routeResultPanel').style.display = 'block';
+                document.getElementById('resCost').textContent = data.total_cost.toFixed(2);
+                document.getElementById('resDistance').textContent = `${(data.total_distance_m / 1000).toFixed(2)} km`;
+                document.getElementById('resExpanded').textContent = data.nodes_expanded.toLocaleString();
+                document.getElementById('resTime').textContent = `${data.execution_time_ms.toFixed(2)} ms`;
+
+                // Draw glowing route on map
+                if (activeRoutePolyline) { map.removeLayer(activeRoutePolyline); }
+                routeNodeMarkers.forEach(m => map.removeLayer(m));
+                routeNodeMarkers = [];
+
+                activeRoutePolyline = L.polyline(data.path_coords, {
+                    color: '#a855f7', weight: 6, opacity: 0.9, lineJoin: 'round',
+                    dashArray: algorithm === 'astar' ? null : '8, 8'
+                }).addTo(map);
+
+                map.fitBounds(activeRoutePolyline.getBounds(), { padding: [50, 50] });
+                showToast(`✅ Tuyến đường tìm thấy bằng ${algorithm.toUpperCase()} (${data.nodes_expanded} nodes, ${data.execution_time_ms.toFixed(1)}ms)!`);
+
+            } catch (err) {
+                showToast('Lỗi khi tính toán lộ trình!');
+            }
+        }
+
+        async function updateEdgeCongestion() {
+            const edgeId = document.getElementById('selectEdge').value;
+            const level = parseInt(document.getElementById('selectCongestion').value);
+
+            try {
+                const res = await fetch('/api/edges/congestion', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ edge_id: edgeId, congestion_level: level })
+                });
+                const data = await res.json();
+                showToast(`🚦 Đã cập nhật mức kẹt xe Level ${level} cho đoạn đường ${edgeId}`);
+                
+                // Refresh edges
+                const edgesRes = await fetch('/api/edges?limit=600');
+                edgesData = await edgesRes.json();
+                renderEdgesOnMap();
+
+                // Recalculate route if active
+                if (document.getElementById('routeResultPanel').style.display === 'block') {
+                    calculateRoute();
+                }
+            } catch (err) {
+                showToast('Lỗi khi cập nhật kẹt xe!');
+            }
+        }
+
+        async function checkSystemHealth() {
+            try {
+                const res = await fetch('/api/health');
+                const data = await res.json();
+                showToast(`⚡ Health OK: Status ${data.status} | Đồ thị RAM: ${data.nodes_count.toLocaleString()} nodes | Latency: ${data.latency_ms}ms`);
+            } catch (err) {
+                showToast('Lỗi khi ping Health API!');
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 3500);
+        }
+
+        window.onload = initMap;
+    </script>
+</body>
+</html>
