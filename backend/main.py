@@ -1,3 +1,4 @@
+import sys
 import os
 import gc
 import time
@@ -19,6 +20,10 @@ from pydantic import BaseModel
 # 1. Đường dẫn tệp & Dữ liệu
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 DASHBOARD_HTML = os.path.join(BASE_DIR, "../frontend/dashboard.html")
 DASHBOARD_JS = os.path.join(BASE_DIR, "../frontend/dashboard.js")
 DASHBOARD_CSS = os.path.join(BASE_DIR, "../frontend/dashboard.css")
