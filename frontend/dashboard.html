@@ -79,23 +79,53 @@
                 <div class="section-title">🧠 3. Tìm Đường Cấp Cứu Tối Ưu (AI Search)</div>
                 <div class="feature-card" style="border-color: rgba(99, 102, 241, 0.4);">
                     <div class="feature-title" style="color: var(--accent-indigo);">⚡ Thuật Toán Tìm Tuyến Đường</div>
-                    
-                    <label style="font-size: 0.75rem; color: var(--text-muted);">Bệnh Viện / Trạm Cứu Hộ Đích:</label>
-                    <select id="selectHospital" onchange="onHospitalSelectChange()"></select>
+                    <div class="route-controls">
+                        <div class="control-block">
+                            <label style="font-size: 0.75rem; color: var(--text-muted);">Điểm xuất phát:</label>
+                            <select id="selectStartMode" onchange="onStartModeChange()">
+                                <option value="current">Vị trí xe cấp cứu hiện tại</option>
+                                <option value="custom">Node tùy chỉnh</option>
+                            </select>
+                            <input id="inputStartNode" type="number" placeholder="Nhập start node id" style="display: none; margin-top: 4px;" />
+                        </div>
 
-                    <label style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Thuật Toán AI:</label>
-                    <select id="selectAlgorithm">
-                        <option value="astar">A* Search (Haversine Heuristic - Tối ưu nhất)</option>
-                        <option value="dijkstra">Dijkstra / UCS (Uniform Cost Search)</option>
-                        <option value="bfs">BFS (Breadth-First Search)</option>
-                        <option value="dfs">DFS (Depth-First Search)</option>
-                    </select>
+                        <div class="control-block">
+                            <label style="font-size: 0.75rem; color: var(--text-muted);">Bệnh viện / Trạm cứu hộ đích:</label>
+                            <select id="selectHospital" onchange="onHospitalSelectChange()"></select>
+                        </div>
+
+                        <div class="control-block full-width">
+                            <label style="font-size: 0.75rem; color: var(--text-muted);">Điểm trung gian (tùy chọn, phân tách bằng dấu phẩy):</label>
+                            <textarea id="inputWaypoints" rows="2" placeholder="Ví dụ: 123, 456, 789"></textarea>
+                        </div>
+
+                        <div class="control-block">
+                            <label style="font-size: 0.75rem; color: var(--text-muted);">Thuật toán AI:</label>
+                            <select id="selectAlgorithm">
+                                <option value="astar">A* Search (Haversine Heuristic)</option>
+                                <option value="dijkstra">Dijkstra / UCS (Uniform Cost Search)</option>
+                                <option value="bfs">BFS (Breadth-First Search)</option>
+                                <option value="dfs">DFS (Depth-First Search)</option>
+                            </select>
+                        </div>
+
+                        <div class="control-block">
+                            <label style="font-size: 0.75rem; color: var(--text-muted);">Tiêu chí tối ưu:</label>
+                            <select id="selectCriterion">
+                                <option value="time">Thời gian di chuyển ngắn nhất</option>
+                                <option value="distance">Quãng đường ngắn nhất</option>
+                                <option value="cost">Chi phí lộ trình thấp nhất</option>
+                                <option value="hops">Ít bước nhảy nhất</option>
+                            </select>
+                        </div>
+                    </div>
 
                     <button class="btn-action" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); margin-top: 4px;" onclick="calculateRoute()">
                         🚀 Tìm Tuyến Cấp Cứu Tối Ưu
                     </button>
 
                     <div id="routeResultPanel" style="display: none; margin-top: 6px;">
+                        <div id="routeSummary" class="route-summary"></div>
                         <div class="metrics-grid">
                             <div class="metric-item">
                                 <span class="metric-label">Tổng Chi Phí (Cost):</span>
@@ -114,6 +144,42 @@
                                 <span class="metric-value" id="resTime">-</span>
                             </div>
                         </div>
+
+                        <div id="routeExplanation" class="route-explanation"></div>
+
+                        <div id="searchVisualizationPanel" class="search-visualization" style="display: none;">
+                            <div class="search-viz-header">
+                                <span>🔍 Mô phỏng: <strong id="vizAlgorithm">-</strong></span>
+                                <span id="vizStep">Step 0 / 0</span>
+                            </div>
+                            <div class="search-viz-row">
+                                <span>Node đang mở:</span>
+                                <code id="vizCurrentNode">-</code>
+                            </div>
+                            <div class="search-viz-row">
+                                <span>Visited:</span>
+                                <strong id="vizVisitedCount">0</strong>
+                            </div>
+                            <div class="search-viz-list" id="vizVisitedList">-</div>
+                            <div class="search-viz-row">
+                                <span id="vizFrontierLabel">Frontier:</span>
+                                <strong id="vizFrontierCount">0</strong>
+                            </div>
+                            <div class="search-viz-list" id="vizFrontierList">-</div>
+                            <div class="search-viz-controls">
+                                <button type="button" onclick="previousSearchStep()">◀</button>
+                                <button type="button" id="btnPlaySearch" onclick="toggleSearchAnimation()">▶ Play</button>
+                                <button type="button" onclick="nextSearchStep()">▶</button>
+                                <select id="searchSpeed" aria-label="Tốc độ mô phỏng">
+                                    <option value="180">Chậm</option>
+                                    <option value="80" selected>Vừa</option>
+                                    <option value="30">Nhanh</option>
+                                </select>
+                            </div>
+                            <div id="vizExplanation" class="search-viz-explanation"></div>
+                        </div>
+
+                        <div id="routeSegmentList" class="route-segment-list"></div>
                     </div>
                 </div>
             </div>

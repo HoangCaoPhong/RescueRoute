@@ -5,6 +5,7 @@ from collections import deque
 from typing import Dict, Any, Optional
 
 from backend.app.algorithms.graph_search.bfs.bfs import solve_bfs
+from backend.app.services.search_trace import build_search_trace
 
 def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     R = 6371000.0
@@ -87,14 +88,24 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
         if not result.get("found", True) or not result.get("path"):
             return {
                 "found": False,
+                "algorithm": "bfs",
                 "nodes_expanded": result.get("explored_nodes", 0),
-                "execution_time_ms": round(exec_time, 2)
+                "execution_time_ms": round(exec_time, 2),
+                "message": result.get(
+                    "message",
+                    f"No route found from '{start_id}' to '{goal_id}'."
+                )
             }
             
         # BFS was successful
         path = result["path"]
         expanded = result.get("explored_nodes", len(result.get("visited_order", [])))
-        return build_path_response(path, exec_time, expanded)
+        response = build_path_response(path, exec_time, expanded)
+        response["search_trace"] = build_search_trace(graph_mgr, result, "bfs")
+        response["explanation_data"] = result.get("explanation_data", {})
+        response["hop_count"] = result.get("hop_count")
+        response["is_optimal"] = result.get("is_optimal")
+        return response
 
     elif algo == "dfs":
         stack = [start_id]
