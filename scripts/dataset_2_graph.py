@@ -2,17 +2,21 @@ import os
 import pandas as pd
 from collections import defaultdict, deque
 from datetime import datetime
-import geopandas as gpd
 from scripts import enrich_data
 import json
 
 # load dataset
 def read():
     dataset_path = os.path.join(os.path.dirname(__file__), '../data/processed')
+    base_segments_path = os.path.join(dataset_path, 'base_segments.csv')
+
+    if not os.path.exists(base_segments_path):
+        print("base_segments.csv not found. Running enrich_data.enrich_segments()...")
+        enrich_data.enrich_segments()
 
     df_nodes = pd.read_csv(os.path.join(dataset_path, 'nodes_with_poi_labels.csv'))
     df_train = pd.read_csv(os.path.join(dataset_path, 'processed_train.csv'))
-    df_base = pd.read_csv(os.path.join(dataset_path, 'base_segments.csv'))
+    df_base = pd.read_csv(base_segments_path)
 
     return df_nodes, df_train, df_base
 
