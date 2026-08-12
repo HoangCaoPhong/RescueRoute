@@ -14,8 +14,11 @@ def get_neighbors(graph, node_id):
     """Get neighbors in deterministic order."""
 
     if isinstance(graph, dict):
-        # Our defaultdict structure: graph[node_id] is a dict where keys are neighbors
-        neighbors = graph.get(node_id, {}).keys()
+        raw_neighbors = graph.get(node_id, [])
+        if isinstance(raw_neighbors, dict):
+            neighbors = raw_neighbors.keys()
+        else:
+            neighbors = raw_neighbors
         return sorted(list(neighbors))
 
     # Common Graph abstraction
