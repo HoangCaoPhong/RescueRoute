@@ -13,7 +13,7 @@
             rel="stylesheet">
         <link rel="stylesheet"
             href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-        <link rel="stylesheet" href="dashboard.css?v=20260812-3">
+        <link rel="stylesheet" href="dashboard.css?v=20260813-11">
     </head>
     <body>
         <header class="app-header">
@@ -36,8 +36,8 @@
             </div>
         </header>
 
-        <main class="workspace">
-            <aside class="sidebar" aria-label="Bảng điều khiển tìm đường">
+        <main id="workspace" class="workspace">
+            <aside id="sidebarPanel" class="sidebar" aria-label="Bảng điều khiển tìm đường">
                 <section class="panel-section" aria-labelledby="datasetTitle">
                     <div class="section-heading">
                         <span class="section-index">01</span>
@@ -317,10 +317,12 @@
                                     </div>
                                     <div class="viz-legend"
                                         aria-label="Chú thích mô phỏng">
-                                        <span class="legend-chip visited">🟡 Đã
-                                            duyệt</span>
-                                        <span class="legend-chip current">🟠
-                                            Hiện tại</span>
+                                        <span id="vizVisitedLegend"
+                                            class="legend-chip visited">🟡 Tuyến
+                                            đã hiện</span>
+                                        <span id="vizCurrentLegend"
+                                            class="legend-chip current">🟠
+                                            Trên tuyến cuối</span>
                                         <span class="legend-chip frontier">🔵
                                             Frontier</span>
                                     </div>
@@ -336,49 +338,70 @@
                                 </div>
                                 <p id="vizMapStatus" class="viz-map-status"
                                     role="status"></p>
-                                <div>
-                                    <span class="list-label">Thứ tự đã duyệt gần
-                                        nhất</span>
-                                    <div class="search-viz-list"
-                                        id="vizVisitedList">—</div>
+                                <details class="search-viz-details">
+                                    <summary>Chi tiết trace &amp; frontier</summary>
+                                    <div class="search-viz-detail-content">
+                                        <div class="search-viz-queue-panel">
+                                            <span class="list-label">Thứ tự đã duyệt gần
+                                                nhất</span>
+                                            <div class="search-viz-list"
+                                                id="vizVisitedList">—</div>
+                                        </div>
+                                        <div class="search-viz-queue-panel">
+                                            <span class="list-label">Frontier / open
+                                                list</span>
+                                            <div class="search-viz-list"
+                                                id="vizFrontierList">—</div>
+                                        </div>
+                                        <label class="follow-search-control"
+                                            for="followSearchNode">
+                                            <input id="followSearchNode" type="checkbox"
+                                                checked>
+                                            <span id="followSearchLabel">Tự động đưa node thuộc tuyến cuối vào
+                                                giữa bản đồ</span>
+                                        </label>
+                                        <p id="vizExplanation"
+                                            class="search-viz-explanation"></p>
+                                    </div>
+                                </details>
+                                <div class="search-viz-toolbar">
+                                    <div class="search-viz-playback"
+                                        aria-label="Điều khiển mô phỏng">
+                                        <button type="button"
+                                            onclick="previousSearchStep()"
+                                            aria-label="Bước trước">←</button>
+                                        <button type="button" id="btnPlaySearch"
+                                            onclick="toggleSearchAnimation()">▶
+                                            Phát</button>
+                                        <button type="button"
+                                            onclick="nextSearchStep()"
+                                            aria-label="Bước tiếp theo">→</button>
+                                    </div>
+                                    <label class="viz-select-control"
+                                        for="searchSpeed">
+                                        <span>Tốc độ</span>
+                                        <select id="searchSpeed">
+                                            <option value="700">Chậm</option>
+                                            <option value="350"
+                                                selected>Vừa</option>
+                                            <option value="120">Nhanh</option>
+                                        </select>
+                                    </label>
+                                    <label class="viz-select-control mode"
+                                        for="mapTraceMode">
+                                        <span>Hiển thị map</span>
+                                        <select id="mapTraceMode"
+                                            onchange="onMapTraceModeChange()">
+                                            <option value="route_frontier" selected>Tuyến
+                                                cuối + frontier</option>
+                                            <option value="full_trace">Toàn bộ search
+                                                trace</option>
+                                        </select>
+                                    </label>
                                 </div>
-                                <div>
-                                    <span class="list-label">Frontier / open
-                                        list</span>
-                                    <div class="search-viz-list"
-                                        id="vizFrontierList">—</div>
-                                </div>
-                                <div class="search-viz-controls">
-                                    <button type="button"
-                                        onclick="previousSearchStep()"
-                                        aria-label="Bước trước">←</button>
-                                    <button type="button" id="btnPlaySearch"
-                                        onclick="toggleSearchAnimation()">▶
-                                        Phát</button>
-                                    <button type="button"
-                                        onclick="nextSearchStep()"
-                                        aria-label="Bước tiếp theo">→</button>
-                                    <label for="searchSpeed" class="sr-only">Tốc
-                                        độ mô phỏng</label>
-                                    <select id="searchSpeed">
-                                        <option value="700">Chậm</option>
-                                        <option value="350"
-                                            selected>Vừa</option>
-                                        <option value="120">Nhanh</option>
-                                    </select>
-                                </div>
-                                <label class="follow-search-control"
-                                    for="followSearchNode">
-                                    <input id="followSearchNode" type="checkbox"
-                                        checked>
-                                    <span>Tự động đưa node đang mở vào giữa bản
-                                        đồ</span>
-                                </label>
-                                <p id="vizExplanation"
-                                    class="search-viz-explanation"></p>
                             </div>
 
-                            <details class="route-details" open>
+                            <details class="route-details">
                                 <summary>Đường đi theo từng chặng</summary>
                                 <div id="routeSegmentList"
                                     class="route-segment-list"></div>
@@ -484,8 +507,19 @@
                 </section>
             </aside>
 
+            <button id="btnToggleSidebar" class="sidebar-toggle" type="button"
+                onclick="toggleSidebar()" aria-controls="sidebarPanel"
+                aria-expanded="true" aria-label="Thu gọn bảng điều khiển"
+                title="Thu gọn bảng điều khiển">
+                <span id="sidebarToggleIcon" aria-hidden="true">‹</span>
+            </button>
+
             <section class="map-shell" aria-label="Bản đồ giao thông">
                 <div id="map"></div>
+                <div id="mapOverlayHost" class="map-overlay-host">
+                    <div id="searchPlaybackDock" class="search-playback-dock"
+                        aria-label="Điều khiển mô phỏng" hidden></div>
+                </div>
                 <div class="map-instruction"><span aria-hidden="true">⌖</span>
                     Nhấp bản đồ để đặt vị trí xe</div>
                 <div class="map-legend">
@@ -500,6 +534,6 @@
         <div id="toast" role="status" aria-live="polite"></div>
 
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script src="dashboard.js?v=20260812-3"></script>
+        <script src="dashboard.js?v=20260813-11"></script>
     </body>
 </html>
