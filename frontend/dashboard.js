@@ -263,6 +263,10 @@ async function loadInitialData() {
 function populateHospitalSelect() {
     const select = byId("selectHospital");
     if (!select) return;
+    const emergencyOnly = byId("chkEmergencyOnly")?.checked || false;
+    const query = byId("inputSearchHospital")?.value?.toLowerCase().trim() || "";
+    const currentVal = select.value;
+
     select.replaceChildren();
 
     if (!hospitalsData.length) {
@@ -271,21 +275,112 @@ function populateHospitalSelect() {
         option.value = "";
         select.append(option);
         select.disabled = true;
+        setText("hospitalCountBadge", "(0 BV)");
         return;
     }
 
-    hospitalsData
+    if (!query) {
+        const autoOption = document.createElement("option");
+        autoOption.value = "";
+        autoOption.textContent = "🌟 [TỰ ĐỘNG DÒ TÌM BV GẦN NHẤT BẰNG THUẬT TOÁN ĐÃ CHỌN]";
+        autoOption.style.fontWeight = "bold";
+        autoOption.style.color = "#38bdf8";
+        select.append(autoOption);
+    }
+
+    const filteredHospitals = hospitalsData
         .slice()
+        .filter((hospital) => {
+            if (emergencyOnly && !hospital.is_emergency) return false;
+            const name = String(hospital.name || "").toLowerCase();
+            const type = String(hospital.type || hospital.category || "").toLowerCase();
+            return !query || name.includes(query) || type.includes(query);
+        })
         .sort((a, b) =>
             String(a.name || "").localeCompare(String(b.name || ""), "vi"),
-        )
-        .forEach((hospital) => {
-            const option = document.createElement("option");
-            option.value = hospital.node_id;
-            option.textContent = `${hospital.name || "Cơ sở y tế"} · node ${hospital.node_id}`;
-            select.append(option);
-        });
+        );
+
+    filteredHospitals.forEach((hospital) => {
+        const option = document.createElement("option");
+        option.value = hospital.node_id;
+        const emoji = hospital.is_emergency ? "🚨" : "🏥";
+        option.textContent = `${emoji} ${hospital.name || "Cơ sở y tế"} (${hospital.category || hospital.type || "N/A"})`;
+        select.append(option);
+    });
+
+    setText("hospitalCountBadge", `(${filteredHospitals.length} BV)`);
     select.disabled = false;
+
+    if (currentVal && Array.from(select.options).some((option) => option.value === currentVal)) {
+        select.value = currentVal;
+    } else if (!filteredHospitals.length) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = "-- Không tìm thấy bệnh viện phù hợp --";
+        select.append(option);
+        select.value = "";
+    }
+}
+
+function haversineDistanceMeters(lat1, lng1, lat2, lng2) {
+    const toRadians = (value) => (value * Math.PI) / 180;
+    const earthRadius = 6371000;
+    const dLat = toRadians(lat2 - lat1);
+    const dLng = toRadians(lng2 - lng1);
+    const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2;
+    return 2 * earthRadius * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function selectNearestHospital() {
+    if (!hospitalsData.length) {
+        showToast("Không có bệnh viện nào trong dữ liệu.", true);
+        return;
+    }
+
+    const emergencyOnly = byId("chkEmergencyOnly")?.checked || false;
+    const query = byId("inputSearchHospital")?.value?.toLowerCase().trim() || "";
+    const currentGps = currentAmbulanceData || {};
+    const baseLat = Number(currentGps.lat);
+    const baseLng = Number(currentGps.lng);
+
+    const candidates = hospitalsData.filter((hospital) => {
+        if (emergencyOnly && !hospital.is_emergency) return false;
+        const name = String(hospital.name || "").toLowerCase();
+        const type = String(hospital.type || hospital.category || "").toLowerCase();
+        return !query || name.includes(query) || type.includes(query);
+    });
+
+    const referenceLat = Number.isFinite(baseLat) ? baseLat : 10.773;
+    const referenceLng = Number.isFinite(baseLng) ? baseLng : 106.698;
+
+    let nearest = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    candidates.forEach((hospital) => {
+        const lat = Number(hospital.lat);
+        const lng = Number(hospital.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        const distance = haversineDistanceMeters(referenceLat, referenceLng, lat, lng);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            nearest = hospital;
+        }
+    });
+
+    if (!nearest) {
+        showToast("Không tìm thấy bệnh viện phù hợp để dò gần nhất.", true);
+        return;
+    }
+
+    const select = byId("selectHospital");
+    if (select) {
+        select.value = String(nearest.node_id);
+        if (typeof onHospitalSelectChange === "function") {
+            onHospitalSelectChange();
+        }
+    }
+    calculateRoute();
 }
 
 function populateEdgeSelect() {
