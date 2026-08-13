@@ -98,27 +98,10 @@ def build_search_trace(
     thành format visualization chung.
     """
 
-    visited_order = (
-        result.get(
-            "visited_order",
-            []
-        )
-        or []
-    )
-
-    frontier_steps = (
-        result.get(
-            "frontier_steps",
-            []
-        )
-        or []
-    )
-
-    total_steps = max(
-        len(visited_order),
-        len(frontier_steps)
-    )
-
+    trace_history = result.get("trace_history") or {}
+    history_events = trace_history.get("events") or []
+    visited_order = list(result.get("visited_order", []) or [])
+    frontier_steps = result.get("frontier_steps", []) or []
     steps = []
 
     search_node_ids = set()
@@ -127,21 +110,37 @@ def build_search_trace(
     # BUILD SEARCH STEPS
     # ======================================
 
-    for index in range(
-        total_steps
-    ):
+    if history_events:
+        event_source = history_events
+    else:
+        total_steps = max(len(visited_order), len(frontier_steps))
+        event_source = [
+            {
+                "step": index + 1,
+                "current_node": (
+                    visited_order[index]
+                    if index < len(visited_order)
+                    else None
+                ),
+                "frontier": (
+                    frontier_steps[index]
+                    if index < len(frontier_steps)
+                    else []
+                ),
+            }
+            for index in range(total_steps)
+        ]
 
-        current_node = (
-            visited_order[index]
-            if index < len(visited_order)
-            else None
-        )
+    if not visited_order and history_events:
+        visited_order = [
+            event.get("current_node")
+            for event in history_events
+            if event.get("current_node") is not None
+        ]
 
-        raw_frontier = (
-            frontier_steps[index]
-            if index < len(frontier_steps)
-            else []
-        )
+    for index, event in enumerate(event_source):
+        current_node = event.get("current_node")
+        raw_frontier = event.get("frontier") or []
 
         normalized_frontier = [
             normalize_frontier_item(item)
@@ -165,8 +164,7 @@ def build_search_trace(
                 )
 
         steps.append({
-            "step":
-                index + 1,
+            "step": event.get("step", index + 1),
 
             "current_node":
                 current_node,

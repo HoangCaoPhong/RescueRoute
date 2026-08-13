@@ -2,11 +2,12 @@ import math
 import time
 import heapq
 from collections import deque
-from typing import Dict, Any, Optional
+from typing import Any, Callable, Dict, List, Optional
 import numpy as np
 
 from backend.app.algorithms.graph_search.bfs.bfs import solve_bfs
 from backend.app.algorithms.graph_search.dfs.dfs import solve_dfs
+from backend.app.algorithms.graph_search.trace_history import SearchTraceHistory
 from backend.app.services.search_trace import build_search_trace
 
 def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -17,6 +18,41 @@ def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     dlng = r_lng2 - r_lng1
     a = math.sin(dlat/2)**2 + math.cos(r_lat1)*math.cos(r_lat2)*math.sin(dlng/2)**2
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def build_priority_frontier_snapshot(
+    current_node: int,
+    current_cost: float,
+    current_priority: float,
+    priority_queue: List[tuple],
+    best_scores: Dict[int, float],
+    heuristic: Optional[Callable[[int], float]] = None,
+) -> List[Dict[str, Any]]:
+    """Build one shared priority-queue snapshot for UCS, A*, and Dijkstra."""
+
+    def format_item(node_id: int, cost: float, priority: float) -> Dict[str, Any]:
+        item: Dict[str, Any] = {
+            "node_id": node_id,
+            "g": round(cost, 2),
+            "f": round(priority, 2),
+        }
+        if heuristic is not None:
+            item["h"] = round(heuristic(node_id), 2)
+        return item
+
+    snapshot = [format_item(current_node, current_cost, current_priority)]
+    included_nodes = {current_node}
+    for entry in sorted(priority_queue):
+        if len(entry) == 2:
+            priority, node_id = entry
+            cost = priority
+        else:
+            priority, cost, node_id = entry
+        if cost != best_scores.get(node_id) or node_id in included_nodes:
+            continue
+        included_nodes.add(node_id)
+        snapshot.append(format_item(node_id, cost, priority))
+    return snapshot
 
 
 def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[str, Any]:
@@ -47,17 +83,6 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
     nodes_expanded = 0
     found = False
 
-    if start_id == goal_id:
-        return {
-            "found": True,
-            "total_cost": 0.0,
-            "total_distance_m": 0.0,
-            "nodes_expanded": 1,
-            "execution_time_ms": (time.perf_counter() - t0) * 1000,
-            "path_coords": [[goal_node["lat"], goal_node["lng"]]],
-            "path_nodes": [start_id]
-        }
-
     # Helper function for coordinate mapping
     def build_path_response(path_nodes, exec_time, expanded=0):
         total_cost = 0.0
@@ -83,6 +108,33 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
             "path_nodes": path_nodes
         }
 
+    def build_success_response(
+        path_nodes: List[int],
+        exec_time: float,
+        expanded: int,
+        trace_result: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Return the final route and replayable trace in one response."""
+
+        response = build_path_response(path_nodes, exec_time, expanded)
+        response["algorithm"] = algo
+        response["search_trace"] = build_search_trace(
+            graph_mgr,
+            trace_result,
+            algo,
+        )
+        return response
+
+    if start_id == goal_id:
+        trace_history = SearchTraceHistory()
+        trace_history.record_expansion(start_id, [start_id])
+        return build_success_response(
+            [start_id],
+            (time.perf_counter() - t0) * 1000,
+            trace_history.explored_nodes,
+            trace_history.as_result_fields(),
+        )
+
     if algo == "bfs":
         result = solve_bfs(graph_mgr.adj, start_id, goal_id)
         exec_time = (time.perf_counter() - t0) * 1000
@@ -102,8 +154,7 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
         # BFS was successful
         path = result["path"]
         expanded = result.get("explored_nodes", len(result.get("visited_order", [])))
-        response = build_path_response(path, exec_time, expanded)
-        response["search_trace"] = build_search_trace(graph_mgr, result, "bfs")
+        response = build_success_response(path, exec_time, expanded, result)
         response["explanation_data"] = result.get("explanation_data", {})
         response["hop_count"] = result.get("hop_count")
         response["is_optimal"] = result.get("is_optimal")
@@ -123,7 +174,10 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
 
             path = result["path"]
             expanded = result.get("explored_nodes", len(result.get("visited_order", [])))
-            return build_path_response(path, exec_time, expanded)
+            response = build_success_response(path, exec_time, expanded, result)
+            response["explanation_data"] = result.get("explanation_data", {})
+            response["is_optimal"] = result.get("is_optimal")
+            return response
         except ValueError:
             exec_time = (time.perf_counter() - t0) * 1000
             return {
@@ -135,11 +189,22 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
     elif algo == "dijkstra":
         pq = [(0.0, start_id)]
         best_dist = {start_id: 0.0}
+        trace_history = SearchTraceHistory()
         while pq:
             d, curr = heapq.heappop(pq)
             if d > best_dist.get(curr, float('inf')):
                 continue
             nodes_expanded += 1
+            trace_history.record_expansion(
+                curr,
+                build_priority_frontier_snapshot(
+                    curr,
+                    d,
+                    d,
+                    pq,
+                    best_dist,
+                ),
+            )
             if curr == goal_id:
                 found = True
                 break
@@ -161,12 +226,24 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
 
         pq = [(h(start_id), 0.0, start_id)]
         g_scores = {start_id: 0.0}
+        trace_history = SearchTraceHistory()
 
         while pq:
             f, g, curr = heapq.heappop(pq)
             if g > g_scores.get(curr, float('inf')):
                 continue
             nodes_expanded += 1
+            trace_history.record_expansion(
+                curr,
+                build_priority_frontier_snapshot(
+                    curr,
+                    g,
+                    f,
+                    pq,
+                    g_scores,
+                    h,
+                ),
+            )
             if curr == goal_id:
                 found = True
                 break
@@ -180,11 +257,19 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
     exec_time = (time.perf_counter() - t0) * 1000
 
     if not found:
-        return {
+        response = {
             "found": False,
+            "algorithm": algo,
             "nodes_expanded": nodes_expanded,
             "execution_time_ms": round(exec_time, 2)
         }
+        if "trace_history" in locals():
+            response["search_trace"] = build_search_trace(
+                graph_mgr,
+                trace_history.as_result_fields(),
+                algo,
+            )
+        return response
 
     # Tái hiện đường đi (cho DFS, Dijkstra, A*, UCS)
     path = []
@@ -194,7 +279,12 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
         curr = parent.get(curr)
     path.reverse()
 
-    return build_path_response(path, exec_time, nodes_expanded)
+    return build_success_response(
+        path,
+        exec_time,
+        nodes_expanded,
+        trace_history.as_result_fields(),
+    )
 
 
 def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "astar", emergency_only: bool = True) -> Dict[str, Any]:
@@ -229,20 +319,28 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
     parent: Dict[int, Optional[int]] = {start_id: None}
     nodes_expanded = 0
     found_goal_id = None
+    trace_history = SearchTraceHistory()
 
     # Nếu start_id trùng ngay 1 bệnh viện
     if start_id in goal_node_set:
         start_node = graph_mgr.road_nodes[start_id]
         h_info = hospital_by_node[start_id]
+        trace_history.record_expansion(start_id, [start_id])
         return {
             "found": True,
+            "algorithm": algo,
             "total_cost": 0.0,
             "total_distance_m": 0.0,
-            "nodes_expanded": 1,
+            "nodes_expanded": trace_history.explored_nodes,
             "execution_time_ms": (time.perf_counter() - t0) * 1000,
             "path_coords": [[start_node["lat"], start_node["lng"]]],
             "path_nodes": [start_id],
-            "destination_hospital": h_info
+            "destination_hospital": h_info,
+            "search_trace": build_search_trace(
+                graph_mgr,
+                trace_history.as_result_fields(),
+                algo,
+            ),
         }
 
     # Helper function build response
@@ -260,8 +358,9 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
                     total_cost += edge[0]
                     total_dist += edge[2]
 
-        return {
+        response = {
             "found": True,
+            "algorithm": algo,
             "total_cost": round(total_cost, 2),
             "total_distance_m": round(total_dist, 2),
             "nodes_expanded": expanded,
@@ -270,12 +369,20 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             "path_nodes": path_nodes,
             "destination_hospital": dest_hospital
         }
+        response["search_trace"] = build_search_trace(
+            graph_mgr,
+            trace_history.as_result_fields(),
+            algo,
+        )
+        return response
 
     # Thuật toán 1: BFS (Tìm bệnh viện ít số bước nhảy / ngã rẽ nhất)
     if algo == "bfs":
         queue = deque([start_id])
         visited = {start_id}
         while queue:
+            curr = queue[0]
+            trace_history.record_expansion(curr, queue)
             curr = queue.popleft()
             nodes_expanded += 1
             if curr in goal_node_set:
@@ -295,6 +402,10 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             curr, p = stack.pop()
             if curr in visited:
                 continue
+            trace_history.record_expansion(
+                curr,
+                [node for node, _ in stack] + [curr],
+            )
             visited.add(curr)
             parent[curr] = p
             nodes_expanded += 1
@@ -314,6 +425,16 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             if d > best_dist.get(curr, float('inf')):
                 continue
             nodes_expanded += 1
+            trace_history.record_expansion(
+                curr,
+                build_priority_frontier_snapshot(
+                    curr,
+                    d,
+                    d,
+                    pq,
+                    best_dist,
+                ),
+            )
             if curr in goal_node_set:
                 found_goal_id = curr
                 break
@@ -347,6 +468,17 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             if g > g_scores.get(curr, float('inf')):
                 continue
             nodes_expanded += 1
+            trace_history.record_expansion(
+                curr,
+                build_priority_frontier_snapshot(
+                    curr,
+                    g,
+                    f,
+                    pq,
+                    g_scores,
+                    h_multi,
+                ),
+            )
             if curr in goal_node_set:
                 found_goal_id = curr
                 break
@@ -362,8 +494,14 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
     if not found_goal_id:
         return {
             "found": False,
+            "algorithm": algo,
             "nodes_expanded": nodes_expanded,
-            "execution_time_ms": round(exec_time, 2)
+            "execution_time_ms": round(exec_time, 2),
+            "search_trace": build_search_trace(
+                graph_mgr,
+                trace_history.as_result_fields(),
+                algo,
+            ),
         }
 
     # Tái hiện đường đi

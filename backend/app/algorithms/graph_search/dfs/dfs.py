@@ -1,5 +1,6 @@
 from time import perf_counter
 from backend.app.algorithms.graph_search.utils import reconstruct_path, get_neighbors
+from backend.app.algorithms.graph_search.trace_history import SearchTraceHistory
 
 
 def has_node(graph, node_id):
@@ -46,19 +47,20 @@ def solve_dfs(
     visited = set()
     parent = {}
 
-    visited_order = []
-    frontier_steps = []
+    trace_history = SearchTraceHistory()
 
     while stack:
-        # Record frontier before expanding current node
-        frontier_steps.append([node for node, _ in stack])
         current_node, current_parent = stack.pop()
 
         if current_node in visited:
             continue
 
+        # Re-add the popped node so the snapshot is the pre-expansion stack.
+        trace_history.record_expansion(
+            current_node,
+            [node for node, _ in stack] + [current_node],
+        )
         visited.add(current_node)
-        visited_order.append(current_node)
         parent[current_node] = current_parent
 
         # Goal found
@@ -72,12 +74,11 @@ def solve_dfs(
             return {
                 "found": True,
                 "path": path,
-                "visited_order": visited_order,
-                "frontier_steps": frontier_steps,
+                **trace_history.as_result_fields(),
                 "total_distance": total_distance,
                 "estimated_time": estimated_time,
                 "total_cost": total_cost,
-                "explored_nodes": len(visited_order),
+                "explored_nodes": trace_history.explored_nodes,
                 "processing_time_ms": processing_time_ms,
                 "is_optimal": False,
                 "explanation_data": {
