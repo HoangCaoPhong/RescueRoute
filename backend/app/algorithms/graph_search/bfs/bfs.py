@@ -3,6 +3,7 @@ from time import perf_counter
 
 
 from backend.app.algorithms.graph_search.utils import reconstruct_path, get_neighbors
+from backend.app.algorithms.graph_search.trace_history import SearchFailure, SearchTraceHistory
 
 
 def has_node(graph, node_id):
@@ -37,8 +38,6 @@ def solve_bfs(graph, start_node_id, goal_node_id, cost_profile=None):
     It does not optimize distance, travel time, congestion, or traffic cost.
     """
 
-    start_node_id = int(start_node_id)
-    goal_node_id = int(goal_node_id)
     start_time = perf_counter()
 
     # Validate input
@@ -53,35 +52,34 @@ def solve_bfs(graph, start_node_id, goal_node_id, cost_profile=None):
     visited = {start_node_id}
     parent = {start_node_id: None}
     
-    visited_order = []
-    frontier_steps = []
+    trace_history = SearchTraceHistory()
 
     # BFS search
     while queue:
 
-        # Record frontier before expanding current node
-        frontier_steps.append(list(queue))
+        # The template keeps the frontier snapshot before this expansion.
+        current_node = queue[0]
+        trace_history.record_expansion(current_node, queue)
         current_node = queue.popleft()
-        visited_order.append(current_node)
 
         # Goal found
         if current_node == goal_node_id:
 
-            path = reconstruct_path(parent,goal_node_id)
-            (total_distance,estimated_time,total_cost) = calculate_path_metrics(graph,path,cost_profile)
+            path = reconstruct_path(parent, goal_node_id)
+            (total_distance, estimated_time, total_cost) = calculate_path_metrics(graph, path, cost_profile)
 
             processing_time_ms = (perf_counter() - start_time) * 1000.0
 
             return {
+                "found": True,
                 "path": path,
-                "visited_order": visited_order,
-                "frontier_steps": frontier_steps,
+                **trace_history.as_result_fields(),
 
                 "total_distance": total_distance,
                 "estimated_time": estimated_time,
                 "total_cost": total_cost,
 
-                "explored_nodes": len(visited_order),
+                "explored_nodes": trace_history.explored_nodes,
                 "processing_time_ms": processing_time_ms,
 
                 # BFS is optimal for minimum number of hops.
@@ -113,8 +111,15 @@ def solve_bfs(graph, start_node_id, goal_node_id, cost_profile=None):
                 queue.append(neighbor_node)
 
     # No route found
-    return {
-        "found": False,
-        "path": [],
-        "message": f"No route found from '{start_node_id}' to '{goal_node_id}'."
-    }
+    message = f"No route found from '{start_node_id}' to '{goal_node_id}'."
+    raise SearchFailure(
+        message,
+        {
+            "found": False,
+            "path": [],
+            **trace_history.as_result_fields(),
+            "explored_nodes": trace_history.explored_nodes,
+            "processing_time_ms": (perf_counter() - start_time) * 1000.0,
+            "message": message,
+        },
+    )

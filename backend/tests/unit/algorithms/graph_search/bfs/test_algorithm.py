@@ -99,6 +99,7 @@ def test_bfs_returns_required_result_fields():
         "path",
         "visited_order",
         "frontier_steps",
+        "trace_history",
         "total_distance",
         "estimated_time",
         "total_cost",
@@ -110,6 +111,15 @@ def test_bfs_returns_required_result_fields():
     }
 
     assert required_fields.issubset(result.keys())
+
+
+def test_bfs_trace_history_matches_legacy_trace_fields():
+    result = solve_bfs(MINIMUM_HOP_GRAPH, "A", "D")
+
+    events = result["trace_history"]["events"]
+
+    assert [event["current_node"] for event in events] == result["visited_order"]
+    assert [event["frontier"] for event in events] == result["frontier_steps"]
 
 
 def test_bfs_dict_graph_has_no_route_metrics():
