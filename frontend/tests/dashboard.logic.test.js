@@ -135,3 +135,31 @@ test('missing coordinate detection includes visited, current and frontier nodes'
     })`, context);
     assert.deepEqual(Array.from(missing), [200, 300]);
 });
+
+test('frontend exposes Hill Climbing and both backend visit-order methods', () => {
+    const context = loadDashboardContext();
+    assert.equal(
+        vm.runInContext("ALGORITHM_SPECS.hill_climbing.label", context),
+        'Hill Climbing'
+    );
+    assert.equal(
+        vm.runInContext("visitOrderLabel('nearest_neighbor')", context),
+        'Nearest Neighbor (xấp xỉ)'
+    );
+    assert.equal(
+        vm.runInContext("visitOrderLabel('held_karp')", context),
+        'Held–Karp (tối ưu)'
+    );
+});
+
+test('frontier formatter includes costs, heuristic and selected candidate', () => {
+    const context = loadDashboardContext();
+    const label = vm.runInContext(
+        "formatFrontierItem({ node_id: 7, g: 2, h: 3, f: 5, selected: true })",
+        context
+    );
+    assert.match(label, /g=2\.00/);
+    assert.match(label, /h=3\.00/);
+    assert.match(label, /f=5\.00/);
+    assert.match(label, /được chọn/);
+});

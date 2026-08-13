@@ -6,7 +6,7 @@ import math
 import heapq
 from datetime import datetime
 from collections import deque
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Literal
 
 import pandas as pd
 import numpy as np
@@ -14,7 +14,7 @@ from scipy.spatial import cKDTree
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # ==========================================
 # 1. Đường dẫn tệp & Dữ liệu
@@ -264,6 +264,39 @@ class RouteRequest(BaseModel):
     goal_node_id: int
     algorithm: str = "astar"
 
+class MultiLocationRouteRequest(BaseModel):
+    start_node_id: Optional[int] = None
+    waypoint_ids: List[int] = Field(default_factory=list, max_length=10)
+    goal_node_id: int
+    route_algorithm: Literal[
+        "bfs", "dfs", "ucs", "astar", "dijkstra", "hill_climbing"
+    ] = "astar"
+    optimization_method: Literal["nearest_neighbor", "held_karp"] = (
+        "nearest_neighbor"
+    )
+    criterion: Literal["cost", "distance", "hops", "time"] = "cost"
+
+class MultiLocationRouteResponse(BaseModel):
+    found: bool
+    message: Optional[str] = None
+    route_algorithm: Optional[str] = None
+    optimization_method: Optional[str] = None
+    criterion: Optional[str] = None
+    order_is_optimal: Optional[bool] = None
+    is_optimal: Optional[bool] = None
+    visiting_order: List[int] = Field(default_factory=list)
+    ordered_waypoints: List[int] = Field(default_factory=list)
+    objective_cost: Optional[float] = None
+    original_order: List[int] = Field(default_factory=list)
+    original_objective_cost: Optional[float] = None
+    segments: List[Dict[str, Any]] = Field(default_factory=list)
+    path_nodes: List[int] = Field(default_factory=list)
+    path_coords: List[List[float]] = Field(default_factory=list)
+    total_cost: Optional[float] = None
+    total_distance_m: Optional[float] = None
+    nodes_expanded: Optional[int] = None
+    execution_time_ms: Optional[float] = None
+
 class CongestionRequest(BaseModel):
     edge_id: str
     congestion_level: int
@@ -271,7 +304,12 @@ class CongestionRequest(BaseModel):
 # ==========================================
 # 5. Thuật toán Tìm đường trên Đồ thị
 # ==========================================
-from backend.app.services.routing_service import run_search, run_search_nearest_hospital, haversine
+from backend.app.services.routing_service import (
+    haversine,
+    run_multi_location_search,
+    run_search,
+    run_search_nearest_hospital,
+)
 
 # ==========================================
 # 6. Các API Endpoints
@@ -433,7 +471,7 @@ async def update_ambulance_location(body: AmbulanceLocationRequest):
 @app.post("/api/route")
 @app.post("/api/v1/route")
 async def calculate_route(body: RouteRequest):
-    """Tìm đường tối ưu (A*, Dijkstra, BFS, DFS, UCS) và vẽ tuyến đường"""
+    """Run A*, Dijkstra, BFS, DFS, UCS, or Hill Climbing and draw the route."""
     start_id = body.start_node_id
     if start_id is None:
         nearest_node, _ = graph_mgr.find_nearest_road_node(graph_mgr.ambulance_lat, graph_mgr.ambulance_lng)
@@ -444,6 +482,32 @@ async def calculate_route(body: RouteRequest):
         return run_search_nearest_hospital(graph_mgr, start_id, body.algorithm, emergency_only=True)
 
     return run_search(graph_mgr, start_id, body.goal_node_id, body.algorithm)
+
+@app.post("/api/route/multi-location", response_model=MultiLocationRouteResponse)
+@app.post("/api/v1/route/multi-location", response_model=MultiLocationRouteResponse)
+async def calculate_multi_location_route(body: MultiLocationRouteRequest):
+    """Optimize waypoint order with Nearest Neighbor or Held-Karp."""
+
+    start_id = body.start_node_id
+    if start_id is None:
+        nearest_node, _ = graph_mgr.find_nearest_road_node(
+            graph_mgr.ambulance_lat,
+            graph_mgr.ambulance_lng,
+        )
+        start_id = (
+            nearest_node["id"]
+            if nearest_node
+            else list(graph_mgr.road_nodes.keys())[0]
+        )
+    return run_multi_location_search(
+        graph_mgr,
+        start_id,
+        body.waypoint_ids,
+        body.goal_node_id,
+        body.route_algorithm,
+        body.optimization_method,
+        body.criterion,
+    )
 
 @app.post("/api/route/nearest-hospital")
 @app.post("/api/v1/route/nearest-hospital")

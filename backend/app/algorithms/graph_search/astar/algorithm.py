@@ -9,6 +9,10 @@ from math import isfinite
 from time import perf_counter
 from typing import Any
 
+from backend.app.algorithms.graph_search.trace_history import (
+    SearchFailure,
+    SearchTraceHistory,
+)
 from backend.app.algorithms.graph_search.utils import (
     EdgeCost,
     NodeId,
@@ -59,34 +63,52 @@ def solve_astar(
     open_heap: list[tuple[float, float, int, NodeId]] = []
     heappush(open_heap, (estimate(start_node_id), 0.0, next(sequence), start_node_id))
     expanded_at_cost: dict[NodeId, float] = {}
-    visited_order: list[NodeId] = []
-    frontier_steps: list[list[NodeId]] = []
+    trace_history = SearchTraceHistory()
+    legacy_frontier_steps: list[list[NodeId]] = []
 
     while open_heap:
-        frontier_steps.append(_active_frontier(open_heap, g_score, expanded_at_cost))
-        _f_score, current_cost, _order, current = heappop(open_heap)
+        current_f, current_cost, _order, current = heappop(open_heap)
         if current_cost != g_score.get(current):
             continue
         if current_cost >= expanded_at_cost.get(current, float("inf")):
             continue
 
+        remaining_frontier = _active_frontier(
+            open_heap,
+            g_score,
+            expanded_at_cost,
+            estimate,
+        )
+        current_item = _frontier_item(
+            current,
+            current_cost,
+            estimate(current),
+            current_f,
+        )
+        trace_history.record_expansion(
+            current,
+            [current_item, *remaining_frontier],
+        )
+        legacy_frontier_steps.append(
+            [current, *[item["node_id"] for item in remaining_frontier]]
+        )
         expanded_at_cost[current] = current_cost
-        visited_order.append(current)
         if current == goal_node_id:
             path = reconstruct_path(parent, goal_node_id)
             distance, estimated_time, total_cost = calculate_path_metrics(
                 graph, path, cost_profile, edge_cost
             )
             optimal = heuristic is None or heuristic_is_admissible
+            trace_fields = trace_history.as_result_fields()
+            trace_fields["frontier_steps"] = legacy_frontier_steps
             return {
                 "found": True,
                 "path": path,
-                "visited_order": visited_order,
-                "frontier_steps": frontier_steps,
+                **trace_fields,
                 "total_distance": distance,
                 "estimated_time": estimated_time,
                 "total_cost": total_cost,
-                "explored_nodes": len(visited_order),
+                "explored_nodes": trace_history.explored_nodes,
                 "processing_time_ms": (perf_counter() - started_at) * 1000.0,
                 "is_optimal": optimal,
                 "explanation_data": {
@@ -121,16 +143,30 @@ def solve_astar(
                 ),
             )
 
-    raise ValueError(f"No route found from '{start_node_id}' to '{goal_node_id}'.")
+    message = f"No route found from '{start_node_id}' to '{goal_node_id}'."
+    trace_fields = trace_history.as_result_fields()
+    trace_fields["frontier_steps"] = legacy_frontier_steps
+    raise SearchFailure(
+        message,
+        {
+            "found": False,
+            "path": [],
+            **trace_fields,
+            "explored_nodes": trace_history.explored_nodes,
+            "processing_time_ms": (perf_counter() - started_at) * 1000.0,
+            "message": message,
+        },
+    )
 
 
 def _active_frontier(
     heap: list[tuple[float, float, int, NodeId]],
     g_score: dict[NodeId, float],
     expanded_at_cost: dict[NodeId, float],
-) -> list[NodeId]:
+    estimate: Callable[[NodeId], float],
+) -> list[dict[str, Any]]:
     """Return the effective heap frontier in deterministic priority order."""
-    frontier: list[NodeId] = []
+    frontier: list[dict[str, Any]] = []
     seen: set[NodeId] = set()
     for _f_score, cost, _order, node_id in sorted(heap):
         if node_id in seen or cost != g_score.get(node_id):
@@ -138,5 +174,23 @@ def _active_frontier(
         if cost >= expanded_at_cost.get(node_id, float("inf")):
             continue
         seen.add(node_id)
-        frontier.append(node_id)
+        heuristic = estimate(node_id)
+        frontier.append(_frontier_item(node_id, cost, heuristic, cost + heuristic))
     return frontier
+
+
+def _frontier_item(
+    node_id: NodeId,
+    cost: float,
+    heuristic: float,
+    priority: float,
+) -> dict[str, Any]:
+    """Return the canonical priority-frontier representation."""
+
+    return {
+        "node_id": node_id,
+        "g": round(cost, 6),
+        "h": round(heuristic, 6),
+        "f": round(priority, 6),
+        "priority": round(priority, 6),
+    }

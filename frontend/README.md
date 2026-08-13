@@ -8,7 +8,8 @@ Frontend hiện tại gồm 2 phần:
 ## Mục tiêu
 
 - Hiển thị bản đồ giao thông và vị trí xe cấp cứu.
-- Gọi API backend để tìm tuyến đường tối ưu (A*, Dijkstra/UCS, BFS, DFS).
+- Gọi API backend để chạy A*, Dijkstra, UCS, BFS, DFS và Hill
+  Climbing trên cùng input.
 - Trực quan hóa kết quả route và từng bước tìm kiếm.
 
 ## Yêu cầu trước khi chạy
@@ -42,10 +43,15 @@ Dashboard đang gọi trực tiếp các endpoint như:
 - `/api/edges`
 - `/api/ambulance/location`
 - `/api/route`
+- `/api/route/multi-location`
 
 `POST /api/route` returns the completed route and its `search_trace` in one JSON
 response. The dashboard uses that saved trace to animate the search locally; it
 does not ask the backend to calculate each visualization step.
+
+Hill Climbing uses the same trace contract with heuristic values for each
+candidate. Multi-location order is optimized in the backend with Nearest
+Neighbor or Held-Karp; algorithms do not write JSON files during a request.
 
 ## Chạy Dashboard Prototype
 

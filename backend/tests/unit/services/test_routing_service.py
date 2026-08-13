@@ -58,7 +58,13 @@ def test_start_equals_goal_still_returns_a_trace(graph_manager):
     assert result["path_nodes"] == [1]
     assert result["search_trace"]["visited_order"] == [1]
     assert result["search_trace"]["steps"] == [
-        {"step": 1, "current_node": 1, "frontier": [{"node_id": 1}]}
+        {
+            "step": 1,
+            "current_node": 1,
+            "frontier": [{"node_id": 1}],
+            "frontier_size": 1,
+            "frontier_truncated": False,
+        }
     ]
 
 
@@ -95,6 +101,9 @@ def test_routing_service_dispatches_to_hill_climbing_module():
 
     assert result["found"] is True
     assert result["path_nodes"] == [1, 2, 4]
+    first_candidate = result["search_trace"]["steps"][0]["frontier"][0]
+    assert "h" in first_candidate
+    assert first_candidate["selected"] is True
 
 
 def test_routing_service_rejects_unknown_algorithm():

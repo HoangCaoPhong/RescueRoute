@@ -7,6 +7,10 @@ from math import isfinite
 from time import perf_counter
 from typing import Any
 
+from backend.app.algorithms.graph_search.trace_history import (
+    SearchFailure,
+    SearchTraceHistory,
+)
 from backend.app.algorithms.graph_search.utils import (
     EdgeCost,
     NodeId,
@@ -53,26 +57,27 @@ def solve_hill_climbing(
     current_estimate = estimate(current)
     path: list[NodeId] = [current]
     visited = {current}
-    visited_order: list[NodeId] = []
+    trace_history = SearchTraceHistory()
     frontier_steps: list[list[NodeId]] = []
     heuristic_steps: list[dict[str, Any]] = []
 
     while True:
-        visited_order.append(current)
         if current == goal_node_id:
+            trace_history.record_expansion(current, [])
             distance, estimated_time, total_cost = calculate_path_metrics(
                 graph, path, cost_profile, edge_cost
             )
+            trace_fields = trace_history.as_result_fields()
+            trace_fields["frontier_steps"] = frontier_steps
             return {
                 "found": True,
                 "path": path,
-                "visited_order": visited_order,
-                "frontier_steps": frontier_steps,
+                **trace_fields,
                 "heuristic_steps": heuristic_steps,
                 "total_distance": distance,
                 "estimated_time": estimated_time,
                 "total_cost": total_cost,
-                "explored_nodes": len(visited_order),
+                "explored_nodes": trace_history.explored_nodes,
                 "processing_time_ms": (perf_counter() - started_at) * 1000.0,
                 "is_optimal": False,
                 "explanation_data": {
@@ -86,25 +91,48 @@ def solve_hill_climbing(
             }
 
         if max_steps is not None and len(path) - 1 >= max_steps:
-            raise ValueError(
-                f"Hill Climbing did not reach '{goal_node_id}' within {max_steps} steps."
+            trace_history.record_expansion(current, [])
+            _raise_search_failure(
+                trace_history,
+                frontier_steps,
+                started_at,
+                f"Hill Climbing did not reach '{goal_node_id}' within {max_steps} steps.",
             )
 
         candidates = [node for node in get_neighbors(graph, current) if node not in visited]
         ranked = sorted((estimate(node), repr(node), node) for node in candidates)
         frontier_steps.append([node for _score, _key, node in ranked])
         if not ranked:
-            raise ValueError(
-                f"Hill Climbing reached a dead end at '{current}' before '{goal_node_id}'."
+            trace_history.record_expansion(current, [])
+            _raise_search_failure(
+                trace_history,
+                frontier_steps,
+                started_at,
+                f"Hill Climbing reached a dead end at '{current}' before '{goal_node_id}'.",
             )
 
         next_estimate, _key, next_node = ranked[0]
         improves = next_estimate < current_estimate
         sideways = allow_sideways and next_estimate == current_estimate
+        trace_history.record_expansion(
+            current,
+            [
+                {
+                    "node_id": node,
+                    "h": round(score, 6),
+                    "priority": round(score, 6),
+                    "selected": node == next_node and (improves or sideways),
+                }
+                for score, _key, node in ranked
+            ],
+        )
         if not improves and not sideways:
-            raise ValueError(
+            _raise_search_failure(
+                trace_history,
+                frontier_steps,
+                started_at,
                 f"Hill Climbing reached a local optimum at '{current}' before "
-                f"'{goal_node_id}'."
+                f"'{goal_node_id}'.",
             )
 
         heuristic_steps.append(
@@ -119,3 +147,24 @@ def solve_hill_climbing(
         current_estimate = next_estimate
         path.append(current)
         visited.add(current)
+
+
+def _raise_search_failure(
+    trace_history: SearchTraceHistory,
+    frontier_steps: list[list[NodeId]],
+    started_at: float,
+    message: str,
+) -> None:
+    trace_fields = trace_history.as_result_fields()
+    trace_fields["frontier_steps"] = frontier_steps
+    raise SearchFailure(
+        message,
+        {
+            "found": False,
+            "path": [],
+            **trace_fields,
+            "explored_nodes": trace_history.explored_nodes,
+            "processing_time_ms": (perf_counter() - started_at) * 1000.0,
+            "message": message,
+        },
+    )
