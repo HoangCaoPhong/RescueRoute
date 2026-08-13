@@ -28,12 +28,7 @@ def calculate_path_metrics(graph, path, cost_profile):
     return None, None, None
 
 
-def solve_bfs(
-    graph,
-    start_node_id,
-    goal_node_id,
-    cost_profile=None
-):
+def solve_bfs(graph, start_node_id, goal_node_id, cost_profile=None):
     """
     Breadth-First Search (BFS).
 
@@ -46,10 +41,7 @@ def solve_bfs(
     start_time = perf_counter()
 
     # Validate input
-    if (
-        not has_node(graph, start_node_id)
-        or not has_node(graph, goal_node_id)
-    ):
+    if (not has_node(graph, start_node_id) or not has_node(graph, goal_node_id)):
         raise ValueError(
             f"Start node '{start_node_id}' or "
             f"goal node '{goal_node_id}' does not exist."
@@ -109,10 +101,7 @@ def solve_bfs(
             }
 
         # Expand neighbors
-        for neighbor_node in get_neighbors(
-            graph,
-            current_node
-        ):
+        for neighbor_node in get_neighbors(graph, current_node):
             if neighbor_node not in visited:
 
                 # Mark visited when inserted into queue

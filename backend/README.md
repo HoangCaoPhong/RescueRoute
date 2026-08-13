@@ -19,9 +19,6 @@ backend/
 │   ├── api/routes/          # FastAPI endpoints
 │   ├── algorithms/          # Thuật toán thuần Python
 │   ├── core/                # Config, constants, logging
-│   ├── domain/              # Node, Edge, Graph, Route, cost
-│   ├── integrations/        # Supabase, map/routing services
-│   ├── repositories/        # Đọc/ghi dữ liệu
 │   ├── schemas/             # API request/response
 │   └── services/            # Điều phối use case
 └── tests/
