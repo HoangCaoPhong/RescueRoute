@@ -14,6 +14,8 @@ Không chỉnh sửa các file nguồn để ghi quyết định mới. Thêm t�
 - `architecture/`: sơ đồ hệ thống, ADR và quyết định kỹ thuật.
   - `architecture/search-visualization-contract.md`: contract trả kết quả route
     và trace cho mô phỏng phía frontend.
+  - `architecture/search-trace-history-contract.md`: contract ghi trace thống nhất
+    trong các thuật toán tìm kiếm và chuyển đổi sang response cho UI playback.
 - `algorithms/`: design, pseudocode, flowchart và benchmark của từng thuật toán.
 - `api/`: API contracts, schema và ví dụ request/response.
 - `development/`: hướng dẫn môi trường, test, benchmark và release.
