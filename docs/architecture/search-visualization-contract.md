@@ -14,7 +14,7 @@ deterministic search history in the same JSON payload.
 - `search_trace.node_coords`: coordinates for every node referenced by the
   trace, so playback needs no per-step map or API lookup.
 
-This contract is shared by BFS, DFS, UCS, A*, and Dijkstra. The frontend owns
+This contract is shared by BFS, DFS, UCS, A*, Dijkstra, and Hill Climbing. The frontend owns
 only presentation: it stores the response and replays `search_trace.steps` with
 its local timer. Playback must never rerun the search algorithm or request a
 new trace from the backend.

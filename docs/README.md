@@ -27,15 +27,15 @@ Không chỉnh sửa các file nguồn để ghi quyết định mới. Thêm t�
 
 ## Checklist bám đề bài
 
-- [ ] Graph có ít nhất 20 node, 30 edge với ngữ cảnh giao thông Việt Nam.
-- [ ] Hỗ trợ tìm đường hai điểm và tối ưu nhiều điểm.
-- [ ] BFS, DFS, UCS và A* chạy đúng và được so sánh.
-- [ ] Có ít nhất hai thuật toán bổ sung.
+- [x] Graph có ít nhất 20 node, 30 edge với ngữ cảnh giao thông Việt Nam.
+- [x] Hỗ trợ tìm đường hai điểm và tối ưu nhiều điểm.
+- [x] BFS, DFS, UCS và A* chạy đúng và được so sánh.
+- [x] Có ít nhất hai thuật toán bổ sung (Dijkstra, Hill Climbing).
 - [ ] Cost không chỉ dựa vào khoảng cách; có giải thích trọng số.
 - [ ] Heuristic được phân tích admissible/consistent hoặc practical-only.
-- [ ] GUI cho chọn điểm, thuật toán, tiêu chí tối ưu và điểm trung gian.
-- [ ] GUI mô phỏng visited nodes, frontier và final route từng bước.
-- [ ] Kết quả có path, visiting order, explored nodes, distance, time, cost và processing time.
+- [x] GUI cho chọn điểm, thuật toán, tiêu chí tối ưu và điểm trung gian.
+- [x] GUI mô phỏng visited nodes, frontier và final route từng bước.
+- [x] Kết quả có path, visiting order, explored nodes, distance, time, cost và processing time.
 - [ ] Có giải thích route, tuyến thay thế, ùn tắc và bảo đảm tối ưu.
 - [ ] Benchmark các thuật toán trên cùng điều kiện.
 - [ ] Technical report, slide, demo video và dataset đúng định dạng nộp bài.

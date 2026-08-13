@@ -8,8 +8,10 @@ import networkx as nx
 # ============================================================
 # CONFIG & CONSTANTS
 # ============================================================
-INPUT_DIR = Path(".")
-OUTPUT_DIR = Path("output")
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parents[2]
+INPUT_DIR = PROJECT_ROOT / "data" / "raw"
+OUTPUT_DIR = SCRIPT_DIR / "Minimap_ouput"
 OUTPUT_IMAGE = OUTPUT_DIR / "graph_clean.png"
 
 HCMUS = {"name": "HCMUS", "lat": 10.7628866, "lon": 106.6825046}
@@ -25,7 +27,7 @@ HOSPITALS = {
 NUMBER_OF_HOSPITALS = 4
 POINT_ON_SEGMENT_TOLERANCE = 3.0
 ENDPOINT_TOLERANCE = 2.0
-FILES = ["nodes.csv", "segments.csv", "streets.csv", "segment_status.csv", "train.csv"]
+FILES = ["nodes.csv", "segments.csv", "segment_status.csv", "train.csv"]
 
 # ============================================================
 # UTILS: MATH & GEOMETRY
@@ -162,11 +164,6 @@ def update_mapped_df(df, mapping, col="segment_id"):
             rows.append(nr)
     return pd.DataFrame(rows, columns=df.columns)
 
-def filter_streets(streets, segments):
-    if "street_id" not in segments.columns: return streets.copy()
-    s_ids = set(pd.to_numeric(segments["street_id"], errors="coerce").dropna().astype(int))
-    return streets[pd.to_numeric(streets["_id"], errors="coerce").isin(s_ids)].copy()
-
 def save_files(dfs):
     OUTPUT_DIR.mkdir(exist_ok=True)
     for df, f in zip(dfs, FILES):
@@ -232,7 +229,7 @@ def draw_graph(nodes, segments, special_nodes, radius):
 def main():
     print("=== HCMUS EMERGENCY ROUTING GRAPH - V2 ===")
     check_files()
-    nodes, segments, streets, segment_status, train = load_data()
+    nodes, segments, segment_status, train = load_data()
     hospitals, radius = find_nearest_hospitals()
     
     f_segments = filter_segments(nodes, segments, radius)
@@ -240,11 +237,10 @@ def main():
     
     f_segments, mapping = split_segments(f_nodes, f_segments)
     f_nodes = filter_nodes(nodes, f_segments)
-    f_streets = filter_streets(streets, f_segments)
     f_status = update_mapped_df(segment_status, mapping, "segment_id")
     f_train = update_mapped_df(train, mapping, "segment_id")
     
-    save_files([f_nodes, f_segments, f_streets, f_status, f_train])
+    save_files([f_nodes, f_segments, f_status, f_train])
     
     G = build_graph(f_nodes, f_segments)
     sp_nodes = get_special_nodes(f_nodes, hospitals)
