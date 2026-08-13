@@ -82,13 +82,59 @@ async function loadInitialData() {
 function populateHospitalSelect() {
     const select = document.getElementById('selectHospital');
     if (!select) return;
+
+    const emergencyOnly = document.getElementById('chkEmergencyOnly') ? document.getElementById('chkEmergencyOnly').checked : false;
+    const query = (document.getElementById('inputSearchHospital') ? document.getElementById('inputSearchHospital').value : '').toLowerCase().trim();
+
+    const currentVal = select.value;
     select.innerHTML = '';
+
+    // Option đặc biệt: Tự động dò tìm BV gần nhất theo thuật toán đang chọn
+    if (!query) {
+        const autoOpt = document.createElement('option');
+        autoOpt.value = '0';
+        autoOpt.textContent = '🌟 [TỰ ĐỘNG DÒ TÌM BV GẦN NHẤT BẰNG THUẬT TOÁN ĐÃ CHỌN]';
+        autoOpt.style.fontWeight = 'bold';
+        autoOpt.style.color = '#38bdf8';
+        select.appendChild(autoOpt);
+    }
+
+    let count = 0;
+
     hospitalsData.forEach(h => {
+        if (emergencyOnly && !h.is_emergency) return;
+        if (query && !h.name.toLowerCase().includes(query) && !h.type.toLowerCase().includes(query)) return;
+
         const opt = document.createElement('option');
         opt.value = h.node_id;
-        opt.textContent = `${h.name} (${h.type})`;
+        const emoji = h.is_emergency ? '🚨' : '🏥';
+        opt.textContent = `${emoji} ${h.name} (${h.category || h.type})`;
         select.appendChild(opt);
+        count++;
     });
+
+    const badgeElem = document.getElementById('hospitalCountBadge');
+    if (badgeElem) {
+        badgeElem.textContent = `(${count} BV)`;
+    }
+
+    if (count === 0 && !query) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '-- Không tìm thấy bệnh viện phù hợp --';
+        select.appendChild(opt);
+    }
+    if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
+        select.value = currentVal;
+    }
+}
+
+async function selectNearestHospital() {
+    const select = document.getElementById('selectHospital');
+    if (select) {
+        select.value = '0';
+    }
+    calculateRoute();
 }
 
 function populateEdgeSelect() {
@@ -596,12 +642,16 @@ async function calculateRoute() {
         return;
     }
 
-    if (!Number.isInteger(goalNodeId)) {
+    if (!Number.isInteger(goalNodeId) && goalNodeId !== 0) {
         showToast('Vui lòng chọn một điểm đến hợp lệ.');
         return;
     }
 
-    showToast(`🧠 Đang chạy ${algorithm.toUpperCase()} với tiêu chí ${criterion.toUpperCase()}...`);
+    if (goalNodeId === 0) {
+        showToast(`🧭 Thuật toán ${algorithm.toUpperCase()} đang tự dò đường tìm BV Cấp Cứu gần nhất trên mạng lưới...`);
+    } else {
+        showToast(`🧠 Đang chạy ${algorithm.toUpperCase()} với tiêu chí ${criterion.toUpperCase()}...`);
+    }
 
     try {
         const segmentResults = [];
