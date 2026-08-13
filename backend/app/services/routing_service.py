@@ -5,6 +5,8 @@ from collections import deque
 from typing import Dict, Any, Optional
 
 from backend.app.algorithms.graph_search.bfs.bfs import solve_bfs
+from backend.app.algorithms.graph_search.astar import solve_astar
+from backend.app.algorithms.optimization.hill_climbing import solve_hill_climbing
 
 def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     R = 6371000.0
@@ -129,32 +131,51 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
                     parent[nbr] = curr
                     heapq.heappush(pq, (new_d, nbr))
 
-    else:  # Mặc định A* và UCS
+    elif algo in {"astar", "ucs", "hill_climbing", "hill-climbing"}:
         def h(n_id: int) -> float:
-            if algo == "ucs":
-                return 0.0
             node = graph_mgr.road_nodes.get(n_id)
             if not node:
                 return 0.0
-            return haversine(node["lat"], node["lng"], goal_node["lat"], goal_node["lng"]) * 0.035
+            distance = haversine(
+                node["lat"], node["lng"], goal_node["lat"], goal_node["lng"]
+            )
+            return distance if algo.startswith("hill") else distance * 0.035
 
-        pq = [(h(start_id), 0.0, start_id)]
-        g_scores = {start_id: 0.0}
+        try:
+            if algo.startswith("hill"):
+                result = solve_hill_climbing(
+                    graph_mgr.adj,
+                    start_id,
+                    goal_id,
+                    lambda node_id, _goal_id: h(node_id),
+                )
+            else:
+                result = solve_astar(
+                    graph_mgr.adj,
+                    start_id,
+                    goal_id,
+                    None if algo == "ucs" else lambda node_id, _goal_id: h(node_id),
+                )
+        except ValueError as error:
+            return {
+                "found": False,
+                "nodes_expanded": 0,
+                "execution_time_ms": round((time.perf_counter() - t0) * 1000, 2),
+                "message": str(error),
+            }
 
-        while pq:
-            f, g, curr = heapq.heappop(pq)
-            if g > g_scores.get(curr, float('inf')):
-                continue
-            nodes_expanded += 1
-            if curr == goal_id:
-                found = True
-                break
-            for nbr, edge in graph_mgr.adj.get(curr, {}).items():
-                tentative_g = g + edge[0]
-                if tentative_g < g_scores.get(nbr, float('inf')):
-                    g_scores[nbr] = tentative_g
-                    parent[nbr] = curr
-                    heapq.heappush(pq, (tentative_g + h(nbr), tentative_g, nbr))
+        exec_time = (time.perf_counter() - t0) * 1000
+        return build_path_response(
+            result["path"], exec_time, result["explored_nodes"]
+        )
+
+    else:
+        return {
+            "found": False,
+            "nodes_expanded": 0,
+            "execution_time_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "message": f"Unsupported search algorithm: '{algorithm}'.",
+        }
 
     exec_time = (time.perf_counter() - t0) * 1000
 
