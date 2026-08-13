@@ -41,7 +41,11 @@ Dashboard đang gọi trực tiếp các endpoint như:
 - `/api/nodes`
 - `/api/edges`
 - `/api/ambulance/location`
-- `/api/route/search`
+- `/api/route`
+
+`POST /api/route` trả final route và `search_trace` trong cùng một JSON. UI lưu
+trace đó để monitor/playback visited nodes và frontier cho BFS, DFS, UCS, A* và
+Dijkstra, kể cả route nhiều chặng.
 
 ## Chạy Dashboard Prototype
 

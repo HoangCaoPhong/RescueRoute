@@ -16,6 +16,8 @@ let searchAnimationTimer = null;
 let searchVisitedLayer = null;
 let searchFrontierLayer = null;
 let searchCurrentLayer = null;
+const MAX_MAP_TRACE_NODES = 250;
+const MAX_TRACE_TOKENS = 48;
 
 function initMap() {
     map = L.map('map', { center: [10.778, 106.692], zoom: 13, zoomControl: false, renderer: L.canvas() });
@@ -211,10 +213,7 @@ function getCriterionHint(criterion, algorithm) {
         hops: 'Ưu tiên số chặng di chuyển ít nhất.'
     };
     const base = mapping[criterion] || 'Tiêu chí được dùng để mô tả hướng tối ưu hóa của tuyến đường.';
-    if (algorithm === 'bfs') {
-        return `${base} Bản đồ bước tìm kiếm sẽ hiển thị vì BFS có trace visited/frontier sẵn.`;
-    }
-    return `${base} Với thuật toán hiện tại, phần giải thích sẽ dựa trên kết quả tính được và trace nếu backend cung cấp.`;
+    return `${base} Backend lưu cùng một trace history (visited, current node và frontier) cho mọi thuật toán tìm kiếm để phát lại trên bản đồ.`;
 }
 
 function stopSearchAnimation() {
@@ -240,13 +239,35 @@ function clearSearchVisualization() {
 function renderTraceTokens(containerId, items, cssClass) {
     const container = document.getElementById(containerId);
     if (!container) return;
+    container.replaceChildren();
     if (!items || items.length === 0) {
         container.textContent = '-';
         return;
     }
-    container.innerHTML = items
-        .map(item => `<span class="search-viz-token ${cssClass}">${item}</span>`)
-        .join('');
+    items.forEach(item => {
+        const token = document.createElement('span');
+        token.className = `search-viz-token ${cssClass}`;
+        token.textContent = item;
+        container.appendChild(token);
+    });
+}
+
+function formatFrontierItem(item) {
+    if (!item || typeof item !== 'object') return String(item ?? '-');
+    const metrics = ['g', 'h', 'f', 'cost', 'priority']
+        .filter(key => Number.isFinite(Number(item[key])))
+        .map(key => `${key}=${Number(item[key]).toFixed(2)}`);
+    return [String(item.node_id ?? '-'), ...metrics].join(' · ');
+}
+
+function frontierKindLabel(kind) {
+    const labels = {
+        queue: 'Queue frontier:',
+        stack: 'Stack frontier:',
+        priority_queue: 'Priority queue:',
+        candidates: 'Candidates:'
+    };
+    return labels[kind] || 'Frontier:';
 }
 
 function renderSearchStep(stepIndex) {
@@ -257,16 +278,19 @@ function renderSearchStep(stepIndex) {
     searchStepIndex = safeIndex;
 
     const step = steps[safeIndex];
-    const visitedOrder = (searchVisualizationData.visited_order || []).slice(0, safeIndex + 1);
-    const frontier = step.frontier || [];
+    const expandedOrder = (searchVisualizationData.visited_order || []).slice(0, safeIndex + 1);
     const currentNode = step.current_node;
+    const visitedOrder = expandedOrder.filter(nodeId => String(nodeId) !== String(currentNode));
+    const frontier = (step.frontier || []).filter(
+        item => String(item?.node_id) !== String(currentNode)
+    );
     const nodeCoords = searchVisualizationData.node_coords || {};
 
     if (searchVisitedLayer) searchVisitedLayer.clearLayers();
     if (searchFrontierLayer) searchFrontierLayer.clearLayers();
     if (searchCurrentLayer) searchCurrentLayer.clearLayers();
 
-    visitedOrder.forEach(nodeId => {
+    visitedOrder.slice(-MAX_MAP_TRACE_NODES).forEach(nodeId => {
         const coords = nodeCoords[String(nodeId)];
         if (!coords) return;
         L.circleMarker(coords, {
@@ -278,7 +302,7 @@ function renderSearchStep(stepIndex) {
         }).bindTooltip(String(nodeId), { permanent: false, direction: 'top' }).addTo(searchVisitedLayer);
     });
 
-    frontier.forEach(item => {
+    frontier.slice(0, MAX_MAP_TRACE_NODES).forEach(item => {
         const coords = nodeCoords[String(item.node_id)];
         if (!coords) return;
         L.circleMarker(coords, {
@@ -306,6 +330,7 @@ function renderSearchStep(stepIndex) {
     const vizCurrentNode = document.getElementById('vizCurrentNode');
     const vizVisitedCount = document.getElementById('vizVisitedCount');
     const vizFrontierCount = document.getElementById('vizFrontierCount');
+    const vizFrontierLabel = document.getElementById('vizFrontierLabel');
     const vizExplanation = document.getElementById('vizExplanation');
 
     if (vizAlgorithm) vizAlgorithm.textContent = searchVisualizationData.algorithm || '-';
@@ -313,12 +338,56 @@ function renderSearchStep(stepIndex) {
     if (vizCurrentNode) vizCurrentNode.textContent = currentNode ?? '-';
     if (vizVisitedCount) vizVisitedCount.textContent = visitedOrder.length.toLocaleString();
     if (vizFrontierCount) vizFrontierCount.textContent = frontier.length.toLocaleString();
+    if (vizFrontierLabel) vizFrontierLabel.textContent = frontierKindLabel(searchVisualizationData.frontier_kind);
     if (vizExplanation) {
-        vizExplanation.textContent = `Mỗi bước cho thấy node hiện tại, danh sách visited tích lũy và frontier tại thời điểm mở rộng node đó.`;
+        const legText = step.leg_total > 1
+            ? `Chặng ${step.leg_index}/${step.leg_total}. `
+            : '';
+        vizExplanation.textContent = `${legText}Trace được backend lưu trước khi mở rộng node: xanh dương là visited, xanh lá là node hiện tại và vàng là frontier còn lại.`;
     }
 
-    renderTraceTokens('vizVisitedList', visitedOrder.map(nodeId => String(nodeId)), 'visited');
-    renderTraceTokens('vizFrontierList', frontier.map(item => String(item.node_id)), 'frontier');
+    renderTraceTokens(
+        'vizVisitedList',
+        visitedOrder.slice(-MAX_TRACE_TOKENS).map(nodeId => String(nodeId)),
+        'visited'
+    );
+    renderTraceTokens(
+        'vizFrontierList',
+        frontier.slice(0, MAX_TRACE_TOKENS).map(formatFrontierItem),
+        'frontier'
+    );
+}
+
+function combineSearchTraces(segmentResults, algorithm) {
+    const tracedSegments = segmentResults.filter(
+        segment => segment.result?.search_trace?.steps?.length
+    );
+    if (!tracedSegments.length) return null;
+
+    const combinedTrace = {
+        algorithm: tracedSegments[0].result.search_trace.algorithm || algorithm,
+        frontier_kind: tracedSegments[0].result.search_trace.frontier_kind || 'frontier',
+        visited_order: [],
+        steps: [],
+        node_coords: {}
+    };
+
+    tracedSegments.forEach((segment, segmentIndex) => {
+        const trace = segment.result.search_trace;
+        Object.assign(combinedTrace.node_coords, trace.node_coords || {});
+        combinedTrace.visited_order.push(...(trace.visited_order || []));
+        (trace.steps || []).forEach(step => {
+            combinedTrace.steps.push({
+                ...step,
+                leg_index: segmentIndex + 1,
+                leg_total: tracedSegments.length,
+                route_start: segment.start,
+                route_goal: segment.goal
+            });
+        });
+    });
+
+    return combinedTrace;
 }
 
 function startSearchVisualization(routeData) {
@@ -713,13 +782,14 @@ async function calculateRoute() {
 
         map.fitBounds(activeRoutePolyline.getBounds(), { padding: [50, 50] });
 
-        if (segmentResults.length === 1 && segmentResults[0].result.search_trace) {
-            startSearchVisualization(segmentResults[0].result);
+        const combinedTrace = combineSearchTraces(segmentResults, algorithm);
+        if (combinedTrace) {
+            startSearchVisualization({ search_trace: combinedTrace });
         } else {
             clearSearchVisualization();
             const explanationBox = document.getElementById('routeExplanation');
             if (explanationBox) {
-                explanationBox.textContent = `${explanationBox.textContent} Tuyến đi nhiều chặng được ghép từ ${segmentResults.length} lần tính riêng biệt.`;
+                explanationBox.textContent = `${explanationBox.textContent} Backend chưa trả trace history cho tuyến này.`;
             }
         }
 
