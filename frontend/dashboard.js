@@ -105,6 +105,44 @@ function setText(id, value) {
     if (element) element.textContent = value;
 }
 
+function mountSearchPlaybackDock() {
+    const dock = byId("searchPlaybackDock");
+    const toolbar = byId("searchVisualizationPanel")?.querySelector(
+        ".search-viz-toolbar",
+    );
+    if (!dock || !toolbar || toolbar.parentElement === dock) return;
+    dock.append(toolbar);
+}
+
+function setSidebarCollapsed(isCollapsed) {
+    const workspace = byId("workspace");
+    const sidebar = byId("sidebarPanel");
+    const button = byId("btnToggleSidebar");
+    const icon = byId("sidebarToggleIcon");
+    if (!workspace || !sidebar || !button || !icon) return;
+
+    workspace.classList.toggle("is-sidebar-collapsed", isCollapsed);
+    sidebar.classList.toggle("is-collapsed", isCollapsed);
+    icon.textContent = isCollapsed ? "›" : "‹";
+
+    const label = isCollapsed
+        ? "Mở bảng điều khiển"
+        : "Thu gọn bảng điều khiển";
+    button.setAttribute("aria-expanded", String(!isCollapsed));
+    button.setAttribute("aria-label", label);
+    button.title = label;
+
+    if (map) {
+        window.setTimeout(() => map.invalidateSize({ animate: true }), 280);
+    }
+}
+
+function toggleSidebar() {
+    const sidebar = byId("sidebarPanel");
+    if (!sidebar) return;
+    setSidebarCollapsed(!sidebar.classList.contains("is-collapsed"));
+}
+
 function escapeHtml(value) {
     return String(value ?? "")
         .replaceAll("&", "&amp;")
@@ -156,6 +194,7 @@ function setButtonBusy(buttonId, isBusy, busyLabel, idleLabel) {
 }
 
 function initMap() {
+    mountSearchPlaybackDock();
     if (typeof L === "undefined") {
         setConnectionStatus("offline", "Không tải được Leaflet");
         setOperationStatus(
@@ -1271,6 +1310,8 @@ function clearSearchVisualization() {
     searchStepIndex = 0;
     const panel = byId("searchVisualizationPanel");
     if (panel) panel.hidden = true;
+    const playbackDock = byId("searchPlaybackDock");
+    if (playbackDock) playbackDock.hidden = true;
 }
 
 async function startSearchVisualization(trace) {
@@ -1282,6 +1323,7 @@ async function startSearchVisualization(trace) {
     searchVisualizationData = trace;
     searchStepIndex = 0;
     byId("searchVisualizationPanel").hidden = false;
+    byId("searchPlaybackDock").hidden = false;
 
     await ensureTraceCoordinates(trace, getMissingTraceNodeIds(trace));
     fitMapToRouteSegments(

@@ -1386,6 +1386,124 @@ tr.best-row td {
     }
 }
 
+/* Keep dense information available without making the command panel feel long. */
+.search-viz-details {
+    background: rgba(7, 16, 24, 0.24);
+    border: 1px solid rgba(162, 190, 202, 0.1);
+    border-radius: var(--radius-sm);
+}
+
+.search-viz-details summary,
+.route-details summary {
+    align-items: center;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    font-size: 0.68rem;
+    font-weight: 700;
+    justify-content: space-between;
+    list-style: none;
+    padding: 8px 10px;
+}
+
+.search-viz-details summary::-webkit-details-marker,
+.route-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.search-viz-details summary::after,
+.route-details summary::after {
+    color: var(--cyan);
+    content: "⌄";
+    font-size: 0.9rem;
+    transition: transform 160ms ease;
+}
+
+.search-viz-details[open] summary::after,
+.route-details[open] summary::after {
+    transform: rotate(180deg);
+}
+
+.search-viz-detail-content {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 0 9px 9px;
+}
+
+.route-details {
+    padding: 0;
+}
+
+.route-details > *:not(summary) {
+    margin-left: 10px;
+    margin-right: 10px;
+}
+
+/* A lighter, glass-like playback dock keeps the map visible underneath. */
+.search-playback-dock {
+    background:
+        linear-gradient(135deg, rgba(20, 55, 72, 0.5), rgba(7, 18, 30, 0.38)),
+        rgba(5, 15, 24, 0.32);
+    border-color: rgba(153, 230, 244, 0.36);
+    border-radius: 16px;
+    box-shadow:
+        0 16px 46px rgba(0, 0, 0, 0.24),
+        inset 0 1px 0 rgba(236, 255, 255, 0.2);
+    left: calc(50% - 84px);
+    overflow: hidden;
+    padding: 9px;
+}
+
+.search-playback-dock::before {
+    background: radial-gradient(circle at 18% 0, rgba(113, 219, 255, 0.2), transparent 44%);
+    content: "";
+    inset: 0;
+    pointer-events: none;
+    position: absolute;
+}
+
+.search-playback-dock .search-viz-toolbar {
+    position: relative;
+    z-index: 1;
+}
+
+.search-playback-dock .search-viz-playback button,
+.search-playback-dock .viz-select-control select {
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    background: rgba(6, 23, 35, 0.46);
+    border-color: rgba(183, 232, 242, 0.27);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.search-playback-dock .search-viz-playback #btnPlaySearch {
+    background: linear-gradient(135deg, rgba(92, 112, 235, 0.84), rgba(57, 198, 215, 0.7));
+    box-shadow: 0 7px 18px rgba(57, 198, 215, 0.19), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.search-playback-dock .search-viz-playback button:hover,
+.search-playback-dock .viz-select-control select:hover {
+    background: rgba(34, 81, 101, 0.58);
+}
+
+.map-legend {
+    bottom: 18px;
+    left: auto;
+    right: 16px;
+}
+
+@media (max-width: 780px) {
+    .search-playback-dock {
+        left: 50%;
+    }
+
+    .map-legend {
+        bottom: 12px;
+        right: 12px;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
 
     *,
@@ -1395,5 +1513,128 @@ tr.best-row td {
         transition-duration: 0.01ms !important;
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
+    }
+}
+
+/* Playback is a map dock: the trace details stay in the operator panel. */
+.map-overlay-host {
+    inset: 0;
+    pointer-events: none;
+    position: absolute;
+    z-index: 700;
+}
+
+.map-overlay-host > * {
+    pointer-events: auto;
+}
+
+.search-playback-dock {
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+    background:
+        linear-gradient(135deg, rgba(20, 55, 72, 0.5), rgba(7, 18, 30, 0.38)),
+        rgba(5, 15, 24, 0.32);
+    border: 1px solid rgba(153, 230, 244, 0.36);
+    border-radius: 16px;
+    bottom: 16px;
+    box-shadow:
+        0 16px 46px rgba(0, 0, 0, 0.24),
+        inset 0 1px 0 rgba(236, 255, 255, 0.2);
+    left: calc(50% - 84px);
+    max-width: min(560px, calc(100% - 48px));
+    overflow: hidden;
+    padding: 9px;
+    position: absolute;
+    transform: translateX(-50%);
+    width: 560px;
+}
+
+.search-playback-dock .search-viz-toolbar {
+    align-items: end;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    gap: 8px;
+    grid-template-columns: minmax(160px, 1fr) 76px minmax(166px, 1.1fr);
+    padding: 0;
+}
+
+/* The whole command panel can get out of the way without resizing the map by hand. */
+.workspace {
+    --sidebar-width: clamp(340px, 27vw, 510px);
+    position: relative;
+}
+
+.sidebar {
+    flex-basis: var(--sidebar-width);
+    min-width: 0;
+    transition: flex-basis 280ms ease, padding 280ms ease, border-color 180ms ease;
+}
+
+.sidebar.is-collapsed {
+    border-right-color: transparent;
+    flex-basis: 0;
+    overflow: hidden;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.sidebar-toggle {
+    align-items: center;
+    background: rgba(8, 24, 36, 0.96);
+    border: 1px solid rgba(57, 198, 215, 0.38);
+    border-radius: 50%;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+    color: var(--cyan);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 1.45rem;
+    height: 34px;
+    justify-content: center;
+    left: calc(var(--sidebar-width) - 17px);
+    line-height: 1;
+    padding: 0 0 3px;
+    position: absolute;
+    top: 18px;
+    transition: background 160ms ease, border-color 160ms ease, left 280ms ease, transform 160ms ease;
+    width: 34px;
+    z-index: 900;
+}
+
+.sidebar-toggle:hover {
+    background: rgba(18, 51, 68, 0.98);
+    border-color: rgba(57, 198, 215, 0.72);
+    transform: scale(1.06);
+}
+
+.workspace.is-sidebar-collapsed .sidebar-toggle {
+    left: 12px;
+}
+
+@media (max-width: 780px) {
+    .sidebar-toggle {
+        display: none;
+    }
+
+    .search-playback-dock {
+        bottom: 12px;
+        left: 50%;
+        max-width: calc(100% - 24px);
+        width: 540px;
+    }
+
+    .search-playback-dock .search-viz-toolbar {
+        grid-template-columns: minmax(145px, 1fr) 72px minmax(150px, 1.1fr);
+    }
+}
+
+@media (max-width: 520px) {
+    .search-playback-dock {
+        bottom: 8px;
+        padding: 7px;
+    }
+
+    .search-playback-dock .search-viz-toolbar {
+        grid-template-columns: 1fr;
     }
 }

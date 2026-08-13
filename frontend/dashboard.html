@@ -13,7 +13,7 @@
             rel="stylesheet">
         <link rel="stylesheet"
             href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-        <link rel="stylesheet" href="dashboard.css?v=20260812-3">
+        <link rel="stylesheet" href="dashboard.css?v=20260813-11">
     </head>
     <body>
         <header class="app-header">
@@ -36,8 +36,8 @@
             </div>
         </header>
 
-        <main class="workspace">
-            <aside class="sidebar" aria-label="Bảng điều khiển tìm đường">
+        <main id="workspace" class="workspace">
+            <aside id="sidebarPanel" class="sidebar" aria-label="Bảng điều khiển tìm đường">
                 <section class="panel-section" aria-labelledby="datasetTitle">
                     <div class="section-heading">
                         <span class="section-index">01</span>
@@ -334,18 +334,32 @@
                                 </div>
                                 <p id="vizMapStatus" class="viz-map-status"
                                     role="status"></p>
-                                <div class="search-viz-queue-panel">
-                                    <span class="list-label">Thứ tự đã duyệt gần
-                                        nhất</span>
-                                    <div class="search-viz-list"
-                                        id="vizVisitedList">—</div>
-                                </div>
-                                <div class="search-viz-queue-panel">
-                                    <span class="list-label">Frontier / open
-                                        list</span>
-                                    <div class="search-viz-list"
-                                        id="vizFrontierList">—</div>
-                                </div>
+                                <details class="search-viz-details">
+                                    <summary>Chi tiết trace &amp; frontier</summary>
+                                    <div class="search-viz-detail-content">
+                                        <div class="search-viz-queue-panel">
+                                            <span class="list-label">Thứ tự đã duyệt gần
+                                                nhất</span>
+                                            <div class="search-viz-list"
+                                                id="vizVisitedList">—</div>
+                                        </div>
+                                        <div class="search-viz-queue-panel">
+                                            <span class="list-label">Frontier / open
+                                                list</span>
+                                            <div class="search-viz-list"
+                                                id="vizFrontierList">—</div>
+                                        </div>
+                                        <label class="follow-search-control"
+                                            for="followSearchNode">
+                                            <input id="followSearchNode" type="checkbox"
+                                                checked>
+                                            <span id="followSearchLabel">Tự động đưa node thuộc tuyến cuối vào
+                                                giữa bản đồ</span>
+                                        </label>
+                                        <p id="vizExplanation"
+                                            class="search-viz-explanation"></p>
+                                    </div>
+                                </details>
                                 <div class="search-viz-toolbar">
                                     <div class="search-viz-playback"
                                         aria-label="Điều khiển mô phỏng">
@@ -381,18 +395,9 @@
                                         </select>
                                     </label>
                                 </div>
-                                <label class="follow-search-control"
-                                    for="followSearchNode">
-                                    <input id="followSearchNode" type="checkbox"
-                                        checked>
-                                    <span id="followSearchLabel">Tự động đưa node thuộc tuyến cuối vào
-                                        giữa bản đồ</span>
-                                </label>
-                                <p id="vizExplanation"
-                                    class="search-viz-explanation"></p>
                             </div>
 
-                            <details class="route-details" open>
+                            <details class="route-details">
                                 <summary>Đường đi theo từng chặng</summary>
                                 <div id="routeSegmentList"
                                     class="route-segment-list"></div>
@@ -498,8 +503,19 @@
                 </section>
             </aside>
 
+            <button id="btnToggleSidebar" class="sidebar-toggle" type="button"
+                onclick="toggleSidebar()" aria-controls="sidebarPanel"
+                aria-expanded="true" aria-label="Thu gọn bảng điều khiển"
+                title="Thu gọn bảng điều khiển">
+                <span id="sidebarToggleIcon" aria-hidden="true">‹</span>
+            </button>
+
             <section class="map-shell" aria-label="Bản đồ giao thông">
                 <div id="map"></div>
+                <div id="mapOverlayHost" class="map-overlay-host">
+                    <div id="searchPlaybackDock" class="search-playback-dock"
+                        aria-label="Điều khiển mô phỏng" hidden></div>
+                </div>
                 <div class="map-instruction"><span aria-hidden="true">⌖</span>
                     Nhấp bản đồ để đặt vị trí xe</div>
                 <div class="map-legend">
@@ -514,6 +530,6 @@
         <div id="toast" role="status" aria-live="polite"></div>
 
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script src="dashboard.js?v=20260812-3"></script>
+        <script src="dashboard.js?v=20260813-11"></script>
     </body>
 </html>
