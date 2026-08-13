@@ -47,6 +47,29 @@ test('annotateResult derives hops and a transparent fallback travel-time estimat
     assert.equal(result.congestion.knownEdges, 0);
 });
 
+test('congestion analysis reports data coverage and average congestion level', () => {
+    const context = loadDashboardContext();
+    const congestion = vm.runInContext(`(() => {
+        edgeIndex = new Map([[
+            '1_2',
+            {
+                edge_id: '1_2',
+                distance: 250,
+                congestion_level: 5
+            }
+        ]]);
+        return analyzePathCongestion({
+            path_nodes: [1, 2],
+            total_distance_m: 250
+        });
+    })()`, context);
+
+    assert.equal(congestion.knownEdges, 1);
+    assert.equal(congestion.knownDistance, 250);
+    assert.equal(congestion.congestionLevelTotal, 5);
+    assert.equal(congestion.averageKnownLevel, 5);
+});
+
 test('aggregateSegments joins legs without duplicating shared nodes', () => {
     const context = loadDashboardContext();
     const aggregate = vm.runInContext(`aggregateSegments([
@@ -109,6 +132,16 @@ test('map coordinates are normalized and can be recovered from final path data',
     assert.deepEqual(Array.from(coords['200']), [10.8, 106.7]);
 });
 
+test('misaligned path coordinates never get assigned to the wrong node', () => {
+    const context = loadDashboardContext();
+    const coords = vm.runInContext(`(() => {
+        const index = {};
+        mergePathNodeCoords(index, [100, 200, 300], [[10.7, 106.6], [10.8, 106.7]]);
+        return index;
+    })()`, context);
+    assert.deepEqual(JSON.parse(JSON.stringify(coords)), {});
+});
+
 test('edge data builds a reusable coordinate index for trace nodes', () => {
     const context = loadDashboardContext();
     const coords = vm.runInContext(`(() => {
@@ -126,6 +159,38 @@ test('edge data builds a reusable coordinate index for trace nodes', () => {
     assert.deepEqual(Array.from(coords[1]), [10.8, 106.7]);
 });
 
+test('decimal-form node IDs from Pandas match JavaScript integer IDs', () => {
+    const context = loadDashboardContext();
+    const result = vm.runInContext(`(() => {
+        const nodeId = 1997154435;
+        const trace = {
+            visited_order: [nodeId],
+            steps: [{ current_node: nodeId, frontier: [] }],
+            node_coords: {}
+        };
+        mergeValidNodeCoords(trace.node_coords, {
+            '1997154435.0': [10.752692, 106.668041]
+        });
+        const edgeCoords = new Map();
+        indexEdgeNodeCoords(edgeCoords, {
+            edge_id: '4631738599.0_1997154435.0',
+            u_lat: 10.76,
+            u_lng: 106.67,
+            v_lat: 10.752692,
+            v_lng: 106.668041
+        });
+        return {
+            coordinateKey: normalizeNodeCoordinateKey('1997154435.0'),
+            missing: getMissingTraceNodeIds(trace),
+            edgeCoords: edgeCoords.get('1997154435')
+        };
+    })()`, context);
+
+    assert.equal(result.coordinateKey, '1997154435');
+    assert.deepEqual(Array.from(result.missing), []);
+    assert.deepEqual(Array.from(result.edgeCoords), [10.752692, 106.668041]);
+});
+
 test('missing coordinate detection includes visited, current and frontier nodes', () => {
     const context = loadDashboardContext();
     const missing = vm.runInContext(`getMissingTraceNodeIds({
@@ -134,4 +199,66 @@ test('missing coordinate detection includes visited, current and frontier nodes'
         node_coords: { '100': [10.7, 106.6] }
     })`, context);
     assert.deepEqual(Array.from(missing), [200, 300]);
+});
+
+test('missing coordinate detection also repairs every final-route node', () => {
+    const context = loadDashboardContext();
+    const missing = vm.runInContext(`getMissingTraceNodeIds({
+        visited_order: [100],
+        steps: [{ current_node: 100, frontier: [] }],
+        route_segments: [{ path_nodes: [100, 200] }],
+        node_coords: { '100': [10.7, 106.6] }
+    })`, context);
+    assert.deepEqual(Array.from(missing), [200]);
+});
+
+test('route progress only reveals final-path nodes expanded by the current step', () => {
+    const context = loadDashboardContext();
+    const routeNodes = vm.runInContext(`getRouteNodesAtSearchStep({
+        route_segments: [{ path_nodes: [1, 2, 3, 4] }],
+        steps: [
+            { legIndex: 1, current_node: 1 },
+            { legIndex: 1, current_node: 99 },
+            { legIndex: 1, current_node: 3 }
+        ]
+    }, 2)`, context);
+    assert.deepEqual(Array.from(routeNodes), [1, 2, 3]);
+});
+
+test('route prefix stays visible while a search branch is expanded', () => {
+    const context = loadDashboardContext();
+    const routeNodes = vm.runInContext(`getRouteNodesAtSearchStep({
+        route_segments: [{ path_nodes: [1, 2, 3] }],
+        steps: [
+            { legIndex: 1, current_node: 1 },
+            { legIndex: 1, current_node: 99 }
+        ]
+    }, 1)`, context);
+    assert.deepEqual(Array.from(routeNodes), [1]);
+});
+
+test('route line keeps gaps for unresolved coordinates instead of joining across them', () => {
+    const context = loadDashboardContext();
+    const segments = vm.runInContext(
+        'buildCoordinateSegments([[10.7, 106.6], null, [10.8, 106.7]])',
+        context,
+    );
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(segments)),
+        [[[10.7, 106.6]], [[10.8, 106.7]]],
+    );
+});
+
+test('missing final-route coordinates are interpolated on the client', () => {
+    const context = loadDashboardContext();
+    const coords = vm.runInContext(`(() => {
+        const trace = {
+            route_segments: [{ path_nodes: [100, 200, 300] }],
+            node_coords: { '100': [10.7, 106.6], '300': [10.9, 106.8] }
+        };
+        estimateMissingRouteCoordinates(trace);
+        return trace.node_coords['200'];
+    })()`, context);
+    assert.ok(Math.abs(coords[0] - 10.8) < 1e-12);
+    assert.ok(Math.abs(coords[1] - 106.7) < 1e-12);
 });

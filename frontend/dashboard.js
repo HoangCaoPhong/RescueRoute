@@ -499,7 +499,7 @@ function getNodeLabel(nodeId) {
 function rebuildEdgeIndex() {
     edgeIndex = new Map();
     edgesData.forEach((edge) => {
-        edgeIndex.set(String(edge.edge_id), edge);
+        edgeIndex.set(normalizeEdgeId(edge.edge_id), edge);
         indexEdgeNodeCoords(fullRoadNodeCoords, edge);
     });
 }
@@ -508,12 +508,16 @@ function indexEdgeNodeCoords(target, edge) {
     const [sourceId, targetId] = String(edge?.edge_id || "").split("_");
     const sourceCoords = normalizeMapCoords([edge?.u_lat, edge?.u_lng]);
     const targetCoords = normalizeMapCoords([edge?.v_lat, edge?.v_lng]);
-    if (sourceId && sourceCoords) target.set(sourceId, sourceCoords);
-    if (targetId && targetCoords) target.set(targetId, targetCoords);
+    if (sourceId && sourceCoords)
+        target.set(normalizeNodeCoordinateKey(sourceId), sourceCoords);
+    if (targetId && targetCoords)
+        target.set(normalizeNodeCoordinateKey(targetId), targetCoords);
 }
 
 function getPathEdge(pathNodes, index) {
-    return edgeIndex.get(`${pathNodes[index]}_${pathNodes[index + 1]}`);
+    return edgeIndex.get(
+        normalizeEdgeId(`${pathNodes[index]}_${pathNodes[index + 1]}`),
+    );
 }
 
 function analyzePathCongestion(response) {
@@ -558,6 +562,8 @@ function analyzePathCongestion(response) {
         estimatedTimeSeconds,
         highCongestionEdges,
         knownEdges,
+        knownDistance,
+        congestionLevelTotal: levelTotal,
         totalEdges: Math.max(0, pathNodes.length - 1),
         averageKnownLevel: knownEdges ? levelTotal / knownEdges : null,
     };
@@ -719,6 +725,8 @@ function aggregateSegments(segments, visitingOrder) {
     let totalTravelTime = 0;
     let totalHops = 0;
     let knownEdges = 0;
+    let knownCongestionDistance = 0;
+    let congestionLevelTotal = 0;
     let totalEdges = 0;
 
     segments.forEach(({ result }, index) => {
@@ -733,6 +741,8 @@ function aggregateSegments(segments, visitingOrder) {
         totalTravelTime += Number(result.estimatedTimeSeconds || 0);
         totalHops += Number(result.hopCount || 0);
         knownEdges += result.congestion?.knownEdges || 0;
+        knownCongestionDistance += result.congestion?.knownDistance || 0;
+        congestionLevelTotal += result.congestion?.congestionLevelTotal || 0;
         totalEdges += result.congestion?.totalEdges || 0;
         highCongestionEdges.push(...(result.congestion?.highCongestionEdges || []));
     });
@@ -748,7 +758,16 @@ function aggregateSegments(segments, visitingOrder) {
         totalProcessingTime,
         totalTravelTime,
         totalHops,
-        congestion: { highCongestionEdges, knownEdges, totalEdges },
+        congestion: {
+            highCongestionEdges,
+            knownEdges,
+            knownCongestionDistance,
+            congestionLevelTotal,
+            totalEdges,
+            averageKnownLevel: knownEdges
+                ? congestionLevelTotal / knownEdges
+                : null,
+        },
     };
 }
 
@@ -822,7 +841,6 @@ async function calculateRoute() {
 
         const aggregate = aggregateSegments(selectedSegments, selectedOrder);
         renderRouteResult(aggregate, input, originalAggregate);
-        drawFinalRoute(aggregate);
 
         const combinedTrace = combineSearchTraces(
             selectedSegments,
@@ -831,7 +849,10 @@ async function calculateRoute() {
         if (combinedTrace) {
             await startSearchVisualization(combinedTrace);
             playSearchAnimation();
-        } else clearSearchVisualization();
+        } else {
+            clearSearchVisualization();
+            drawFinalRoute(aggregate);
+        }
 
         setOperationStatus(
             `Hoàn tất ${selectedSegments.length} chặng bằng ${ALGORITHM_SPECS[input.algorithm].label}.`,
@@ -983,6 +1004,9 @@ function renderCongestionExplanation(aggregate) {
     const coverage = congestion.totalEdges
         ? (congestion.knownEdges / congestion.totalEdges) * 100
         : 0;
+    const averageLevel = Number.isFinite(congestion.averageKnownLevel)
+        ? congestion.averageKnownLevel.toFixed(1)
+        : "—";
     const uniqueHighEdges = Array.from(
         new Map(
             congestion.highCongestionEdges.map((edge) => [edge.edgeId, edge]),
@@ -1005,7 +1029,7 @@ function renderCongestionExplanation(aggregate) {
         : "Không phát hiện cạnh mức ùn tắc 4–6 trong phần dữ liệu quan sát được.";
     setText(
         "congestionExplanation",
-        `${highText} Độ phủ dữ liệu cạnh trên path: ${congestion.knownEdges}/${congestion.totalEdges} (${coverage.toFixed(1)}%). Phần chưa có dữ liệu dùng tốc độ mặc định ${DEFAULT_SPEED_KPH} km/h để ước tính thời gian.`,
+        `${highText} Độ phủ dữ liệu cạnh trên path: ${congestion.knownEdges}/${congestion.totalEdges} (${coverage.toFixed(1)}%), tương ứng ${formatDistance(congestion.knownCongestionDistance || 0)}. Mức ùn tắc trung bình của các cạnh có dữ liệu: ${averageLevel}/6. Phần chưa có dữ liệu dùng tốc độ mặc định ${DEFAULT_SPEED_KPH} km/h để ước tính thời gian.`,
     );
 }
 
@@ -1036,25 +1060,16 @@ function drawFinalRoute(aggregate) {
     if (!map) return;
     clearFinalRoute();
 
-    if (aggregate.pathCoords.length >= 2) {
-        activeRoutePolyline = L.polyline(aggregate.pathCoords, {
-            pane: "finalRoutePane",
-            color: "#9e77ff",
-            weight: 6,
-            opacity: 0.92,
-            lineJoin: "round",
-        }).addTo(map);
-        map.fitBounds(activeRoutePolyline.getBounds(), { padding: [46, 46] });
-    } else if (aggregate.pathCoords.length === 1) {
-        map.setView(aggregate.pathCoords[0], 16);
-    }
+    const routeSegments = buildCoordinateSegments(aggregate.pathCoords);
+    drawRouteLine(routeSegments);
+    fitMapToRouteSegments(routeSegments);
 
     aggregate.visitingOrder.forEach((nodeId, index) => {
         const pathIndex =
             index === aggregate.visitingOrder.length - 1
                 ? aggregate.pathNodes.lastIndexOf(nodeId)
                 : aggregate.pathNodes.indexOf(nodeId);
-        const coords = aggregate.pathCoords[pathIndex];
+        const coords = normalizeMapCoords(aggregate.pathCoords[pathIndex]);
         if (!coords) return;
         const color =
             index === 0
@@ -1087,6 +1102,52 @@ function clearFinalRoute() {
     routeNodeMarkers = [];
 }
 
+function buildCoordinateSegments(rawCoords = []) {
+    const segments = [];
+    let segment = [];
+
+    rawCoords.forEach((rawCoords) => {
+        const coords = normalizeMapCoords(rawCoords);
+        if (coords) {
+            segment.push(coords);
+            return;
+        }
+        if (segment.length) segments.push(segment);
+        segment = [];
+    });
+    if (segment.length) segments.push(segment);
+    return segments;
+}
+
+function drawRouteLine(routeSegments) {
+    if (!map) return;
+    if (activeRoutePolyline) {
+        map.removeLayer(activeRoutePolyline);
+        activeRoutePolyline = null;
+    }
+    if (!routeSegments.length) return;
+
+    const latLngs =
+        routeSegments.length === 1 ? routeSegments[0] : routeSegments;
+    activeRoutePolyline = L.polyline(latLngs, {
+        pane: "finalRoutePane",
+        color: SEARCH_COLORS.route,
+        weight: 6,
+        opacity: 0.92,
+        lineJoin: "round",
+    }).addTo(map);
+}
+
+function fitMapToRouteSegments(routeSegments) {
+    if (!map) return;
+    const coords = routeSegments.flat();
+    if (coords.length >= 2) {
+        map.fitBounds(L.latLngBounds(coords), { padding: [46, 46] });
+    } else if (coords.length === 1) {
+        map.setView(coords[0], 16);
+    }
+}
+
 function combineSearchTraces(segments, algorithm) {
     const tracedSegments = segments.filter(
         (segment) => segment.result.search_trace?.steps?.length,
@@ -1096,6 +1157,7 @@ function combineSearchTraces(segments, algorithm) {
     const steps = [];
     const visitedOrder = [];
     const nodeCoords = {};
+    const routeSegments = [];
     tracedSegments.forEach((segment, segmentIndex) => {
         const trace = segment.result.search_trace;
         mergeValidNodeCoords(nodeCoords, trace.node_coords || {});
@@ -1104,6 +1166,11 @@ function combineSearchTraces(segments, algorithm) {
             segment.result.path_nodes,
             segment.result.path_coords,
         );
+        routeSegments.push({
+            path_nodes: Array.isArray(segment.result.path_nodes)
+                ? segment.result.path_nodes
+                : [],
+        });
         (trace.visited_order || []).forEach((nodeId) => visitedOrder.push(nodeId));
         (trace.steps || []).forEach((step) => {
             steps.push({
@@ -1128,21 +1195,23 @@ function combineSearchTraces(segments, algorithm) {
         visited_order: visitedOrder,
         steps,
         node_coords: nodeCoords,
+        route_segments: routeSegments,
     };
 }
 
 function mergeValidNodeCoords(target, source) {
     Object.entries(source || {}).forEach(([nodeId, rawCoords]) => {
         const coords = normalizeMapCoords(rawCoords);
-        if (coords) target[String(nodeId)] = coords;
+        if (coords) target[normalizeNodeCoordinateKey(nodeId)] = coords;
     });
 }
 
 function mergePathNodeCoords(target, pathNodes = [], pathCoords = []) {
+    if ((pathNodes?.length || 0) !== (pathCoords?.length || 0)) return;
     const count = Math.min(pathNodes?.length || 0, pathCoords?.length || 0);
     for (let index = 0; index < count; index += 1) {
         const coords = normalizeMapCoords(pathCoords[index]);
-        if (coords) target[String(pathNodes[index])] = coords;
+        if (coords) target[normalizeNodeCoordinateKey(pathNodes[index])] = coords;
     }
 }
 
@@ -1151,11 +1220,25 @@ function mergeEdgeNodeCoords(target, edges = []) {
         const [sourceId, targetId] = String(edge.edge_id || "").split("_");
         const sourceCoords = normalizeMapCoords([edge.u_lat, edge.u_lng]);
         const targetCoords = normalizeMapCoords([edge.v_lat, edge.v_lng]);
-        if (sourceId && sourceCoords && !target[sourceId])
-            target[sourceId] = sourceCoords;
-        if (targetId && targetCoords && !target[targetId])
-            target[targetId] = targetCoords;
+        const sourceKey = normalizeNodeCoordinateKey(sourceId);
+        const targetKey = normalizeNodeCoordinateKey(targetId);
+        if (sourceId && sourceCoords && !target[sourceKey])
+            target[sourceKey] = sourceCoords;
+        if (targetId && targetCoords && !target[targetKey])
+            target[targetKey] = targetCoords;
     });
+}
+
+function normalizeNodeCoordinateKey(nodeId) {
+    const rawNodeId = String(nodeId ?? "").trim();
+    const decimalIntegerMatch = rawNodeId.match(/^(\d+)\.0+$/);
+    return decimalIntegerMatch ? decimalIntegerMatch[1] : rawNodeId;
+}
+
+function normalizeEdgeId(edgeId) {
+    const [sourceId, targetId, ...rest] = String(edgeId ?? "").split("_");
+    if (!sourceId || !targetId || rest.length) return String(edgeId ?? "");
+    return `${normalizeNodeCoordinateKey(sourceId)}_${normalizeNodeCoordinateKey(targetId)}`;
 }
 
 function normalizeMapCoords(rawCoords) {
@@ -1200,11 +1283,10 @@ async function startSearchVisualization(trace) {
     searchStepIndex = 0;
     byId("searchVisualizationPanel").hidden = false;
 
-    const missingNodeIds = getMissingTraceNodeIds(trace);
-    if (missingNodeIds.length) {
-        setMapTraceLoadingStatus(missingNodeIds.length);
-        await ensureTraceCoordinates(trace, missingNodeIds);
-    }
+    await ensureTraceCoordinates(trace, getMissingTraceNodeIds(trace));
+    fitMapToRouteSegments(
+        buildCoordinateSegments(getAllTraceRouteCoordinates(trace)),
+    );
     renderSearchStep(0);
 }
 
@@ -1218,9 +1300,109 @@ function getMissingTraceNodeIds(trace) {
                 nodeIds.add(item.node_id);
         });
     });
+    (trace.route_segments || []).forEach((segment) => {
+        (segment.path_nodes || []).forEach((nodeId) => nodeIds.add(nodeId));
+    });
     return Array.from(nodeIds).filter(
-        (nodeId) => !normalizeMapCoords(trace.node_coords?.[String(nodeId)]),
+        (nodeId) =>
+            !normalizeMapCoords(
+                trace.node_coords?.[normalizeNodeCoordinateKey(nodeId)],
+            ),
     );
+}
+
+function appendRouteNodes(target, nodes) {
+    nodes.forEach((nodeId) => {
+        if (
+            normalizeNodeCoordinateKey(target[target.length - 1]) !==
+            normalizeNodeCoordinateKey(nodeId)
+        ) {
+            target.push(nodeId);
+        }
+    });
+}
+
+function getAllTraceRouteNodes(trace) {
+    const nodes = [];
+    (trace.route_segments || []).forEach((segment) => {
+        appendRouteNodes(nodes, segment.path_nodes || []);
+    });
+    return nodes;
+}
+
+function getRouteNodesAtSearchStep(trace, stepIndex) {
+    const routeSegments = trace.route_segments || [];
+    const traceSteps = trace.steps || [];
+    if (!routeSegments.length || !traceSteps.length) return [];
+
+    const safeStepIndex = Math.max(
+        0,
+        Math.min(
+            Number(stepIndex) || 0,
+            traceSteps.length - 1,
+        ),
+    );
+    const activeStep = traceSteps[safeStepIndex];
+    const activeSegmentIndex = Math.max(
+        0,
+        Math.min(
+            Number(activeStep?.legIndex || 1) - 1,
+            routeSegments.length - 1,
+        ),
+    );
+    const routeNodes = [];
+    routeSegments.forEach((segment, segmentIndex) => {
+        const pathNodes = segment.path_nodes || [];
+        if (segmentIndex < activeSegmentIndex) {
+            appendRouteNodes(routeNodes, pathNodes);
+            return;
+        }
+        if (segmentIndex !== activeSegmentIndex) return;
+
+        const furthestExpandedPathIndex = traceSteps
+            .slice(0, safeStepIndex + 1)
+            .filter(
+                (candidateStep) =>
+                    Number(candidateStep?.legIndex || 1) ===
+                    activeSegmentIndex + 1,
+            )
+            .reduce((furthestIndex, candidateStep) => {
+                const pathIndex = pathNodes
+                    .map(normalizeNodeCoordinateKey)
+                    .lastIndexOf(
+                        normalizeNodeCoordinateKey(candidateStep.current_node),
+                    );
+                return Math.max(furthestIndex, pathIndex);
+            }, -1);
+        if (furthestExpandedPathIndex >= 0) {
+            appendRouteNodes(
+                routeNodes,
+                pathNodes.slice(0, furthestExpandedPathIndex + 1),
+            );
+        }
+    });
+    return routeNodes;
+}
+
+function getAllTraceRouteCoordinates(trace) {
+    const nodeCoords = trace.node_coords || {};
+    return getAllTraceRouteNodes(trace).map(
+        (nodeId) => nodeCoords[normalizeNodeCoordinateKey(nodeId)],
+    );
+}
+
+function drawRouteProgress(trace, stepIndex) {
+    const routeNodes = getRouteNodesAtSearchStep(trace, stepIndex);
+    const routeCoords = routeNodes.map(
+        (nodeId) => trace.node_coords?.[normalizeNodeCoordinateKey(nodeId)],
+    );
+    drawRouteLine(buildCoordinateSegments(routeCoords));
+    return {
+        revealedNodeCount: routeNodes.length,
+        totalNodeCount: getAllTraceRouteNodes(trace).length,
+        currentNodeId: routeNodes.at(-1) ?? null,
+        routeNodes,
+    };
 }
 
 function setMapTraceLoadingStatus(missingCount) {
@@ -1233,7 +1415,12 @@ function setMapTraceLoadingStatus(missingCount) {
 async function ensureTraceCoordinates(trace, missingNodeIds) {
     copyIndexedCoordsToTrace(trace, missingNodeIds);
     let unresolved = getMissingTraceNodeIds(trace);
-    if (!unresolved.length || allEdgeCoordinatesLoaded) return;
+    if (!unresolved.length || allEdgeCoordinatesLoaded) {
+        estimateMissingRouteCoordinates(trace);
+        return;
+    }
+
+    setMapTraceLoadingStatus(unresolved.length);
 
     try {
         await loadAllEdgeCoordinates();
@@ -1245,13 +1432,68 @@ async function ensureTraceCoordinates(trace, missingNodeIds) {
             true,
         );
     }
+    estimateMissingRouteCoordinates(trace);
 }
 
 function copyIndexedCoordsToTrace(trace, nodeIds) {
     trace.node_coords ||= {};
     nodeIds.forEach((nodeId) => {
-        const coords = fullRoadNodeCoords.get(String(nodeId));
-        if (coords) trace.node_coords[String(nodeId)] = coords;
+        const nodeKey = normalizeNodeCoordinateKey(nodeId);
+        const coords = fullRoadNodeCoords.get(nodeKey);
+        if (coords) trace.node_coords[nodeKey] = coords;
+    });
+}
+
+function estimateMissingRouteCoordinates(trace) {
+    trace.node_coords ||= {};
+    (trace.route_segments || []).forEach((segment) => {
+        const pathNodes = segment.path_nodes || [];
+        for (let index = 0; index < pathNodes.length; index += 1) {
+            const nodeKey = normalizeNodeCoordinateKey(pathNodes[index]);
+            if (normalizeMapCoords(trace.node_coords[nodeKey]))
+                continue;
+
+            let previousIndex = index - 1;
+            while (
+                previousIndex >= 0 &&
+                !normalizeMapCoords(
+                    trace.node_coords[
+                        normalizeNodeCoordinateKey(pathNodes[previousIndex])
+                    ],
+                )
+            ) {
+                previousIndex -= 1;
+            }
+            let nextIndex = index + 1;
+            while (
+                nextIndex < pathNodes.length &&
+                !normalizeMapCoords(
+                    trace.node_coords[
+                        normalizeNodeCoordinateKey(pathNodes[nextIndex])
+                    ],
+                )
+            ) {
+                nextIndex += 1;
+            }
+            if (previousIndex < 0 || nextIndex >= pathNodes.length) continue;
+
+            const previousCoords = normalizeMapCoords(
+                trace.node_coords[
+                    normalizeNodeCoordinateKey(pathNodes[previousIndex])
+                ],
+            );
+            const nextCoords = normalizeMapCoords(
+                trace.node_coords[
+                    normalizeNodeCoordinateKey(pathNodes[nextIndex])
+                ],
+            );
+            const ratio =
+                (index - previousIndex) / (nextIndex - previousIndex);
+            trace.node_coords[nodeKey] = [
+                previousCoords[0] + (nextCoords[0] - previousCoords[0]) * ratio,
+                previousCoords[1] + (nextCoords[1] - previousCoords[1]) * ratio,
+            ];
+        }
     });
 }
 
@@ -1274,6 +1516,34 @@ async function loadAllEdgeCoordinates() {
     return fullCoordinateLoadPromise;
 }
 
+function getSearchMapMode() {
+    return byId("mapTraceMode")?.value === "full_trace"
+        ? "full_trace"
+        : "route_frontier";
+}
+
+function onMapTraceModeChange() {
+    if (searchVisualizationData) renderSearchStep(searchStepIndex);
+}
+
+function updateSearchMapModeLabels(mapMode) {
+    const isFullTrace = mapMode === "full_trace";
+    setText(
+        "vizVisitedLegend",
+        isFullTrace ? "🟡 Đã duyệt" : "🟡 Tuyến đã hiện",
+    );
+    setText(
+        "vizCurrentLegend",
+        isFullTrace ? "🟠 Đang mở" : "🟠 Trên tuyến cuối",
+    );
+    setText(
+        "followSearchLabel",
+        isFullTrace
+            ? "Tự động đưa node đang mở vào giữa bản đồ"
+            : "Tự động đưa node thuộc tuyến cuối vào giữa bản đồ",
+    );
+}
+
 function renderSearchStep(stepIndex) {
     if (!searchVisualizationData?.steps?.length) return;
     const steps = searchVisualizationData.steps;
@@ -1285,13 +1555,29 @@ function renderSearchStep(stepIndex) {
         safeIndex + 1,
     );
     const visitedOrder = expandedOrder.filter(
-        (nodeId) => String(nodeId) !== String(step.current_node),
+        (nodeId) =>
+            normalizeNodeCoordinateKey(nodeId) !==
+            normalizeNodeCoordinateKey(step.current_node),
     );
     const rawFrontier = Array.isArray(step.frontier) ? step.frontier : [];
     const frontier = rawFrontier.filter(
-        (item) => String(item.node_id) !== String(step.current_node),
+        (item) =>
+            normalizeNodeCoordinateKey(item.node_id) !==
+            normalizeNodeCoordinateKey(step.current_node),
     );
     const nodeCoords = searchVisualizationData.node_coords || {};
+    const routeProgress = drawRouteProgress(
+        searchVisualizationData,
+        safeIndex,
+    );
+    const mapMode = getSearchMapMode();
+    const isFullTrace = mapMode === "full_trace";
+    updateSearchMapModeLabels(mapMode);
+    const routeVisitedOrder = routeProgress.routeNodes.slice(0, -1);
+    const mapVisitedOrder = isFullTrace ? visitedOrder : routeVisitedOrder;
+    const mapCurrentNodeId = isFullTrace
+        ? step.current_node
+        : routeProgress.currentNodeId;
     let visitedMarkersDrawn = 0;
     let frontierMarkersDrawn = 0;
 
@@ -1299,8 +1585,10 @@ function renderSearchStep(stepIndex) {
     searchFrontierLayer?.clearLayers();
     searchCurrentLayer?.clearLayers();
 
-    visitedOrder.slice(-MAX_MAP_TRACE_NODES).forEach((nodeId) => {
-        const coords = normalizeMapCoords(nodeCoords[String(nodeId)]);
+    mapVisitedOrder.slice(-MAX_MAP_TRACE_NODES).forEach((nodeId) => {
+        const coords = normalizeMapCoords(
+            nodeCoords[normalizeNodeCoordinateKey(nodeId)],
+        );
         if (!coords) return;
         L.circleMarker(coords, {
             pane: "searchVisitedPane",
@@ -1317,7 +1605,9 @@ function renderSearchStep(stepIndex) {
     });
 
     frontier.slice(0, MAX_MAP_TRACE_NODES).forEach((item) => {
-        const coords = normalizeMapCoords(nodeCoords[String(item.node_id)]);
+        const coords = normalizeMapCoords(
+            nodeCoords[normalizeNodeCoordinateKey(item.node_id)],
+        );
         if (!coords) return;
         L.circleMarker(coords, {
             pane: "searchFrontierPane",
@@ -1334,7 +1624,7 @@ function renderSearchStep(stepIndex) {
     });
 
     const currentCoords = normalizeMapCoords(
-        nodeCoords[String(step.current_node)],
+        nodeCoords[normalizeNodeCoordinateKey(mapCurrentNodeId)],
     );
     if (currentCoords) {
         L.circleMarker(currentCoords, {
@@ -1355,14 +1645,19 @@ function renderSearchStep(stepIndex) {
             opacity: 1,
             weight: 3,
         })
-            .bindTooltip(`Đang mở: ${step.current_node}`, {
+            .bindTooltip(
+                isFullTrace
+                    ? `Đang mở: ${mapCurrentNodeId}`
+                    : `Tuyến đã hiện: ${mapCurrentNodeId}`,
+                {
                 permanent: true,
                 direction: "top",
-            })
+                },
+            )
             .addTo(searchCurrentLayer);
         const currentIcon = L.divIcon({
             className: "search-current-marker",
-            html: `<span class="current-marker-label">Node ${escapeHtml(step.current_node)}</span><span class="current-marker-core">●</span>`,
+            html: `<span class="current-marker-label">Node ${escapeHtml(mapCurrentNodeId)}</span><span class="current-marker-core">●</span>`,
             iconSize: [34, 34],
             iconAnchor: [17, 17],
         });
@@ -1373,7 +1668,11 @@ function renderSearchStep(stepIndex) {
             keyboard: false,
             zIndexOffset: 5000,
         }).addTo(searchCurrentLayer);
-        focusCurrentSearchNode(currentCoords, safeIndex);
+        focusCurrentSearchNode(
+            currentCoords,
+            safeIndex,
+            isFullTrace || Boolean(routeProgress.currentNodeId),
+        );
     }
 
     updateMapTraceStatus(
@@ -1383,6 +1682,9 @@ function renderSearchStep(stepIndex) {
         frontierMarkersDrawn,
         visitedOrder.length,
         frontier.length,
+        routeProgress,
+        mapMode,
+        mapCurrentNodeId,
     );
 
     setText("vizAlgorithm", searchVisualizationData.algorithm);
@@ -1413,7 +1715,7 @@ function renderSearchStep(stepIndex) {
             : "";
     setText(
         "vizExplanation",
-        `${legText}Màu vàng là các node đã duyệt trước bước hiện tại, cam là node đang mở và xanh dương là frontier đang chờ trong queue.${omittedVisited || omittedFrontier ? ` Danh sách rút gọn ${omittedVisited} visited và ${omittedFrontier} frontier để giao diện không bị quá tải.` : ""}`,
+        `${legText}${isFullTrace ? "Bản đồ hiển thị toàn bộ visited/frontier và node đang mở theo search trace." : "Frontier vẫn hiển thị đầy đủ bằng marker xanh dương; node vàng, marker cam, camera và tuyến tím chỉ tiến dọc theo tuyến cuối."}${omittedVisited || omittedFrontier ? ` Danh sách rút gọn ${omittedVisited} visited và ${omittedFrontier} frontier để giao diện không bị quá tải.` : ""}`,
     );
 }
 
@@ -1424,18 +1726,29 @@ function updateMapTraceStatus(
     frontierDrawn,
     visitedTotal,
     frontierTotal,
+    routeProgress,
+    mapMode,
+    mapCurrentNodeId,
 ) {
     const status = byId("vizMapStatus");
     if (!status) return;
     const missingCurrent = !currentCoords;
     status.classList.toggle("is-warning", missingCurrent);
-    status.textContent = missingCurrent
-        ? `Không có tọa độ cho node ${step.current_node}; map không thể đặt marker ở bước này. Đã vẽ ${visitedDrawn}/${visitedTotal} visited và ${frontierDrawn}/${frontierTotal} frontier có tọa độ.`
-        : `Map đã vẽ ${visitedDrawn} visited, ${frontierDrawn} frontier và marker xanh lá cho node ${step.current_node}.`;
+    const isFullTrace = mapMode === "full_trace";
+    const routeProgressText = ` Tuyến đang hiện dần ${routeProgress.revealedNodeCount}/${routeProgress.totalNodeCount} node.`;
+    if (missingCurrent) {
+        status.textContent = isFullTrace
+            ? `Không có tọa độ cho node đang mở ${step.current_node}.${routeProgressText}`
+            : `Chưa có node nào thuộc tuyến cuối để đặt marker ở bước này.${routeProgressText}`;
+        return;
+    }
+    status.textContent = isFullTrace
+        ? `Map đã vẽ ${visitedDrawn}/${visitedTotal} visited, ${frontierDrawn}/${frontierTotal} frontier và marker cam cho node ${mapCurrentNodeId}.${routeProgressText}`
+        : `Map đã vẽ ${visitedDrawn} node thuộc tuyến cuối, ${frontierDrawn}/${frontierTotal} frontier và marker cam cho node ${mapCurrentNodeId}.${routeProgressText}`;
 }
 
-function focusCurrentSearchNode(coords, stepIndex) {
-    if (!map || !byId("followSearchNode")?.checked) return;
+function focusCurrentSearchNode(coords, stepIndex, isOnFinalRoute) {
+    if (!map || !isOnFinalRoute || !byId("followSearchNode")?.checked) return;
     const targetZoom = Math.max(map.getZoom(), 15);
     map.setView(coords, targetZoom, {
         animate: stepIndex > 0,
