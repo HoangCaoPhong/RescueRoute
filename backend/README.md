@@ -1,6 +1,8 @@
 # Backend workspace
 
-Thư mục này sẽ chứa FastAPI API, domain model, thuật toán tìm đường và test backend. Hiện tại repository chỉ dựng khung để các thành viên phát triển song song; chưa có ứng dụng backend chạy được và chưa khóa dependency.
+Thư mục này chứa FastAPI demo, graph manager trong RAM, routing service,
+các thuật toán tìm kiếm/tối ưu và test backend. Entry point hiện tại
+là `backend.main:app`; dependency được khai báo trong `requirements.txt`.
 
 ## Đọc theo thứ tự
 
@@ -28,19 +30,22 @@ backend/
     └── unit/
 ```
 
-## Thứ tự triển khai đề xuất
+## Luồng backend hiện tại
 
-1. Merge `feature/graph-search-contract`: Node, Edge, Graph, CostProfile, SearchRequest và SearchResult.
-2. Merge dataset mẫu ổn định vào `data/samples/`.
-3. Các thành viên tạo branch thuật toán từ `dev` và chỉ làm trong folder được giao cùng folder test tương ứng.
-4. Merge route service để chọn/chạy thuật toán.
-5. Sau cùng mới nối FastAPI, frontend và dịch vụ ngoài.
+1. `GraphManager` nạp graph processed và các POI vào RAM.
+2. FastAPI route validate request và gọi `app/services/routing_service.py`.
+3. Service chọn BFS, DFS, UCS, A*, Dijkstra hoặc Hill Climbing.
+4. Mọi thuật toán trả final path và unified search trace cho frontend.
+5. Route nhiều điểm dùng Nearest Neighbor hoặc Held–Karp để sắp waypoint.
 
-Không để mỗi thuật toán tự định nghĩa một Graph hoặc kiểu kết quả riêng. Nếu contract chung chưa tồn tại, ưu tiên hoàn thành contract trước thay vì viết tạm rồi sửa hàng loạt.
+Thuật toán không tự đọc CSV, gọi FastAPI hoặc ghi JSON. Data adapter và
+optional trace exporter nằm ngoài folder thuật toán.
 
 ## Môi trường Python
 
-Backend dự kiến dùng Python 3.10+. Khi branch nền tảng thêm manifest dependency, thành viên sẽ cài theo lệnh được ghi trong README này. Trước thời điểm đó không tự tạo và commit `venv`, `.venv` hoặc dependency manifest riêng trong từng folder thuật toán.
+Backend dùng Python 3.10+. Cài package bằng
+`python -m pip install -r backend/requirements.txt`. Không commit `venv`,
+`.venv` hoặc dependency manifest riêng trong từng folder thuật toán.
 
 ## Cách chạy Server (Quan trọng)
 
