@@ -1,8 +1,7 @@
 import math
 import time
 import heapq
-from collections import deque
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from backend.app.algorithms.graph_search.bfs.bfs import solve_bfs
 from backend.app.algorithms.graph_search.dfs.dfs import solve_dfs
@@ -16,6 +15,31 @@ def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     dlng = r_lng2 - r_lng1
     a = math.sin(dlat/2)**2 + math.cos(r_lat1)*math.cos(r_lat2)*math.sin(dlng/2)**2
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def _build_frontier_snapshot(
+    entries: Iterable[Tuple[float, float, int]],
+    best_scores: Dict[int, float],
+    heuristic,
+) -> List[Dict[str, float | int]]:
+    """Return the current, non-stale priority queue entries for the UI trace."""
+
+    snapshot: List[Dict[str, float | int]] = []
+    seen_nodes = set()
+    for priority, cost, node_id in sorted(entries):
+        if cost != best_scores.get(node_id) or node_id in seen_nodes:
+            continue
+        seen_nodes.add(node_id)
+        heuristic_cost = heuristic(node_id)
+        snapshot.append(
+            {
+                "node_id": node_id,
+                "g": round(cost, 2),
+                "h": round(heuristic_cost, 2),
+                "f": round(priority, 2),
+            }
+        )
+    return snapshot
 
 
 def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[str, Any]:
@@ -46,17 +70,6 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
     nodes_expanded = 0
     found = False
 
-    if start_id == goal_id:
-        return {
-            "found": True,
-            "total_cost": 0.0,
-            "total_distance_m": 0.0,
-            "nodes_expanded": 1,
-            "execution_time_ms": (time.perf_counter() - t0) * 1000,
-            "path_coords": [[goal_node["lat"], goal_node["lng"]]],
-            "path_nodes": [start_id]
-        }
-
     # Helper function for coordinate mapping
     def build_path_response(path_nodes, exec_time, expanded=0):
         total_cost = 0.0
@@ -82,6 +95,35 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
             "path_nodes": path_nodes
         }
 
+    def build_success_response(
+        path_nodes: List[int],
+        exec_time: float,
+        expanded: int,
+        trace_result: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Keep the route and visualization payload in one response contract."""
+
+        response = build_path_response(path_nodes, exec_time, expanded)
+        response["algorithm"] = algo
+        response["search_trace"] = build_search_trace(
+            graph_mgr,
+            trace_result,
+            algo,
+        )
+        return response
+
+    if start_id == goal_id:
+        execution_time = (time.perf_counter() - t0) * 1000
+        return build_success_response(
+            [start_id],
+            execution_time,
+            1,
+            {
+                "visited_order": [start_id],
+                "frontier_steps": [[start_id]],
+            },
+        )
+
     if algo == "bfs":
         result = solve_bfs(graph_mgr.adj, start_id, goal_id)
         exec_time = (time.perf_counter() - t0) * 1000
@@ -101,8 +143,7 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
         # BFS was successful
         path = result["path"]
         expanded = result.get("explored_nodes", len(result.get("visited_order", [])))
-        response = build_path_response(path, exec_time, expanded)
-        response["search_trace"] = build_search_trace(graph_mgr, result, "bfs")
+        response = build_success_response(path, exec_time, expanded, result)
         response["explanation_data"] = result.get("explanation_data", {})
         response["hop_count"] = result.get("hop_count")
         response["is_optimal"] = result.get("is_optimal")
@@ -122,7 +163,10 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
 
             path = result["path"]
             expanded = result.get("explored_nodes", len(result.get("visited_order", [])))
-            return build_path_response(path, exec_time, expanded)
+            response = build_success_response(path, exec_time, expanded, result)
+            response["explanation_data"] = result.get("explanation_data", {})
+            response["is_optimal"] = result.get("is_optimal")
+            return response
         except ValueError:
             exec_time = (time.perf_counter() - t0) * 1000
             return {
@@ -134,11 +178,24 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
     elif algo == "dijkstra":
         pq = [(0.0, start_id)]
         best_dist = {start_id: 0.0}
+        visited_order = []
+        frontier_steps = []
         while pq:
             d, curr = heapq.heappop(pq)
             if d > best_dist.get(curr, float('inf')):
                 continue
             nodes_expanded += 1
+            visited_order.append(curr)
+            frontier_steps.append(
+                [
+                    {"node_id": curr, "g": round(d, 2), "f": round(d, 2)},
+                    *[
+                        {"node_id": node_id, "g": round(cost, 2), "f": round(cost, 2)}
+                        for cost, node_id in sorted(pq)
+                        if cost == best_dist.get(node_id)
+                    ],
+                ]
+            )
             if curr == goal_id:
                 found = True
                 break
@@ -160,12 +217,26 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
 
         pq = [(h(start_id), 0.0, start_id)]
         g_scores = {start_id: 0.0}
+        visited_order = []
+        frontier_steps = []
 
         while pq:
             f, g, curr = heapq.heappop(pq)
             if g > g_scores.get(curr, float('inf')):
                 continue
             nodes_expanded += 1
+            visited_order.append(curr)
+            frontier_steps.append(
+                [
+                    {
+                        "node_id": curr,
+                        "g": round(g, 2),
+                        "h": round(h(curr), 2),
+                        "f": round(f, 2),
+                    },
+                    *_build_frontier_snapshot(pq, g_scores, h),
+                ]
+            )
             if curr == goal_id:
                 found = True
                 break
@@ -193,4 +264,12 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
         curr = parent.get(curr)
     path.reverse()
 
-    return build_path_response(path, exec_time, nodes_expanded)
+    return build_success_response(
+        path,
+        exec_time,
+        nodes_expanded,
+        {
+            "visited_order": visited_order,
+            "frontier_steps": frontier_steps,
+        },
+    )
