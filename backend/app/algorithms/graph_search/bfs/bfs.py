@@ -42,8 +42,6 @@ def solve_bfs(
     It does not optimize distance, travel time, congestion, or traffic cost.
     """
 
-    start_node_id = int(start_node_id)
-    goal_node_id = int(goal_node_id)
     start_time = perf_counter()
 
     # Validate input
@@ -75,12 +73,13 @@ def solve_bfs(
         # Goal found
         if current_node == goal_node_id:
 
-            path = reconstruct_path(parent,goal_node_id)
-            (total_distance,estimated_time,total_cost) = calculate_path_metrics(graph,path,cost_profile)
+            path = reconstruct_path(parent, goal_node_id)
+            (total_distance, estimated_time, total_cost) = calculate_path_metrics(graph, path, cost_profile)
 
             processing_time_ms = (perf_counter() - start_time) * 1000.0
 
             return {
+                "found": True,
                 "path": path,
                 "visited_order": visited_order,
                 "frontier_steps": frontier_steps,
@@ -124,8 +123,4 @@ def solve_bfs(
                 queue.append(neighbor_node)
 
     # No route found
-    return {
-        "found": False,
-        "path": [],
-        "message": f"No route found from '{start_node_id}' to '{goal_node_id}'."
-    }
+    raise ValueError(f"No route found from '{start_node_id}' to '{goal_node_id}'.")

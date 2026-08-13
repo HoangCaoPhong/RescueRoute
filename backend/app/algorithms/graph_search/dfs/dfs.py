@@ -42,23 +42,24 @@ def solve_dfs(
             f"goal node '{goal_node_id}' does not exist."
         )
 
-    stack = [start_node_id]
+    stack = [(start_node_id, None)]
     visited = set()
-    parent = {start_node_id: None}
+    parent = {}
 
     visited_order = []
     frontier_steps = []
 
     while stack:
         # Record frontier before expanding current node
-        frontier_steps.append(list(stack))
-        current_node = stack.pop()
+        frontier_steps.append([node for node, _ in stack])
+        current_node, current_parent = stack.pop()
 
         if current_node in visited:
             continue
 
         visited.add(current_node)
         visited_order.append(current_node)
+        parent[current_node] = current_parent
 
         # Goal found
         if current_node == goal_node_id:
@@ -69,6 +70,7 @@ def solve_dfs(
             processing_time_ms = (perf_counter() - start_time) * 1000.0
 
             return {
+                "found": True,
                 "path": path,
                 "visited_order": visited_order,
                 "frontier_steps": frontier_steps,
@@ -92,9 +94,7 @@ def solve_dfs(
         neighbors = get_neighbors(graph, current_node)
         for neighbor_node in reversed(neighbors):
             if neighbor_node not in visited:
-                if neighbor_node not in parent:
-                    parent[neighbor_node] = current_node
-                stack.append(neighbor_node)
+                stack.append((neighbor_node, current_node))
 
     # No route found
     raise ValueError(f"No route found from '{start_node_id}' to '{goal_node_id}'.")
