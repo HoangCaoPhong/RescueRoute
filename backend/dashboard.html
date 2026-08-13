@@ -450,7 +450,19 @@
             const emergencyOnly = document.getElementById('chkEmergencyOnly') ? document.getElementById('chkEmergencyOnly').checked : false;
             const query = (document.getElementById('inputSearchHospital') ? document.getElementById('inputSearchHospital').value : '').toLowerCase().trim();
 
+            const currentVal = select.value;
             select.innerHTML = '';
+
+            // Option đặc biệt: Tự động dò tìm BV gần nhất theo thuật toán đang chọn
+            if (!query) {
+                const autoOpt = document.createElement('option');
+                autoOpt.value = '0';
+                autoOpt.textContent = '🌟 [TỰ ĐỘNG DÒ TÌM BV GẦN NHẤT BẰNG THUẬT TOÁN ĐÃ CHỌN]';
+                autoOpt.style.fontWeight = 'bold';
+                autoOpt.style.color = '#38bdf8';
+                select.appendChild(autoOpt);
+            }
+
             let count = 0;
 
             hospitalsData.forEach(h => {
@@ -470,11 +482,14 @@
                 badgeElem.textContent = `(${count} BV)`;
             }
 
-            if (count === 0) {
+            if (count === 0 && !query) {
                 const opt = document.createElement('option');
                 opt.value = '';
                 opt.textContent = '-- Không tìm thấy bệnh viện phù hợp --';
                 select.appendChild(opt);
+            }
+            if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
+                select.value = currentVal;
             }
         }
 
@@ -683,48 +698,36 @@
         }
 
         async function selectNearestHospital() {
-            try {
-                const emergencyOnly = document.getElementById('chkEmergencyOnly') ? document.getElementById('chkEmergencyOnly').checked : true;
-                showToast('🔍 Đang tìm bệnh viện cấp cứu gần nhất qua KD-Tree...');
-                const res = await fetch(`/api/hospitals/nearest?emergency_only=${emergencyOnly}`);
-                const data = await res.json();
-                if (data.status === 'success' && data.nearest_hospital) {
-                    const h = data.nearest_hospital;
-                    
-                    // Reset ô tìm kiếm nếu đang lọc để hiển thị bệnh viện này
-                    const searchInput = document.getElementById('inputSearchHospital');
-                    if (searchInput && searchInput.value) {
-                        searchInput.value = '';
-                        populateHospitalSelect();
-                    }
-
-                    const select = document.getElementById('selectHospital');
-                    select.value = h.node_id;
-                    onHospitalSelectChange();
-                    showToast(`🚨 Đã chọn BV Cấp cứu: ${h.name} (~${data.distance_km} km)`);
-                } else {
-                    showToast('Không tìm thấy bệnh viện gần nhất!');
-                }
-            } catch (err) {
-                showToast('Lỗi khi tra cứu bệnh viện gần nhất!');
+            const select = document.getElementById('selectHospital');
+            if (select) {
+                select.value = '0';
             }
+            calculateRoute();
         }
 
         function onHospitalSelectChange() {
-            const hId = parseInt(document.getElementById('selectHospital').value);
-            const hospital = hospitalsData.find(h => h.node_id === hId);
-            if (hospital) {
-                map.panTo([hospital.lat, hospital.lng]);
-                if (hospitalMarkers[hId]) hospitalMarkers[hId].openPopup();
+            const val = document.getElementById('selectHospital').value;
+            const hId = parseInt(val);
+            if (hId > 0) {
+                const hospital = hospitalsData.find(h => h.node_id === hId);
+                if (hospital) {
+                    map.panTo([hospital.lat, hospital.lng]);
+                    if (hospitalMarkers[hId]) hospitalMarkers[hId].openPopup();
+                }
             }
         }
 
         async function calculateRoute() {
-            const goalNodeId = parseInt(document.getElementById('selectHospital').value);
+            const val = document.getElementById('selectHospital').value;
+            const goalNodeId = val ? parseInt(val) : 0;
             const algorithm = document.getElementById('selectAlgorithm').value;
             const startNodeId = currentAmbulanceData.mapped_nearest_node ? currentAmbulanceData.mapped_nearest_node.nearest_node_id : null;
 
-            showToast(`🧠 Đang chạy thuật toán ${algorithm.toUpperCase()} trên đồ thị thực tế...`);
+            if (goalNodeId === 0) {
+                showToast(`🧭 Thuật toán ${algorithm.toUpperCase()} đang tự dò đường tìm BV Cấp Cứu gần nhất trên mạng lưới...`);
+            } else {
+                showToast(`🧠 Đang chạy thuật toán ${algorithm.toUpperCase()} tới bệnh viện đã chọn...`);
+            }
 
             try {
                 const res = await fetch('/api/route', {
@@ -739,7 +742,7 @@
 
                 const data = await res.json();
                 if (!data.found) {
-                    showToast('⚠️ Không tìm thấy đường đi giữa hai điểm trên đồ thị!');
+                    showToast('⚠️ Không tìm thấy đường đi tới bệnh viện trên đồ thị!');
                     return;
                 }
 
@@ -761,7 +764,16 @@
                 }).addTo(map);
 
                 map.fitBounds(activeRoutePolyline.getBounds(), { padding: [50, 50] });
-                showToast(`✅ Tuyến đường tìm thấy bằng ${algorithm.toUpperCase()} (${data.nodes_expanded} nodes, ${data.execution_time_ms.toFixed(1)}ms)!`);
+
+                if (data.destination_hospital) {
+                    const destH = data.destination_hospital;
+                    if (hospitalMarkers[destH.node_id]) {
+                        hospitalMarkers[destH.node_id].openPopup();
+                    }
+                    showToast(`🚨 ${algorithm.toUpperCase()} đã tìm thấy BV: ${destH.name} (${data.nodes_expanded} nodes, ${data.execution_time_ms.toFixed(1)}ms)!`);
+                } else {
+                    showToast(`✅ Tuyến đường tìm thấy bằng ${algorithm.toUpperCase()} (${data.nodes_expanded} nodes, ${data.execution_time_ms.toFixed(1)}ms)!`);
+                }
 
             } catch (err) {
                 showToast('Lỗi khi tính toán lộ trình!');

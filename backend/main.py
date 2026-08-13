@@ -263,7 +263,12 @@ class CongestionRequest(BaseModel):
 # ==========================================
 # 5. Thuật toán Tìm đường trên Đồ thị
 # ==========================================
-from backend.app.services.routing_service import run_search, haversine
+from backend.app.services.routing_service import run_search, run_search_nearest_hospital, haversine
+
+class NearestHospitalRouteRequest(BaseModel):
+    start_node_id: Optional[int] = None
+    algorithm: str = "astar"
+    emergency_only: bool = True
 
 # ==========================================
 # 6. Các API Endpoints
@@ -417,7 +422,22 @@ async def calculate_route(body: RouteRequest):
         nearest_node, _ = graph_mgr.find_nearest_road_node(graph_mgr.ambulance_lat, graph_mgr.ambulance_lng)
         start_id = nearest_node["id"] if nearest_node else list(graph_mgr.road_nodes.keys())[0]
 
+    # Nếu goal_node_id = 0 hoặc -1 -> Chế độ tự động dò tìm BV gần nhất trên đồ thị (Multi-Goal Search)
+    if body.goal_node_id is None or body.goal_node_id <= 0:
+        return run_search_nearest_hospital(graph_mgr, start_id, body.algorithm, emergency_only=True)
+
     return run_search(graph_mgr, start_id, body.goal_node_id, body.algorithm)
+
+@app.post("/api/route/nearest-hospital")
+@app.post("/api/v1/route/nearest-hospital")
+async def calculate_nearest_hospital_route(body: NearestHospitalRouteRequest):
+    """Tự động dùng thuật toán AI dò đường trên mạng lưới đồ thị để tìm bệnh viện cấp cứu tối ưu nhất mà không cần biết trước điểm đích"""
+    start_id = body.start_node_id
+    if start_id is None:
+        nearest_node, _ = graph_mgr.find_nearest_road_node(graph_mgr.ambulance_lat, graph_mgr.ambulance_lng)
+        start_id = nearest_node["id"] if nearest_node else list(graph_mgr.road_nodes.keys())[0]
+
+    return run_search_nearest_hospital(graph_mgr, start_id, body.algorithm, emergency_only=body.emergency_only)
 
 @app.post("/api/edges/congestion")
 @app.post("/api/v1/edges/congestion")
