@@ -84,6 +84,9 @@ Desktop.ini
 $RECYCLE.BIN/
 
 # Office temporary files
+*.docx
+*.pdf
+.~lock.*#
 ~$*.docx
 ~$*.pptx
 ~$*.xlsx

@@ -1,13 +1,13 @@
 # Chỉ mục tài liệu
 
-## Tài liệu nguồn được giữ nguyên
+## Tài liệu nguồn chỉ lưu local
 
-- `Lab 1 - Searching.pdf`: đề bài chính thức, yêu cầu chức năng và thang điểm.
-- `Họp Project 1-AI.docx`: ý tưởng, sprint, vai trò và phân công ban đầu.
-- `Lab1_KeHoach_TrienKhai_Team5.docx`: mô hình Node/Edge và cost function ban đầu.
-- `KẾ HOẠCH TRIỂN KHAI BACKEND VÀ TÍCH HỢP HỆ THỐNG.docx`: kế hoạch FastAPI, Render, GPS, Supabase và bản đồ.
+Các file PDF/DOCX nguồn như đề bài, biên bản họp và kế hoạch triển khai được
+đặt local trong `docs/` khi cần đối chiếu, nhưng bị `.gitignore` loại khỏi
+repository và lịch sử Git. Không thêm lại các file nhị phân này vào commit.
 
-Không chỉnh sửa các file nguồn để ghi quyết định mới. Thêm tài liệu Markdown vào đúng thư mục dưới đây để Git review được thay đổi.
+Không chỉnh sửa các file nguồn để ghi quyết định mới. Thêm tài liệu Markdown
+vào đúng thư mục dưới đây để Git review được thay đổi.
 
 ## Tài liệu sẽ phát triển
 

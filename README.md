@@ -172,7 +172,9 @@ prototype. Không commit `.env`, virtual environment hoặc GPS người dùng.
 
 ## Tài liệu nguồn
 
-Đề bài và kế hoạch ban đầu được giữ nguyên trong `docs/`. Khi tài liệu thay đổi, cập nhật chỉ mục và ghi quyết định kỹ thuật mới trong `docs/architecture/` thay vì sửa lịch sử họp cũ.
+PDF/DOCX của đề bài và kế hoạch ban đầu chỉ được giữ local trong `docs/` và bị
+Git bỏ qua. Khi yêu cầu thay đổi, cập nhật chỉ mục Markdown và ghi quyết định
+kỹ thuật mới trong `docs/architecture/` thay vì commit lại tài liệu nhị phân.
 
 ## Nhóm thực hiện
 

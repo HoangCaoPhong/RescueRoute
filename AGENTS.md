@@ -23,7 +23,8 @@ Before changing code, read:
 
 ## Change discipline
 
-- Preserve source documents in `docs/`; record new decisions in Markdown files.
+- Keep binary source documents local and ignored in `docs/`; record new
+  decisions in tracked Markdown files.
 - Do not introduce a second graph, cost, or search-result contract for one algorithm.
 - Do not add dependencies without explaining their purpose and updating the relevant manifest/lockfile.
 - Never add credentials or real user GPS records.
