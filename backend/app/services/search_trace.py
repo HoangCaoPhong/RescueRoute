@@ -75,7 +75,8 @@ def normalize_frontier_item(
             "h",
             "f",
             "cost",
-            "priority"
+            "priority",
+            "selected",
         ):
             if key in item:
                 normalized[key] = item[key]
@@ -170,7 +171,17 @@ def build_search_trace(
                 current_node,
 
             "frontier":
-                normalized_frontier
+                normalized_frontier,
+
+            "frontier_size": event.get(
+                "frontier_size",
+                len(normalized_frontier),
+            ),
+
+            "frontier_truncated": event.get(
+                "frontier_truncated",
+                False,
+            ),
         })
 
     # ======================================
@@ -205,6 +216,8 @@ def build_search_trace(
     # ======================================
 
     return {
+        "schema_version": trace_history.get("version", "1.0"),
+
         "algorithm":
             algorithm,
 

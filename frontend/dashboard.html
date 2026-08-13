@@ -175,8 +175,10 @@
                                 <select id="selectVisitOrder">
                                     <option value="input">Giữ thứ tự đã
                                         nhập</option>
-                                    <option value="nearest">Nearest Neighbor
+                                    <option value="nearest_neighbor">Nearest Neighbor
                                         (xấp xỉ)</option>
+                                    <option value="held_karp">Held–Karp
+                                        (tối ưu, tối đa 10 điểm)</option>
                                 </select>
                             </div>
 
@@ -192,6 +194,8 @@
                                         (BFS)</option>
                                     <option value="dfs">Depth-First Search
                                         (DFS)</option>
+                                    <option value="hill_climbing">Hill Climbing
+                                        (xấp xỉ)</option>
                                 </select>
                             </div>
 
@@ -224,7 +228,7 @@
                             <button id="btnCompareAlgorithms"
                                 class="btn-secondary" type="button"
                                 onclick="compareAlgorithms()">
-                                So sánh 5 thuật toán
+                                So sánh 6 thuật toán
                             </button>
                         </div>
                         <div id="operationStatus" class="operation-status"

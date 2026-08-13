@@ -35,7 +35,10 @@ def graph_manager():
     )
 
 
-@pytest.mark.parametrize("algorithm", ["bfs", "dfs", "ucs", "astar", "dijkstra"])
+@pytest.mark.parametrize(
+    "algorithm",
+    ["bfs", "dfs", "ucs", "astar", "dijkstra", "hill_climbing"],
+)
 def test_every_route_algorithm_returns_a_replayable_trace(graph_manager, algorithm):
     result = run_search(graph_manager, 1, 4, algorithm)
 
@@ -54,8 +57,16 @@ def test_every_route_algorithm_returns_a_replayable_trace(graph_manager, algorit
         assert str(step["current_node"]) in trace["node_coords"]
         assert all("node_id" in item for item in step["frontier"])
 
+    if algorithm == "astar":
+        assert {"g", "h", "f"}.issubset(trace["steps"][0]["frontier"][0])
+    if algorithm == "ucs":
+        assert trace["steps"][0]["frontier"][0]["h"] == 0
 
-@pytest.mark.parametrize("algorithm", ["bfs", "dfs", "ucs", "astar", "dijkstra"])
+
+@pytest.mark.parametrize(
+    "algorithm",
+    ["bfs", "dfs", "ucs", "astar", "dijkstra", "hill_climbing"],
+)
 def test_nearest_hospital_search_uses_the_same_trace_contract(graph_manager, algorithm):
     result = run_search_nearest_hospital(graph_manager, 1, algorithm)
 
@@ -63,6 +74,10 @@ def test_nearest_hospital_search_uses_the_same_trace_contract(graph_manager, alg
     assert result["destination_hospital"]["node_id"] == 4
     assert len(result["search_trace"]["steps"]) == result["nodes_expanded"]
     assert result["search_trace"]["steps"][-1]["current_node"] == 4
+    if algorithm == "hill_climbing":
+        first_candidate = result["search_trace"]["steps"][0]["frontier"][0]
+        assert "h" in first_candidate
+        assert first_candidate["selected"] is True
 
 
 @pytest.mark.parametrize("algorithm", ["bfs", "dfs"])

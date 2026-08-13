@@ -7,7 +7,14 @@ import numpy as np
 
 from backend.app.algorithms.graph_search.bfs.bfs import solve_bfs
 from backend.app.algorithms.graph_search.astar import solve_astar
+from backend.app.algorithms.graph_search.dijkstra import solve_dijkstra
+from backend.app.algorithms.graph_search.ucs import solve_ucs
+from backend.app.algorithms.graph_search.utils import get_edge_data
 from backend.app.algorithms.optimization.hill_climbing import solve_hill_climbing
+from backend.app.algorithms.optimization.held_karp import optimize_held_karp
+from backend.app.algorithms.optimization.nearest_neighbor import (
+    optimize_nearest_neighbor,
+)
 from backend.app.algorithms.graph_search.dfs.dfs import solve_dfs
 from backend.app.algorithms.graph_search.trace_history import SearchFailure, SearchTraceHistory
 from backend.app.services.search_trace import build_search_trace
@@ -20,6 +27,17 @@ def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     dlng = r_lng2 - r_lng1
     a = math.sin(dlat/2)**2 + math.cos(r_lat1)*math.cos(r_lat2)*math.sin(dlng/2)**2
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def distance_edge_cost(graph, source, target, _cost_profile=None) -> float:
+    """Return the distance weight used by Dijkstra in the demo graph."""
+
+    edge = get_edge_data(graph, source, target)
+    if isinstance(edge, dict):
+        return float(edge.get("distance", edge.get("weight", 1.0)))
+    if isinstance(edge, (list, tuple)) and len(edge) > 2:
+        return float(edge[2])
+    return float(edge)
 
 
 def build_priority_frontier_snapshot(
@@ -80,10 +98,6 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
 
     algo = algorithm.lower().strip()
     goal_node = graph_mgr.road_nodes[goal_id]
-    start_node = graph_mgr.road_nodes[start_id]
-    parent: Dict[int, Optional[int]] = {start_id: None}
-    nodes_expanded = 0
-    found = False
 
     # Helper function for coordinate mapping
     def build_path_response(path_nodes, exec_time, expanded=0):
@@ -200,36 +214,7 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
                 ),
             }
 
-    elif algo == "dijkstra":
-        pq = [(0.0, start_id)]
-        best_dist = {start_id: 0.0}
-        trace_history = SearchTraceHistory()
-        while pq:
-            d, curr = heapq.heappop(pq)
-            if d > best_dist.get(curr, float('inf')):
-                continue
-            nodes_expanded += 1
-            trace_history.record_expansion(
-                curr,
-                build_priority_frontier_snapshot(
-                    curr,
-                    d,
-                    d,
-                    pq,
-                    best_dist,
-                ),
-            )
-            if curr == goal_id:
-                found = True
-                break
-            for nbr, edge in graph_mgr.adj.get(curr, {}).items():
-                new_d = d + edge[2]
-                if new_d < best_dist.get(nbr, float('inf')):
-                    best_dist[nbr] = new_d
-                    parent[nbr] = curr
-                    heapq.heappush(pq, (new_d, nbr))
-
-    elif algo in {"astar", "ucs", "hill_climbing", "hill-climbing"}:
+    elif algo in {"astar", "ucs", "dijkstra", "hill_climbing", "hill-climbing"}:
         def h(n_id: int) -> float:
             node = graph_mgr.road_nodes.get(n_id)
             if not node:
@@ -247,13 +232,39 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
                     goal_id,
                     lambda node_id, _goal_id: h(node_id),
                 )
+            elif algo == "ucs":
+                result = solve_ucs(
+                    graph_mgr.adj,
+                    start_id,
+                    goal_id,
+                )
+            elif algo == "dijkstra":
+                result = solve_dijkstra(
+                    graph_mgr.adj,
+                    start_id,
+                    goal_id,
+                    edge_cost=distance_edge_cost,
+                )
             else:
                 result = solve_astar(
                     graph_mgr.adj,
                     start_id,
                     goal_id,
-                    None if algo == "ucs" else lambda node_id, _goal_id: h(node_id),
+                    lambda node_id, _goal_id: h(node_id),
                 )
+        except SearchFailure as error:
+            return {
+                "found": False,
+                "algorithm": algo,
+                "nodes_expanded": error.result.get("explored_nodes", 0),
+                "execution_time_ms": round((time.perf_counter() - t0) * 1000, 2),
+                "message": str(error),
+                "search_trace": build_search_trace(
+                    graph_mgr,
+                    error.result,
+                    algo,
+                ),
+            }
         except ValueError as error:
             return {
                 "found": False,
@@ -283,37 +294,149 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
             "message": f"Unsupported search algorithm: '{algorithm}'.",
         }
 
-    exec_time = (time.perf_counter() - t0) * 1000
+    raise AssertionError("Search dispatch reached an unexpected state.")
 
-    if not found:
-        response = {
+
+def run_multi_location_search(
+    graph_mgr,
+    start_id: int,
+    waypoint_ids: List[int],
+    goal_id: int,
+    route_algorithm: str = "astar",
+    optimization_method: str = "nearest_neighbor",
+    criterion: str = "cost",
+) -> Dict[str, Any]:
+    """Optimize waypoint order and return every selected route segment."""
+
+    started_at = time.perf_counter()
+    waypoints = list(dict.fromkeys(waypoint_ids))
+    if start_id in waypoints or goal_id in waypoints:
+        waypoints = [
+            node_id
+            for node_id in waypoints
+            if node_id not in {start_id, goal_id}
+        ]
+    if len(waypoints) > 10:
+        return {
             "found": False,
-            "algorithm": algo,
-            "nodes_expanded": nodes_expanded,
-            "execution_time_ms": round(exec_time, 2)
+            "message": "Multi-location optimization supports at most 10 waypoints.",
         }
-        if "trace_history" in locals():
-            response["search_trace"] = build_search_trace(
-                graph_mgr,
-                trace_history.as_result_fields(),
-                algo,
+
+    pair_results: Dict[tuple, Dict[str, Any]] = {}
+    pair_costs: Dict[tuple, float] = {}
+    sources = [start_id, *waypoints]
+    targets = [*waypoints, goal_id]
+    for source in sources:
+        for target in targets:
+            result = run_search(graph_mgr, source, target, route_algorithm)
+            pair_results[(source, target)] = result
+            pair_costs[(source, target)] = (
+                _route_objective(result, criterion)
+                if result.get("found")
+                else float("inf")
             )
-        return response
 
-    # Tái hiện đường đi (cho DFS, Dijkstra, A*, UCS)
-    path = []
-    curr = goal_id
-    while curr is not None:
-        path.append(curr)
-        curr = parent.get(curr)
-    path.reverse()
+    method = optimization_method.lower().strip().replace("-", "_")
+    try:
+        if method == "nearest_neighbor":
+            optimized = optimize_nearest_neighbor(
+                start_id,
+                waypoints,
+                goal_id,
+                pair_costs,
+            )
+        elif method == "held_karp":
+            optimized = optimize_held_karp(
+                start_id,
+                waypoints,
+                goal_id,
+                pair_costs,
+            )
+        else:
+            return {
+                "found": False,
+                "message": f"Unsupported optimization method: '{optimization_method}'.",
+            }
+    except ValueError as error:
+        return {
+            "found": False,
+            "message": str(error),
+            "optimization_method": method,
+        }
 
-    return build_success_response(
-        path,
-        exec_time,
-        nodes_expanded,
-        trace_history.as_result_fields(),
+    visiting_order = optimized["visiting_order"]
+    segments = []
+    merged_path_nodes = []
+    merged_path_coords = []
+    total_cost = 0.0
+    total_distance = 0.0
+    total_expanded = 0
+    for index, (source, target) in enumerate(
+        zip(visiting_order, visiting_order[1:])
+    ):
+        result = pair_results[(source, target)]
+        if not result.get("found"):
+            return {
+                "found": False,
+                "message": result.get(
+                    "message",
+                    f"No route from '{source}' to '{target}'.",
+                ),
+            }
+        path_nodes = result.get("path_nodes", [])
+        path_coords = result.get("path_coords", [])
+        merged_path_nodes.extend(path_nodes if index == 0 else path_nodes[1:])
+        merged_path_coords.extend(path_coords if index == 0 else path_coords[1:])
+        total_cost += float(result.get("total_cost", 0.0))
+        total_distance += float(result.get("total_distance_m", 0.0))
+        total_expanded += int(result.get("nodes_expanded", 0))
+        segments.append({"start": source, "goal": target, "result": result})
+
+    original_order = [start_id, *waypoints, goal_id]
+    original_objective = sum(
+        pair_costs.get((source, target), float("inf"))
+        for source, target in zip(original_order, original_order[1:])
     )
+    original_objective_value = (
+        round(float(original_objective), 6)
+        if math.isfinite(original_objective)
+        else None
+    )
+    return {
+        "found": True,
+        "route_algorithm": route_algorithm,
+        "optimization_method": method,
+        "criterion": criterion,
+        "order_is_optimal": optimized["is_optimal"],
+        "is_optimal": optimized["is_optimal"],
+        "visiting_order": visiting_order,
+        "ordered_waypoints": visiting_order[1:-1],
+        "objective_cost": round(float(optimized["objective_cost"]), 6),
+        "original_order": original_order,
+        "original_objective_cost": original_objective_value,
+        "segments": segments,
+        "path_nodes": merged_path_nodes,
+        "path_coords": merged_path_coords,
+        "total_cost": round(total_cost, 2),
+        "total_distance_m": round(total_distance, 2),
+        "nodes_expanded": total_expanded,
+        "execution_time_ms": round(
+            (time.perf_counter() - started_at) * 1000,
+            2,
+        ),
+    }
+
+
+def _route_objective(result: Dict[str, Any], criterion: str) -> float:
+    """Return the pairwise score used by the ordering algorithm."""
+
+    normalized = criterion.lower().strip()
+    if normalized == "distance":
+        return float(result.get("total_distance_m", float("inf")))
+    if normalized == "hops":
+        return float(max(0, len(result.get("path_nodes", [])) - 1))
+    # The current dataset folds estimated travel time and congestion into cost.
+    return float(result.get("total_cost", float("inf")))
 
 
 def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "astar", emergency_only: bool = True) -> Dict[str, Any]:
@@ -349,6 +472,36 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
     nodes_expanded = 0
     found_goal_id = None
     trace_history = SearchTraceHistory()
+
+    def nearest_goal_distance(node_id: int) -> float:
+        """Estimate straight-line distance to the closest candidate hospital."""
+
+        node = graph_mgr.road_nodes.get(node_id)
+        if not node:
+            return 0.0
+        tree = (
+            graph_mgr.emergency_hospital_kdtree
+            if emergency_only and graph_mgr.emergency_hospital_kdtree is not None
+            else graph_mgr.hospital_kdtree
+        )
+        if tree is not None:
+            query = np.radians([node["lat"], node["lng"]])
+            distance_radians, _ = tree.query(query)
+            return float(distance_radians * 6371000.0)
+
+        distances = []
+        for hospital in target_hospitals:
+            target = graph_mgr.road_nodes.get(hospital["node_id"], hospital)
+            if "lat" in target and "lng" in target:
+                distances.append(
+                    haversine(
+                        node["lat"],
+                        node["lng"],
+                        target["lat"],
+                        target["lng"],
+                    )
+                )
+        return min(distances, default=0.0)
 
     # Nếu start_id trùng ngay 1 bệnh viện
     if start_id in goal_node_set:
@@ -445,6 +598,46 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
                 if nbr not in visited:
                     stack.append((nbr, curr))
 
+    elif algo in {"hill_climbing", "hill-climbing"}:
+        current = start_id
+        visited = {current}
+        while True:
+            nodes_expanded += 1
+            if current in goal_node_set:
+                trace_history.record_expansion(current, [])
+                found_goal_id = current
+                break
+
+            candidates = [
+                neighbor
+                for neighbor in graph_mgr.adj.get(current, {})
+                if neighbor not in visited
+            ]
+            ranked = sorted(
+                (nearest_goal_distance(node_id), repr(node_id), node_id)
+                for node_id in candidates
+            )
+            current_h = nearest_goal_distance(current)
+            can_advance = bool(ranked and ranked[0][0] < current_h)
+            selected = ranked[0][2] if can_advance else None
+            trace_history.record_expansion(
+                current,
+                [
+                    {
+                        "node_id": node_id,
+                        "h": round(score, 6),
+                        "priority": round(score, 6),
+                        "selected": node_id == selected,
+                    }
+                    for score, _key, node_id in ranked
+                ],
+            )
+            if selected is None:
+                break
+            parent[selected] = current
+            current = selected
+            visited.add(current)
+
     # Thuật toán 3: DIJKSTRA (Tìm bệnh viện có quãng đường thực tế ngắn nhất)
     elif algo == "dijkstra":
         pq = [(0.0, start_id)]
@@ -479,15 +672,7 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
         def h_multi(n_id: int) -> float:
             if algo == "ucs":
                 return 0.0
-            node = graph_mgr.road_nodes.get(n_id)
-            if not node:
-                return 0.0
-            tree = graph_mgr.emergency_hospital_kdtree if (emergency_only and graph_mgr.emergency_hospital_kdtree is not None) else graph_mgr.hospital_kdtree
-            if tree is not None:
-                q = np.radians([node["lat"], node["lng"]])
-                d_rad, _ = tree.query(q)
-                return float(d_rad * 6371000.0) * 0.035
-            return 0.0
+            return nearest_goal_distance(n_id) * 0.035
 
         pq = [(h_multi(start_id), 0.0, start_id)]
         g_scores = {start_id: 0.0}

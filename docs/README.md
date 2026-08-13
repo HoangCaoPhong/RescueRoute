@@ -18,6 +18,8 @@ Không chỉnh sửa các file nguồn để ghi quyết định mới. Thêm t�
     trong các thuật toán tìm kiếm và chuyển đổi sang response cho UI playback.
 - `algorithms/`: design, pseudocode, flowchart và benchmark của từng thuật toán.
 - `api/`: API contracts, schema và ví dụ request/response.
+  - `api/multi-location-routing.md`: API tối ưu thứ tự waypoint bằng Nearest
+    Neighbor hoặc Held-Karp.
 - `development/`: hướng dẫn môi trường, test, benchmark và release.
 - `diagrams/`: source của flowchart, sequence diagram và hình dùng trong báo cáo.
 - `meeting-notes/`: biên bản họp mới theo ngày `YYYY-MM-DD-topic.md`.

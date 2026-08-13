@@ -56,6 +56,15 @@ const ALGORITHM_SPECS = {
         explanation:
             "DFS đi sâu theo một nhánh trước. Thuật toán phù hợp để minh họa hành vi tìm kiếm nhưng không bảo đảm route tối ưu.",
     },
+    hill_climbing: {
+        label: "Hill Climbing",
+        objective: "heuristic Haversine cục bộ",
+        compatibleCriteria: [],
+        optimality: "Xấp xỉ cục bộ",
+        badgeClass: "warning",
+        explanation:
+            "Hill Climbing luôn chọn ứng viên có heuristic tốt nhất tại bước hiện tại; thuật toán nhanh nhưng có thể kẹt ở cực trị cục bộ và không bảo đảm tìm được route.",
+    },
 };
 
 const CRITERION_LABELS = {
@@ -643,69 +652,31 @@ async function runOrderedRoute(
     return segments;
 }
 
-async function optimizeWaypointOrder(input, progressCallback = () => { }) {
-    const remaining = [...input.waypointIds];
-    const orderedWaypoints = [];
-    const segments = [];
-    let current = input.startNodeId;
-    let requestCount = 0;
-    const expectedRequests = (remaining.length * (remaining.length + 1)) / 2 + 1;
-
-    while (remaining.length) {
-        const candidates = [];
-        for (const candidate of remaining) {
-            requestCount += 1;
-            progressCallback(requestCount, expectedRequests);
-            try {
-                const result = await runRouteSegment(
-                    current,
-                    candidate,
-                    input.algorithm,
-                );
-                candidates.push({
-                    candidate,
-                    result,
-                    score: scoreResult(result, input.criterion),
-                });
-            } catch (error) {
-                console.warn(
-                    `Waypoint ${candidate} is unreachable from ${current}:`,
-                    error,
-                );
-            }
-        }
-
-        if (!candidates.length) {
-            throw new Error(
-                `Không thể đi từ node ${current} tới bất kỳ điểm trung gian còn lại.`,
-            );
-        }
-
-        candidates.sort((a, b) => a.score - b.score || a.candidate - b.candidate);
-        const selected = candidates[0];
-        orderedWaypoints.push(selected.candidate);
-        segments.push({
-            start: current,
-            goal: selected.candidate,
-            result: selected.result,
-        });
-        current = selected.candidate;
-        remaining.splice(remaining.indexOf(selected.candidate), 1);
-    }
-
-    requestCount += 1;
-    progressCallback(requestCount, expectedRequests);
-    const finalResult = await runRouteSegment(
-        current,
-        input.goalNodeId,
-        input.algorithm,
-    );
-    segments.push({
-        start: current,
-        goal: input.goalNodeId,
-        result: finalResult,
+async function optimizeWaypointOrderOnBackend(input) {
+    const response = await fetchJson(`${API_BASE}/route/multi-location`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            start_node_id: input.startNodeId,
+            waypoint_ids: input.waypointIds,
+            goal_node_id: input.goalNodeId,
+            route_algorithm: input.algorithm,
+            optimization_method: input.visitOrderMode,
+            criterion: input.criterion,
+        }),
     });
-    return { orderedWaypoints, segments };
+    if (!response?.found) {
+        throw new Error(response?.message || "Không thể tối ưu thứ tự điểm ghé.");
+    }
+    return {
+        orderedWaypoints: response.ordered_waypoints || [],
+        segments: (response.segments || []).map((segment) => ({
+            start: segment.start,
+            goal: segment.goal,
+            result: annotateResult(segment.result),
+        })),
+        isOptimal: Boolean(response.is_optimal),
+    };
 }
 
 function aggregateSegments(segments, visitingOrder) {
@@ -787,7 +758,7 @@ async function calculateRoute() {
         let selectedOrder = originalOrder;
         let originalAggregate = null;
 
-        if (input.visitOrderMode === "nearest" && input.waypointIds.length > 1) {
+        if (input.visitOrderMode !== "input" && input.waypointIds.length > 1) {
             const originalSegments = await runOrderedRoute(
                 originalOrder,
                 input.algorithm,
@@ -799,11 +770,10 @@ async function calculateRoute() {
             );
             originalAggregate = aggregateSegments(originalSegments, originalOrder);
 
-            const optimized = await optimizeWaypointOrder(input, (current, total) => {
-                setOperationStatus(
-                    `Nearest Neighbor đang đánh giá tuyến ứng viên ${current}/${total}…`,
-                );
-            });
+            setOperationStatus(
+                `${visitOrderLabel(input.visitOrderMode)} đang tối ưu thứ tự trên backend…`,
+            );
+            const optimized = await optimizeWaypointOrderOnBackend(input);
             selectedOrder = [
                 input.startNodeId,
                 ...optimized.orderedWaypoints,
@@ -879,7 +849,12 @@ function renderRouteResult(aggregate, input, originalAggregate) {
     setText("resTime", `${aggregate.totalProcessingTime.toFixed(2)} ms`);
 
     renderVisitingOrder(aggregate.visitingOrder);
-    renderOrderComparison(aggregate, originalAggregate, input.criterion);
+    renderOrderComparison(
+        aggregate,
+        originalAggregate,
+        input.criterion,
+        input.visitOrderMode,
+    );
     renderExplanation(aggregate, input, spec);
     renderCongestionExplanation(aggregate);
     renderSegmentList(aggregate.segments);
@@ -899,9 +874,7 @@ function renderRouteSummary(aggregate, input) {
         ],
         [
             "Cách sắp thứ tự",
-            input.visitOrderMode === "nearest"
-                ? "Nearest Neighbor (xấp xỉ)"
-                : "Theo thứ tự nhập",
+            visitOrderLabel(input.visitOrderMode),
         ],
     ];
 
@@ -934,7 +907,7 @@ function renderVisitingOrder(order) {
     });
 }
 
-function renderOrderComparison(optimized, original, criterion) {
+function renderOrderComparison(optimized, original, criterion, method) {
     const container = byId("orderComparison");
     if (!original) {
         container.hidden = true;
@@ -953,7 +926,8 @@ function renderOrderComparison(optimized, original, criterion) {
         difference >= 0
             ? `cải thiện ${difference.toFixed(1)}%`
             : `cao hơn ${Math.abs(difference).toFixed(1)}%`;
-    container.textContent = `Thứ tự nhập: ${originalOrder}. Thứ tự Nearest Neighbor: ${optimizedOrder}. Theo “${CRITERION_LABELS[criterion]}”, phương án xấp xỉ ${outcome}.`;
+    const guarantee = method === "held_karp" ? "phương án tối ưu" : "phương án xấp xỉ";
+    container.textContent = `Thứ tự nhập: ${originalOrder}. Thứ tự ${visitOrderLabel(method)}: ${optimizedOrder}. Theo “${CRITERION_LABELS[criterion]}”, ${guarantee} ${outcome}.`;
     container.hidden = false;
 }
 
@@ -974,7 +948,7 @@ function renderExplanation(aggregate, input, spec) {
 
     setText(
         "routeExplanation",
-        `${spec.explanation} ${criterionSentence} ${multiLocationSentence} ${traceSentence} Dùng bảng “So sánh 5 thuật toán” để đối chiếu một route thay thế trên cùng đầu vào.`,
+        `${spec.explanation} ${criterionSentence} ${multiLocationSentence} ${traceSentence} Dùng bảng “So sánh 6 thuật toán” để đối chiếu một route thay thế trên cùng đầu vào.`,
     );
 }
 
@@ -1291,6 +1265,14 @@ function renderSearchStep(stepIndex) {
     const frontier = rawFrontier.filter(
         (item) => String(item.node_id) !== String(step.current_node),
     );
+    const currentWasInFrontier = rawFrontier.some(
+        (item) => String(item.node_id) === String(step.current_node),
+    );
+    const fullFrontierCount = Math.max(
+        0,
+        Number(step.frontier_size ?? rawFrontier.length) -
+        (currentWasInFrontier ? 1 : 0),
+    );
     const nodeCoords = searchVisualizationData.node_coords || {};
     let visitedMarkersDrawn = 0;
     let frontierMarkersDrawn = 0;
@@ -1382,14 +1364,14 @@ function renderSearchStep(stepIndex) {
         visitedMarkersDrawn,
         frontierMarkersDrawn,
         visitedOrder.length,
-        frontier.length,
+        fullFrontierCount,
     );
 
     setText("vizAlgorithm", searchVisualizationData.algorithm);
     setText("vizStep", `Bước ${safeIndex + 1} / ${steps.length}`);
     setText("vizCurrentNode", step.current_node ?? "—");
     setText("vizVisitedCount", visitedOrder.length.toLocaleString("vi-VN"));
-    setText("vizFrontierCount", frontier.length.toLocaleString("vi-VN"));
+    setText("vizFrontierCount", fullFrontierCount.toLocaleString("vi-VN"));
     setText(
         "vizFrontierLabel",
         frontierKindLabel(searchVisualizationData.frontier_kind),
@@ -1406,14 +1388,14 @@ function renderSearchStep(stepIndex) {
     );
 
     const omittedVisited = Math.max(0, visitedOrder.length - MAX_TRACE_TOKENS);
-    const omittedFrontier = Math.max(0, frontier.length - MAX_TRACE_TOKENS);
+    const omittedFrontier = Math.max(0, fullFrontierCount - MAX_TRACE_TOKENS);
     const legText =
         step.legTotal > 1
             ? `Chặng ${step.legIndex}/${step.legTotal} (${step.routeStart} → ${step.routeGoal}). `
             : "";
     setText(
         "vizExplanation",
-        `${legText}Màu vàng là các node đã duyệt trước bước hiện tại, cam là node đang mở và xanh dương là frontier đang chờ trong queue.${omittedVisited || omittedFrontier ? ` Danh sách rút gọn ${omittedVisited} visited và ${omittedFrontier} frontier để giao diện không bị quá tải.` : ""}`,
+        `${legText}Màu vàng là các node đã duyệt trước bước hiện tại, cam là node đang mở và xanh dương là ${frontierKindLabel(searchVisualizationData.frontier_kind).toLowerCase()}.${omittedVisited || omittedFrontier ? ` Danh sách rút gọn ${omittedVisited} visited và ${omittedFrontier} frontier để giao diện không bị quá tải.` : ""}`,
     );
 }
 
@@ -1431,7 +1413,7 @@ function updateMapTraceStatus(
     status.classList.toggle("is-warning", missingCurrent);
     status.textContent = missingCurrent
         ? `Không có tọa độ cho node ${step.current_node}; map không thể đặt marker ở bước này. Đã vẽ ${visitedDrawn}/${visitedTotal} visited và ${frontierDrawn}/${frontierTotal} frontier có tọa độ.`
-        : `Map đã vẽ ${visitedDrawn} visited, ${frontierDrawn} frontier và marker xanh lá cho node ${step.current_node}.`;
+        : `Map đã vẽ ${visitedDrawn} visited, ${frontierDrawn} frontier và marker cam cho node ${step.current_node}.`;
 }
 
 function focusCurrentSearchNode(coords, stepIndex) {
@@ -1463,7 +1445,10 @@ function formatFrontierItem(item) {
     const costs = ["g", "h", "f", "cost", "priority"]
         .filter((key) => item[key] !== undefined)
         .map((key) => `${key}=${Number(item[key]).toFixed(2)}`);
-    return [String(item.node_id ?? "—"), ...costs].join(" · ");
+    const selection = item.selected ? "✓ được chọn" : null;
+    return [String(item.node_id ?? "—"), ...costs, selection]
+        .filter(Boolean)
+        .join(" · ");
 }
 
 function frontierKindLabel(kind) {
@@ -1474,6 +1459,15 @@ function frontierKindLabel(kind) {
         candidates: "Ứng viên",
     };
     return labels[kind] || "Frontier";
+}
+
+function visitOrderLabel(method) {
+    const labels = {
+        input: "Theo thứ tự nhập",
+        nearest_neighbor: "Nearest Neighbor (xấp xỉ)",
+        held_karp: "Held–Karp (tối ưu)",
+    };
+    return labels[method] || method;
 }
 
 function previousSearchStep() {
@@ -1525,14 +1519,21 @@ async function compareAlgorithms() {
         return;
     }
 
-    const algorithms = ["bfs", "dfs", "ucs", "astar", "dijkstra"];
+    const algorithms = [
+        "bfs",
+        "dfs",
+        "ucs",
+        "astar",
+        "dijkstra",
+        "hill_climbing",
+    ];
     const nodeOrder = [input.startNodeId, ...input.waypointIds, input.goalNodeId];
     const results = [];
     setButtonBusy(
         "btnCompareAlgorithms",
         true,
         "Đang so sánh…",
-        "So sánh 5 thuật toán",
+        "So sánh 6 thuật toán",
     );
     byId("btnCalculateRoute").disabled = true;
     byId("comparisonPanel").hidden = true;
@@ -1556,13 +1557,13 @@ async function compareAlgorithms() {
         }
         renderComparison(results, input);
         setOperationStatus("Đã hoàn tất bảng so sánh trên cùng đầu vào.");
-        showToast("Đã so sánh xong 5 thuật toán.");
+        showToast("Đã so sánh xong 6 thuật toán.");
     } finally {
         setButtonBusy(
             "btnCompareAlgorithms",
             false,
             "Đang so sánh…",
-            "So sánh 5 thuật toán",
+            "So sánh 6 thuật toán",
         );
         byId("btnCalculateRoute").disabled = false;
     }
@@ -1619,8 +1620,8 @@ function renderComparison(results, input) {
     });
 
     const modeNote =
-        input.visitOrderMode === "nearest" && input.waypointIds.length > 1
-            ? "Bảng so sánh giữ nguyên thứ tự điểm đã nhập để mọi thuật toán nhận cùng điều kiện; không chạy Nearest Neighbor."
+        input.visitOrderMode !== "input" && input.waypointIds.length > 1
+            ? "Bảng so sánh giữ nguyên thứ tự điểm đã nhập để mọi thuật toán nhận cùng điều kiện; không chạy tối ưu thứ tự."
             : "Mọi thuật toán nhận cùng start, destination và thứ tự điểm trung gian.";
     setText(
         "comparisonNote",
