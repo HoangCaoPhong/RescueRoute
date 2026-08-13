@@ -89,8 +89,21 @@
                             <input id="inputStartNode" type="number" placeholder="Nhập start node id" style="display: none; margin-top: 4px;" />
                         </div>
 
-                        <div class="control-block">
-                            <label style="font-size: 0.75rem; color: var(--text-muted);">Bệnh viện / Trạm cứu hộ đích:</label>
+                        <div class="control-block full-width">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                                <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Bệnh viện / Trạm cứu hộ đích:</label>
+                                <button type="button" style="background: rgba(244, 63, 94, 0.2); border: 1px solid rgba(244, 63, 94, 0.5); color: #fda4af; font-size: 0.72rem; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-weight: 700;" onclick="selectNearestHospital()">🚨 BV Gần Nhất</button>
+                            </div>
+                            <input type="text" id="inputSearchHospital" placeholder="🔍 Gõ tìm BV (VD: Chợ Rẫy, 115, Bình Tân...)" 
+                                   style="width: 100%; box-sizing: border-box; padding: 6px 10px; background: rgba(0,0,0,0.35); border: 1px solid var(--border-color); border-radius: 6px; color: #fff; font-size: 0.75rem; margin-bottom: 4px;" 
+                                   oninput="populateHospitalSelect()" />
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; margin-bottom: 4px;">
+                                <label style="color: #fda4af; cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: 600;">
+                                    <input type="checkbox" id="chkEmergencyOnly" checked onchange="populateHospitalSelect()" style="cursor: pointer; accent-color: var(--accent-rose);" />
+                                    🚨 Lọc BV Cấp Cứu / Đa Khoa
+                                </label>
+                                <span id="hospitalCountBadge" style="color: var(--text-muted); font-family: monospace;">(Đang tải...)</span>
+                            </div>
                             <select id="selectHospital" onchange="onHospitalSelectChange()"></select>
                         </div>
 
