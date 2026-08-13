@@ -12,6 +12,8 @@ Không chỉnh sửa các file nguồn để ghi quyết định mới. Thêm t�
 ## Tài liệu sẽ phát triển
 
 - `architecture/`: sơ đồ hệ thống, ADR và quyết định kỹ thuật.
+  - `architecture/search-visualization-contract.md`: contract trả kết quả route
+    và trace cho mô phỏng phía frontend.
 - `algorithms/`: design, pseudocode, flowchart và benchmark của từng thuật toán.
 - `api/`: API contracts, schema và ví dụ request/response.
 - `development/`: hướng dẫn môi trường, test, benchmark và release.

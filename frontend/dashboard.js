@@ -733,8 +733,10 @@ async function calculateRoute() {
             selectedSegments,
             input.algorithm,
         );
-        if (combinedTrace) await startSearchVisualization(combinedTrace);
-        else clearSearchVisualization();
+        if (combinedTrace) {
+            await startSearchVisualization(combinedTrace);
+            playSearchAnimation();
+        } else clearSearchVisualization();
 
         setOperationStatus(
             `Hoàn tất ${selectedSegments.length} chặng bằng ${ALGORITHM_SPECS[input.algorithm].label}.`,
@@ -1397,6 +1399,11 @@ function toggleSearchAnimation() {
         stopSearchAnimation();
         return;
     }
+    playSearchAnimation();
+}
+
+function playSearchAnimation() {
+    if (!searchVisualizationData || searchAnimationTimer) return;
     if (searchStepIndex >= searchVisualizationData.steps.length - 1)
         renderSearchStep(0);
     setText("btnPlaySearch", "⏸ Tạm dừng");
