@@ -41,7 +41,11 @@ Dashboard đang gọi trực tiếp các endpoint như:
 - `/api/nodes`
 - `/api/edges`
 - `/api/ambulance/location`
-- `/api/route/search`
+- `/api/route`
+
+`POST /api/route` returns the completed route and its `search_trace` in one JSON
+response. The dashboard uses that saved trace to animate the search locally; it
+does not ask the backend to calculate each visualization step.
 
 ## Chạy Dashboard Prototype
 
