@@ -24,7 +24,9 @@ PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-DASHBOARD_FILE = os.path.join(BASE_DIR, "dashboard.html")
+DASHBOARD_HTML = os.path.join(BASE_DIR, "../frontend/dashboard.html")
+DASHBOARD_JS = os.path.join(BASE_DIR, "../frontend/dashboard.js")
+DASHBOARD_CSS = os.path.join(BASE_DIR, "../frontend/dashboard.css")
 DATA_DIR = os.path.abspath(os.path.join(BASE_DIR, "../data/processed"))
 
 # ==========================================
@@ -210,9 +212,23 @@ from backend.app.services.routing_service import run_search, haversine
 @app.get("/dashboard", response_class=FileResponse)
 async def serve_dashboard():
     """Mở trực tiếp giao diện Dashboard bản đồ"""
-    if os.path.exists(DASHBOARD_FILE):
-        return FileResponse(DASHBOARD_FILE)
+    if os.path.exists(DASHBOARD_HTML):
+        return FileResponse(DASHBOARD_HTML)
     return {"message": "dashboard.html không tìm thấy"}
+
+@app.get("/dashboard.js", response_class=FileResponse)
+async def serve_dashboard_js():
+    """Serve the dashboard javascript file"""
+    if os.path.exists(DASHBOARD_JS):
+        return FileResponse(DASHBOARD_JS)
+    return {"message": "dashboard.js không tìm thấy"}
+
+@app.get("/dashboard.css", response_class=FileResponse)
+async def serve_dashboard_css():
+    """Serve the dashboard css file"""
+    if os.path.exists(DASHBOARD_CSS):
+        return FileResponse(DASHBOARD_CSS)
+    return {"message": "dashboard.css không tìm thấy"}
 
 @app.get("/api/health")
 @app.get("/api/v1/health")
