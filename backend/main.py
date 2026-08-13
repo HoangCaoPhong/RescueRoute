@@ -1,3 +1,4 @@
+import sys
 import os
 import gc
 import time
@@ -19,7 +20,13 @@ from pydantic import BaseModel
 # 1. Đường dẫn tệp & Dữ liệu
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DASHBOARD_FILE = os.path.join(BASE_DIR, "dashboard.html")
+PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+DASHBOARD_HTML = os.path.join(BASE_DIR, "../frontend/dashboard.html")
+DASHBOARD_JS = os.path.join(BASE_DIR, "../frontend/dashboard.js")
+DASHBOARD_CSS = os.path.join(BASE_DIR, "../frontend/dashboard.css")
 DATA_DIR = os.path.abspath(os.path.join(BASE_DIR, "../data/processed"))
 
 # ==========================================
@@ -36,6 +43,7 @@ class GraphManager:
         self.kdtree = None
         self.road_node_ids_array = np.array([])
         self.hospitals = []
+        self.hospital_kdtree = None
         self.pois = []
         self.dynamic_edges_count = 0
         self.ambulance_lat = 10.7735
@@ -114,6 +122,13 @@ class GraphManager:
         self.hospitals = hospitals_list
         self.pois = pois_list
         self.nodes = self.road_nodes # Alias cho tương thích
+
+        # KDTree cho tra cứu bệnh viện gần nhất siêu nhanh (< 0.1ms)
+        h_coords = [(h["lat"], h["lng"]) for h in self.hospitals]
+        if len(h_coords) > 0:
+            h_coords_rad = np.radians(np.array(h_coords))
+            self.hospital_kdtree = cKDTree(h_coords_rad)
+
         self.is_loaded = True
         
     def find_nearest_road_node(self, lat: float, lng: float) -> Tuple[Optional[Dict[str, Any]], float]:
@@ -124,6 +139,25 @@ class GraphManager:
         dist_m = float(dist_rad * 6371000.0)
         nearest_id = int(self.road_node_ids_array[idx])
         return self.road_nodes.get(nearest_id), round(dist_m, 1)
+
+    def find_nearest_hospital(self, lat: float, lng: float) -> Tuple[Optional[Dict[str, Any]], float]:
+        if not self.hospitals:
+            return None, 0.0
+        if self.hospital_kdtree is not None and len(self.hospitals) > 0:
+            query_pt = np.radians([lat, lng])
+            dist_rad, idx = self.hospital_kdtree.query(query_pt)
+            dist_m = float(dist_rad * 6371000.0)
+            return self.hospitals[idx], round(dist_m, 1)
+        
+        # Fallback tra cứu bằng khoảng cách Haversine
+        best_h = None
+        min_dist = float('inf')
+        for h in self.hospitals:
+            d = haversine(lat, lng, h["lat"], h["lng"])
+            if d < min_dist:
+                min_dist = d
+                best_h = h
+        return best_h, round(min_dist, 1)
 
 # Nạp dữ liệu ngay khi khởi động
 graph_mgr = GraphManager()
@@ -153,6 +187,10 @@ class AmbulanceLocationRequest(BaseModel):
     lat: float
     lng: float
 
+class NearestHospitalRequest(BaseModel):
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
 class RouteRequest(BaseModel):
     start_node_id: Optional[int] = None
     goal_node_id: int
@@ -165,7 +203,7 @@ class CongestionRequest(BaseModel):
 # ==========================================
 # 5. Thuật toán Tìm đường trên Đồ thị
 # ==========================================
-from backend.app.services.routing_service import run_search
+from backend.app.services.routing_service import run_search, haversine
 
 # ==========================================
 # 6. Các API Endpoints
@@ -174,9 +212,23 @@ from backend.app.services.routing_service import run_search
 @app.get("/dashboard", response_class=FileResponse)
 async def serve_dashboard():
     """Mở trực tiếp giao diện Dashboard bản đồ"""
-    if os.path.exists(DASHBOARD_FILE):
-        return FileResponse(DASHBOARD_FILE)
+    if os.path.exists(DASHBOARD_HTML):
+        return FileResponse(DASHBOARD_HTML)
     return {"message": "dashboard.html không tìm thấy"}
+
+@app.get("/dashboard.js", response_class=FileResponse)
+async def serve_dashboard_js():
+    """Serve the dashboard javascript file"""
+    if os.path.exists(DASHBOARD_JS):
+        return FileResponse(DASHBOARD_JS)
+    return {"message": "dashboard.js không tìm thấy"}
+
+@app.get("/dashboard.css", response_class=FileResponse)
+async def serve_dashboard_css():
+    """Serve the dashboard css file"""
+    if os.path.exists(DASHBOARD_CSS):
+        return FileResponse(DASHBOARD_CSS)
+    return {"message": "dashboard.css không tìm thấy"}
 
 @app.get("/api/health")
 @app.get("/api/v1/health")
@@ -204,6 +256,53 @@ async def get_nodes(poi_type: Optional[str] = Query("hospital"), limit: int = Qu
     if poi_type == "all":
         return (graph_mgr.hospitals + graph_mgr.pois)[:limit]
     return [p for p in graph_mgr.pois if p["type"] and poi_type.lower() in p["type"].lower()][:limit]
+
+@app.get("/api/hospitals/nearest")
+@app.get("/api/v1/hospitals/nearest")
+async def get_nearest_hospital(
+    lat: Optional[float] = Query(None, description="Vĩ độ vị trí truy vấn (mặc định lấy theo vị trí xe cấp cứu)"),
+    lng: Optional[float] = Query(None, description="Kinh độ vị trí truy vấn (mặc định lấy theo vị trí xe cấp cứu)")
+):
+    """Tìm bệnh viện / cơ sở y tế gần nhất theo tọa độ GPS bằng KD-Tree"""
+    query_lat = lat if lat is not None else graph_mgr.ambulance_lat
+    query_lng = lng if lng is not None else graph_mgr.ambulance_lng
+
+    nearest_hospital, dist_m = graph_mgr.find_nearest_hospital(query_lat, query_lng)
+    if not nearest_hospital:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bệnh viện nào trong hệ thống")
+
+    return {
+        "status": "success",
+        "query_location": {
+            "lat": query_lat,
+            "lng": query_lng
+        },
+        "nearest_hospital": nearest_hospital,
+        "distance_meters": dist_m,
+        "distance_km": round(dist_m / 1000.0, 2)
+    }
+
+@app.post("/api/hospitals/nearest")
+@app.post("/api/v1/hospitals/nearest")
+async def post_nearest_hospital(body: Optional[NearestHospitalRequest] = None):
+    """Tìm bệnh viện / cơ sở y tế gần nhất qua POST request"""
+    query_lat = body.lat if (body and body.lat is not None) else graph_mgr.ambulance_lat
+    query_lng = body.lng if (body and body.lng is not None) else graph_mgr.ambulance_lng
+
+    nearest_hospital, dist_m = graph_mgr.find_nearest_hospital(query_lat, query_lng)
+    if not nearest_hospital:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bệnh viện nào trong hệ thống")
+
+    return {
+        "status": "success",
+        "query_location": {
+            "lat": query_lat,
+            "lng": query_lng
+        },
+        "nearest_hospital": nearest_hospital,
+        "distance_meters": dist_m,
+        "distance_km": round(dist_m / 1000.0, 2)
+    }
 
 @app.get("/api/edges")
 @app.get("/api/v1/edges")
