@@ -20,6 +20,20 @@ python -m scripts.dataset_2_graph
 
 Cách chạy này áp dụng cho mọi file python bên trong thư mục `scripts/`.
 
+## Data builders
+
+- `build_simulated_traffic_sample.py`: tạo fixture 40 node/60 edge dùng cho
+  unit test nhỏ.
+- `build_hcmus_minimap_edges.py`: gom các bảng HCMUS minimap thành
+  `edges.csv` có đủ distance, estimated time, congestion và road type.
+- `dataset_2_graph.py`: nạp processed data thành adjacency graph cho runtime.
+
+Chạy data builder từ root project, ví dụ:
+
+```bash
+python scripts/build_hcmus_minimap_edges.py
+```
+
 # Dành cho các file .ipynb
 
 Thư mục này cũng chứa các notebook Jupyter để clean dữ liệu, trực quan hóa graph và thử nghiệm thuật toán. Các notebook này có thể được mở trực tiếp trong VSCode hoặc Jupyter Notebook.
