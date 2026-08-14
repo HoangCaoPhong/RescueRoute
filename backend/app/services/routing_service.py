@@ -226,30 +226,15 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
 
         try:
             if algo.startswith("hill"):
-                result = solve_hill_climbing(
-                    graph_mgr.adj,
-                    start_id,
-                    goal_id,
+                result = solve_hill_climbing (graph_mgr.adj, start_id, goal_id,
                     lambda node_id, _goal_id: h(node_id),
                 )
             elif algo == "ucs":
-                result = solve_ucs(
-                    graph_mgr.adj,
-                    start_id,
-                    goal_id,
-                )
+                result = solve_ucs(graph_mgr.adj, start_id, goal_id)
             elif algo == "dijkstra":
-                result = solve_dijkstra(
-                    graph_mgr.adj,
-                    start_id,
-                    goal_id,
-                    edge_cost=distance_edge_cost,
-                )
+                result = solve_dijkstra(graph_mgr.adj, start_id, goal_id, edge_cost=distance_edge_cost)
             else:
-                result = solve_astar(
-                    graph_mgr.adj,
-                    start_id,
-                    goal_id,
+                result = solve_astar(graph_mgr.adj, start_id, goal_id,
                     lambda node_id, _goal_id: h(node_id),
                 )
         except SearchFailure as error:
