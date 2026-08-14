@@ -4,6 +4,8 @@ from collections.abc import Mapping, Sequence
 from math import isfinite
 from typing import Any
 
+from backend.app.algorithms.optimization.utils import get_pairwise_cost
+
 
 MAX_HELD_KARP_WAYPOINTS = 10
 
@@ -22,7 +24,7 @@ def optimize_held_karp(
             f"Held-Karp supports at most {MAX_HELD_KARP_WAYPOINTS} waypoints."
         )
     if not waypoints:
-        direct_cost = _cost(pair_costs, start_node_id, goal_node_id)
+        direct_cost = get_pairwise_cost(pair_costs, start_node_id, goal_node_id)
         if not isfinite(direct_cost):
             raise ValueError(f"No route from '{start_node_id}' to '{goal_node_id}'.")
         return {
@@ -35,7 +37,7 @@ def optimize_held_karp(
     # (visited_mask, last_index) -> (cost, predecessor_index)
     dp: dict[tuple[int, int], tuple[float, int | None]] = {}
     for index, waypoint in enumerate(waypoints):
-        initial_cost = _cost(pair_costs, start_node_id, waypoint)
+        initial_cost = get_pairwise_cost(pair_costs, start_node_id, waypoint)
         if isfinite(initial_cost):
             dp[(1 << index, index)] = (initial_cost, None)
 
@@ -49,7 +51,7 @@ def optimize_held_karp(
                 if mask & (1 << nxt):
                     continue
                 new_mask = mask | (1 << nxt)
-                transition_cost = _cost(
+                transition_cost = get_pairwise_cost(
                     pair_costs,
                     waypoints[last],
                     waypoints[nxt],
@@ -65,7 +67,7 @@ def optimize_held_karp(
     final_candidates = [
         (
             dp[(full_mask, last)][0]
-            + _cost(pair_costs, waypoints[last], goal_node_id),
+            + get_pairwise_cost(pair_costs, waypoints[last], goal_node_id),
             last,
         )
         for last in range(len(waypoints))
@@ -92,13 +94,3 @@ def optimize_held_karp(
         "method": "held_karp",
     }
 
-
-def _cost(
-    pair_costs: Mapping[tuple[Any, Any], float],
-    source: Any,
-    target: Any,
-) -> float:
-    value = float(pair_costs.get((source, target), float("inf")))
-    if value < 0:
-        raise ValueError("Pair costs must be non-negative.")
-    return value

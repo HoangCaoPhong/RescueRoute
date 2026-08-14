@@ -7,6 +7,11 @@ from math import isfinite
 from time import perf_counter
 from typing import Any
 
+from backend.app.algorithms.optimization.utils import (
+    calculate_route_cost,
+    validate_locations_and_matrix,
+)
+
 
 def solve_genetic_algorithm(
     locations: list[Any],
@@ -49,7 +54,7 @@ def solve_genetic_algorithm(
     if start_city not in locations or end_city not in locations:
         raise ValueError(f"Start city '{start_city}' or end city '{end_city}' is missing.")
 
-    remaining = _validate_inputs(locations, distance_matrix, start_city, end_city)
+    remaining = validate_locations_and_matrix(locations, distance_matrix, start_city, end_city)
     rng = random.Random(seed)
     population_size = max(2, population_size)
     generations = max(1, generations)
@@ -63,11 +68,11 @@ def solve_genetic_algorithm(
             rng.shuffle(route[1:-1])
             population.append(route)
 
-        best_route = min(population, key=lambda route: _route_cost(route, distance_matrix))
-        best_cost = _route_cost(best_route, distance_matrix)
+        best_route = min(population, key=lambda route: calculate_route_cost(route, distance_matrix))
+        best_cost = calculate_route_cost(best_route, distance_matrix)
 
         for _ in range(generations):
-            scored = [(route, _route_cost(route, distance_matrix)) for route in population]
+            scored = [(route, calculate_route_cost(route, distance_matrix)) for route in population]
             scored.sort(key=lambda item: item[1])
             elites = [route for route, _ in scored[: max(2, population_size // 2)]]
             next_population = elites[:]
@@ -84,13 +89,13 @@ def solve_genetic_algorithm(
                     next_population.append(child)
 
             population = next_population
-            candidate = min(population, key=lambda route: _route_cost(route, distance_matrix))
-            candidate_cost = _route_cost(candidate, distance_matrix)
+            candidate = min(population, key=lambda route: calculate_route_cost(route, distance_matrix))
+            candidate_cost = calculate_route_cost(candidate, distance_matrix)
             if candidate_cost < best_cost:
                 best_route = candidate
                 best_cost = candidate_cost
 
-    objective_cost = float(_route_cost(best_route, distance_matrix))
+    objective_cost = float(calculate_route_cost(best_route, distance_matrix))
     return {
         "found": True,
         "path": best_route,
@@ -113,40 +118,6 @@ def solve_genetic_algorithm(
         },
     }
 
-
-def _validate_inputs(
-    locations: list[Any],
-    distance_matrix: dict[Any, dict[Any, float]],
-    start_city: Any,
-    end_city: Any,
-) -> list[Any]:
-    if start_city not in locations:
-        raise ValueError(f"Start city '{start_city}' is not in locations.")
-    if end_city not in locations:
-        raise ValueError(f"End city '{end_city}' is not in locations.")
-    if start_city == end_city:
-        return [start_city]
-
-    missing = [city for city in locations if city not in distance_matrix]
-    if missing:
-        raise ValueError(f"Missing city entries in distance matrix: {missing}")
-
-    for city, row in distance_matrix.items():
-        for target in row:
-            if target not in distance_matrix:
-                raise ValueError(f"Distance matrix is incomplete for city '{target}'.")
-
-    return [city for city in locations if city not in {start_city, end_city}]
-
-
-def _route_cost(route: list[Any], distance_matrix: dict[Any, dict[Any, float]]) -> float:
-    total = 0.0
-    for source, target in zip(route, route[1:]):
-        value = float(distance_matrix[source][target])
-        if not isfinite(value) or value < 0:
-            raise ValueError(f"Edge cost from '{source}' to '{target}' must be finite and non-negative.")
-        total += value
-    return total
 
 
 def _mutate(route: list[Any], rng: random.Random) -> list[Any]:

@@ -4,6 +4,8 @@ from collections.abc import Mapping, Sequence
 from math import isfinite
 from typing import Any
 
+from backend.app.algorithms.optimization.utils import get_pairwise_cost
+
 
 def optimize_nearest_neighbor(
     start_node_id: Any,
@@ -20,7 +22,7 @@ def optimize_nearest_neighbor(
 
     while remaining:
         candidates = [
-            (_cost(pair_costs, current, node_id), repr(node_id), node_id)
+            (get_pairwise_cost(pair_costs, current, node_id), repr(node_id), node_id)
             for node_id in remaining
         ]
         cost, _key, selected = min(candidates)
@@ -33,7 +35,7 @@ def optimize_nearest_neighbor(
         remaining.remove(selected)
         current = selected
 
-    final_cost = _cost(pair_costs, current, goal_node_id)
+    final_cost = get_pairwise_cost(pair_costs, current, goal_node_id)
     if not isfinite(final_cost):
         raise ValueError(f"No route from '{current}' to '{goal_node_id}'.")
     total_cost += final_cost
@@ -45,13 +47,3 @@ def optimize_nearest_neighbor(
         "method": "nearest_neighbor",
     }
 
-
-def _cost(
-    pair_costs: Mapping[tuple[Any, Any], float],
-    source: Any,
-    target: Any,
-) -> float:
-    value = float(pair_costs.get((source, target), float("inf")))
-    if value < 0:
-        raise ValueError("Pair costs must be non-negative.")
-    return value

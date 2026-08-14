@@ -12,6 +12,11 @@ import random
 from time import perf_counter
 from typing import Any
 
+from backend.app.algorithms.optimization.utils import (
+    calculate_route_cost,
+    validate_locations_and_matrix,
+)
+
 
 def solve_simulated_annealing(
     locations: list[Any],
@@ -53,17 +58,17 @@ def solve_simulated_annealing(
     if start_city not in locations or end_city not in locations:
         raise ValueError(f"Start city '{start_city}' or end city '{end_city}' is missing.")
 
-    remaining = _validate_inputs(locations, distance_matrix, start_city, end_city)
+    remaining = validate_locations_and_matrix(locations, distance_matrix, start_city, end_city)
     rng = random.Random(seed)
 
     if not remaining:
         best_route = [start_city, end_city]
-        best_cost = _route_cost(best_route, distance_matrix)
+        best_cost = calculate_route_cost(best_route, distance_matrix)
     else:
         # Create an initial route
         current_route = [start_city] + remaining[:] + [end_city]
         rng.shuffle(current_route[1:-1])
-        current_cost = _route_cost(current_route, distance_matrix)
+        current_cost = calculate_route_cost(current_route, distance_matrix)
 
         best_route = list(current_route)
         best_cost = current_cost
@@ -74,7 +79,7 @@ def solve_simulated_annealing(
         while temp > min_temperature:
             for _ in range(iterations_per_temp):
                 neighbor = _get_neighbor(current_route, rng)
-                neighbor_cost = _route_cost(neighbor, distance_matrix)
+                neighbor_cost = calculate_route_cost(neighbor, distance_matrix)
 
                 delta_cost = neighbor_cost - current_cost
 
@@ -110,40 +115,6 @@ def solve_simulated_annealing(
         },
     }
 
-
-def _validate_inputs(
-    locations: list[Any],
-    distance_matrix: dict[Any, dict[Any, float]],
-    start_city: Any,
-    end_city: Any,
-) -> list[Any]:
-    if start_city not in locations:
-        raise ValueError(f"Start city '{start_city}' is not in locations.")
-    if end_city not in locations:
-        raise ValueError(f"End city '{end_city}' is not in locations.")
-    if start_city == end_city:
-        return [start_city]
-
-    missing = [city for city in locations if city not in distance_matrix]
-    if missing:
-        raise ValueError(f"Missing city entries in distance matrix: {missing}")
-
-    for city, row in distance_matrix.items():
-        for target in row:
-            if target not in distance_matrix:
-                raise ValueError(f"Distance matrix is incomplete for city '{target}'.")
-
-    return [city for city in locations if city not in {start_city, end_city}]
-
-
-def _route_cost(route: list[Any], distance_matrix: dict[Any, dict[Any, float]]) -> float:
-    total = 0.0
-    for source, target in zip(route, route[1:]):
-        value = float(distance_matrix[source][target])
-        if not math.isfinite(value) or value < 0:
-            raise ValueError(f"Edge cost from '{source}' to '{target}' must be finite and non-negative.")
-        total += value
-    return total
 
 
 def _get_neighbor(route: list[Any], rng: random.Random) -> list[Any]:
