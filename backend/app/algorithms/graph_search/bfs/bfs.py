@@ -2,30 +2,13 @@ from collections import deque
 from time import perf_counter
 
 
-from backend.app.algorithms.graph_search.utils import reconstruct_path, get_neighbors
+from backend.app.algorithms.graph_search.utils import (
+    reconstruct_path,
+    get_neighbors,
+    has_node,
+    calculate_path_metrics,
+)
 from backend.app.algorithms.graph_search.trace_history import SearchFailure, SearchTraceHistory
-
-
-def has_node(graph, node_id):
-    """Check whether node exists in graph."""
-    if isinstance(graph, dict):
-        return node_id in graph
-
-    return graph.has_node(node_id)
-
-
-def calculate_path_metrics(graph, path, cost_profile):
-    """
-    Calculate route metrics after BFS has found a path.
-    BFS does not use these metrics to choose which node to explore.
-    """
-
-    if hasattr(graph, "calculate_path_metrics"):
-        return graph.calculate_path_metrics(path, cost_profile)
-
-    # Adjacency-dict graph used in current unit tests
-    # does not contain edge attributes.
-    return None, None, None
 
 
 def solve_bfs(graph, start_node_id, goal_node_id, cost_profile=None):
