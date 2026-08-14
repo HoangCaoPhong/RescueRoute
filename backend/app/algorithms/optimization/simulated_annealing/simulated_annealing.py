@@ -19,10 +19,10 @@ def solve_simulated_annealing(
     start_city: Any,
     end_city: Any,
     *,
-    initial_temperature: float = 10000.0,
-    cooling_rate: float = 0.99,
+    initial_temperature: float = 1000.0,
+    cooling_rate: float = 0.95,
     min_temperature: float = 0.01,
-    iterations_per_temp: int = 100,
+    iterations_per_temp: int = 15,
     seed: int = 7,
 ) -> dict[str, Any]:
     """Return a deterministic approximate route using Simulated Annealing."""
@@ -70,11 +70,7 @@ def solve_simulated_annealing(
 
         temp = initial_temperature
 
-        # Note for the user: For larger datasets (many waypoints), the default parameters
-        # (initial_temperature=10000.0, cooling_rate=0.99, iterations_per_temp=100) are
-        # set generously to allow longer exploration. The >200,000 nodes mentioned in the 
-        # whole graph do not affect this directly; this algorithm's performance only depends 
-        # on the number of WAYPOINTS chosen for the multi-location optimization.
+        # Parameters are tuned for small routes (7-10 waypoints typically).
         while temp > min_temperature:
             for _ in range(iterations_per_temp):
                 neighbor = _get_neighbor(current_route, rng)
