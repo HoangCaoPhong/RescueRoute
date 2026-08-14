@@ -1,10 +1,3 @@
-"""Simulated Annealing algorithm for fixed-start/fixed-goal route search.
-
-This module implements the Simulated Annealing algorithm for multi-location
-routing (TSP style). It evaluates neighboring route mutations and occasionally
-accepts worse routes based on a temperature parameter to escape local minima.
-"""
-
 from __future__ import annotations
 
 import math
@@ -114,7 +107,6 @@ def solve_simulated_annealing(
             ),
         },
     }
-
 
 
 def _get_neighbor(route: list[Any], rng: random.Random) -> list[Any]:
