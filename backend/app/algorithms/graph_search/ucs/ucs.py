@@ -1,45 +1,13 @@
 import heapq
 from time import perf_counter
 
-from backend.app.algorithms.graph_search.utils import reconstruct_path, get_neighbors
-
-
-def has_node(graph, node_id):
-    """Check whether node exists in graph."""
-    if isinstance(graph, dict):
-        return node_id in graph
-
-    return graph.has_node(node_id)
-
-
-def calculate_path_metrics(graph, path, cost_profile):
-    """
-    Calculate route metrics after UCS has found a path.
-    """
-    if hasattr(graph, "calculate_path_metrics"):
-        return graph.calculate_path_metrics(path, cost_profile)
-
-    return None, None, None
-
-
-def get_edge_cost(graph, u, v, cost_profile=None):
-    """Extract edge cost dynamically based on graph type."""
-    if hasattr(graph, "get_edge_weight"):
-        return graph.get_edge_weight(u, v, cost_profile)
-    
-    if isinstance(graph, dict):
-        if u in graph:
-            neighbors = graph[u]
-            if isinstance(neighbors, dict) and v in neighbors:
-                edge_data = neighbors[v]
-                if isinstance(edge_data, (int, float)):
-                    return float(edge_data)
-                if isinstance(edge_data, list) and len(edge_data) > 0:
-                    return float(edge_data[0])
-                if isinstance(edge_data, dict):
-                    return float(edge_data.get("weight", 1.0))
-    
-    return 1.0
+from backend.app.algorithms.graph_search.utils import (
+    reconstruct_path,
+    get_neighbors,
+    has_node,
+    calculate_path_metrics,
+    resolve_edge_cost,
+)
 
 
 def solve_ucs(graph, start_node_id, goal_node_id, cost_profile=None):
@@ -128,7 +96,7 @@ def solve_ucs(graph, start_node_id, goal_node_id, cost_profile=None):
             if neighbor_node in visited:
                 continue
                 
-            edge_cost = get_edge_cost(graph, current_node, neighbor_node, cost_profile)
+            edge_cost = resolve_edge_cost(graph, current_node, neighbor_node, cost_profile)
             tentative_g = current_cost + edge_cost
             
             if neighbor_node not in g_score or tentative_g < g_score[neighbor_node]:
