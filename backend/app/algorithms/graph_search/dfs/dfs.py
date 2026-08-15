@@ -1,22 +1,11 @@
 from time import perf_counter
-from backend.app.algorithms.graph_search.utils import reconstruct_path, get_neighbors
-
-
-def has_node(graph, node_id):
-    """Check whether node exists in graph."""
-    if isinstance(graph, dict):
-        return node_id in graph
-    return graph.has_node(node_id)
-
-
-def calculate_path_metrics(graph, path, cost_profile):
-    """
-    Calculate route metrics after DFS has found a path.
-    DFS does not use these metrics to choose which node to explore.
-    """
-    if hasattr(graph, "calculate_path_metrics"):
-        return graph.calculate_path_metrics(path, cost_profile)
-    return None, None, None
+from backend.app.algorithms.graph_search.utils import (
+    reconstruct_path,
+    get_neighbors,
+    has_node,
+    calculate_path_metrics,
+)
+from backend.app.algorithms.graph_search.trace_history import SearchFailure, SearchTraceHistory
 
 
 def solve_dfs(
@@ -46,19 +35,20 @@ def solve_dfs(
     visited = set()
     parent = {}
 
-    visited_order = []
-    frontier_steps = []
+    trace_history = SearchTraceHistory()
 
     while stack:
-        # Record frontier before expanding current node
-        frontier_steps.append([node for node, _ in stack])
         current_node, current_parent = stack.pop()
 
         if current_node in visited:
             continue
 
+        # Re-add the popped node so the snapshot is the pre-expansion stack.
+        trace_history.record_expansion(
+            current_node,
+            [node for node, _ in stack] + [current_node],
+        )
         visited.add(current_node)
-        visited_order.append(current_node)
         parent[current_node] = current_parent
 
         # Goal found
@@ -72,12 +62,11 @@ def solve_dfs(
             return {
                 "found": True,
                 "path": path,
-                "visited_order": visited_order,
-                "frontier_steps": frontier_steps,
+                **trace_history.as_result_fields(),
                 "total_distance": total_distance,
                 "estimated_time": estimated_time,
                 "total_cost": total_cost,
-                "explored_nodes": len(visited_order),
+                "explored_nodes": trace_history.explored_nodes,
                 "processing_time_ms": processing_time_ms,
                 "is_optimal": False,
                 "explanation_data": {
@@ -97,4 +86,15 @@ def solve_dfs(
                 stack.append((neighbor_node, current_node))
 
     # No route found
-    raise ValueError(f"No route found from '{start_node_id}' to '{goal_node_id}'.")
+    message = f"No route found from '{start_node_id}' to '{goal_node_id}'."
+    raise SearchFailure(
+        message,
+        {
+            "found": False,
+            "path": [],
+            **trace_history.as_result_fields(),
+            "explored_nodes": trace_history.explored_nodes,
+            "processing_time_ms": (perf_counter() - start_time) * 1000.0,
+            "message": message,
+        },
+    )

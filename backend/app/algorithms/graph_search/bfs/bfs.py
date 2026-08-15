@@ -2,37 +2,16 @@ from collections import deque
 from time import perf_counter
 
 
-from backend.app.algorithms.graph_search.utils import reconstruct_path, get_neighbors
+from backend.app.algorithms.graph_search.utils import (
+    reconstruct_path,
+    get_neighbors,
+    has_node,
+    calculate_path_metrics,
+)
+from backend.app.algorithms.graph_search.trace_history import SearchFailure, SearchTraceHistory
 
 
-def has_node(graph, node_id):
-    """Check whether node exists in graph."""
-    if isinstance(graph, dict):
-        return node_id in graph
-
-    return graph.has_node(node_id)
-
-
-def calculate_path_metrics(graph, path, cost_profile):
-    """
-    Calculate route metrics after BFS has found a path.
-    BFS does not use these metrics to choose which node to explore.
-    """
-
-    if hasattr(graph, "calculate_path_metrics"):
-        return graph.calculate_path_metrics(path, cost_profile)
-
-    # Adjacency-dict graph used in current unit tests
-    # does not contain edge attributes.
-    return None, None, None
-
-
-def solve_bfs(
-    graph,
-    start_node_id,
-    goal_node_id,
-    cost_profile=None
-):
+def solve_bfs(graph, start_node_id, goal_node_id, cost_profile=None):
     """
     Breadth-First Search (BFS).
 
@@ -45,10 +24,7 @@ def solve_bfs(
     start_time = perf_counter()
 
     # Validate input
-    if (
-        not has_node(graph, start_node_id)
-        or not has_node(graph, goal_node_id)
-    ):
+    if (not has_node(graph, start_node_id) or not has_node(graph, goal_node_id)):
         raise ValueError(
             f"Start node '{start_node_id}' or "
             f"goal node '{goal_node_id}' does not exist."
@@ -59,16 +35,15 @@ def solve_bfs(
     visited = {start_node_id}
     parent = {start_node_id: None}
     
-    visited_order = []
-    frontier_steps = []
+    trace_history = SearchTraceHistory()
 
     # BFS search
     while queue:
 
-        # Record frontier before expanding current node
-        frontier_steps.append(list(queue))
+        # The template keeps the frontier snapshot before this expansion.
+        current_node = queue[0]
+        trace_history.record_expansion(current_node, queue)
         current_node = queue.popleft()
-        visited_order.append(current_node)
 
         # Goal found
         if current_node == goal_node_id:
@@ -81,14 +56,13 @@ def solve_bfs(
             return {
                 "found": True,
                 "path": path,
-                "visited_order": visited_order,
-                "frontier_steps": frontier_steps,
+                **trace_history.as_result_fields(),
 
                 "total_distance": total_distance,
                 "estimated_time": estimated_time,
                 "total_cost": total_cost,
 
-                "explored_nodes": len(visited_order),
+                "explored_nodes": trace_history.explored_nodes,
                 "processing_time_ms": processing_time_ms,
 
                 # BFS is optimal for minimum number of hops.
@@ -110,10 +84,7 @@ def solve_bfs(
             }
 
         # Expand neighbors
-        for neighbor_node in get_neighbors(
-            graph,
-            current_node
-        ):
+        for neighbor_node in get_neighbors(graph, current_node):
             if neighbor_node not in visited:
 
                 # Mark visited when inserted into queue
@@ -123,4 +94,15 @@ def solve_bfs(
                 queue.append(neighbor_node)
 
     # No route found
-    raise ValueError(f"No route found from '{start_node_id}' to '{goal_node_id}'.")
+    message = f"No route found from '{start_node_id}' to '{goal_node_id}'."
+    raise SearchFailure(
+        message,
+        {
+            "found": False,
+            "path": [],
+            **trace_history.as_result_fields(),
+            "explored_nodes": trace_history.explored_nodes,
+            "processing_time_ms": (perf_counter() - start_time) * 1000.0,
+            "message": message,
+        },
+    )

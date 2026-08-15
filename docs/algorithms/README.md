@@ -9,7 +9,9 @@ docs/algorithms/
 ├── dfs/
 ├── dijkstra/
 ├── ucs/
+├── held_karp/
 ├── hill_climbing/
+├── nearest_neighbor/
 ├── simulated_annealing/
 └── genetic_algorithm/
 ```
@@ -25,4 +27,3 @@ Nội dung đề xuất trong mỗi folder:
 ```
 
 Không chép nguyên walkthrough từ tutorial. Tài liệu phải giải thích thứ tự mở rộng node, frontier/open list, cost/heuristic và cách tạo final route theo yêu cầu demo video.
-
