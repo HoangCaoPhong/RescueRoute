@@ -169,14 +169,18 @@ async function fetchJson(url, options = {}) {
         : { detail: await response.text() };
 
     if (!response.ok) {
-        const detail =
+        let detail =
             typeof data?.detail === "string"
                 ? data.detail
                 : JSON.stringify(data?.detail || "");
+        if (detail.includes("<html") || detail.includes("<!DOCTYPE") || detail.includes("<title>")) {
+            detail = `HTTP ${response.status} (${response.statusText || "Lỗi Gateway / Máy chủ"})`;
+        }
         throw new Error(detail || data?.message || `HTTP ${response.status}`);
     }
     return data;
 }
+
 
 function setConnectionStatus(mode, text) {
     const badge = byId("connectionStatus");

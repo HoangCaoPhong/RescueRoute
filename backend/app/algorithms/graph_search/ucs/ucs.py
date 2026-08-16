@@ -8,7 +8,7 @@ algorithms through the same ``build_success_response`` path.
 
 from __future__ import annotations
 
-from heapq import heappop, heappush
+from heapq import heappop, heappush, nsmallest
 from itertools import count
 from time import perf_counter
 from typing import Any
@@ -26,6 +26,7 @@ from backend.app.algorithms.graph_search.utils import (
     reconstruct_path,
     resolve_edge_cost,
 )
+
 
 
 def solve_ucs(
@@ -142,18 +143,23 @@ def _active_frontier(
     heap: list[tuple[float, int, NodeId]],
     g_score: dict[NodeId, float],
     expanded_at_cost: dict[NodeId, float],
+    max_items: int = 250,
 ) -> list[dict[str, Any]]:
     """Return the effective heap frontier in deterministic cost order."""
     frontier: list[dict[str, Any]] = []
     seen: set[NodeId] = set()
-    for cost, _order, node_id in sorted(heap):
+    candidates = nsmallest(max_items * 3, heap) if len(heap) > max_items * 3 else sorted(heap)
+    for cost, _order, node_id in candidates:
         if node_id in seen or cost != g_score.get(node_id):
             continue
         if cost >= expanded_at_cost.get(node_id, float("inf")):
             continue
         seen.add(node_id)
         frontier.append(_frontier_item(node_id, cost))
+        if len(frontier) >= max_items:
+            break
     return frontier
+
 
 
 def _frontier_item(node_id: NodeId, cost: float) -> dict[str, Any]:

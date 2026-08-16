@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from heapq import heappop, heappush
+from heapq import heappop, heappush, nsmallest
 from itertools import count
 from math import isfinite
 from time import perf_counter
@@ -164,11 +164,13 @@ def _active_frontier(
     g_score: dict[NodeId, float],
     expanded_at_cost: dict[NodeId, float],
     estimate: Callable[[NodeId], float],
+    max_items: int = 250,
 ) -> list[dict[str, Any]]:
     """Return the effective heap frontier in deterministic priority order."""
     frontier: list[dict[str, Any]] = []
     seen: set[NodeId] = set()
-    for _f_score, cost, _order, node_id in sorted(heap):
+    candidates = nsmallest(max_items * 3, heap) if len(heap) > max_items * 3 else sorted(heap)
+    for _f_score, cost, _order, node_id in candidates:
         if node_id in seen or cost != g_score.get(node_id):
             continue
         if cost >= expanded_at_cost.get(node_id, float("inf")):
@@ -176,7 +178,10 @@ def _active_frontier(
         seen.add(node_id)
         heuristic = estimate(node_id)
         frontier.append(_frontier_item(node_id, cost, heuristic, cost + heuristic))
+        if len(frontier) >= max_items:
+            break
     return frontier
+
 
 
 def _frontier_item(
