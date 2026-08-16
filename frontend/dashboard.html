@@ -446,58 +446,9 @@
                     </div>
                 </section>
 
-                <section class="panel-section" aria-labelledby="trafficTitle">
-                    <div class="section-heading">
-                        <span class="section-index">04</span>
-                        <div>
-                            <h2 id="trafficTitle">Mô phỏng ùn tắc</h2>
-                            <p>Quan sát ảnh hưởng của giao thông lên chi phí</p>
-                        </div>
-                    </div>
-                    <div class="feature-card accent-cyan-card">
-                        <button id="btnToggleTraffic" type="button"
-                            class="toggle-button is-active"
-                            onclick="toggleTrafficLayer()" aria-pressed="true">
-                            <span>Lớp mức độ ùn tắc</span><span>Bật</span>
-                        </button>
-                        <div class="traffic-legend" aria-label="Mức độ ùn tắc">
-                            <span><i class="traffic-dot level-low"></i>Bình
-                                thường</span>
-                            <span><i
-                                    class="traffic-dot level-medium"></i>Đông</span>
-                            <span><i class="traffic-dot level-high"></i>Nghiêm
-                                trọng</span>
-                        </div>
-                        <div class="control-block">
-                            <label for="selectEdge">Đoạn đường mẫu</label>
-                            <select id="selectEdge" disabled><option>Đang
-                                    tải…</option></select>
-                        </div>
-                        <div class="inline-controls">
-                            <div class="control-block">
-                                <label for="selectCongestion">Mức ùn tắc</label>
-                                <select id="selectCongestion">
-                                    <option value="1">1 — Thông thoáng</option>
-                                    <option value="2">2 — Nhẹ</option>
-                                    <option value="3">3 — Đông</option>
-                                    <option value="4">4 — Nặng</option>
-                                    <option value="5">5 — Rất nặng</option>
-                                    <option value="6">6 — Tắc nghẽn</option>
-                                </select>
-                            </div>
-                            <button id="btnUpdateCongestion"
-                                class="btn-secondary align-end" type="button"
-                                onclick="updateEdgeCongestion()">Cập
-                                nhật</button>
-                        </div>
-                        <small>Thay đổi được gửi tới API và tuyến đang hiển thị
-                            sẽ được tính lại.</small>
-                    </div>
-                </section>
-
                 <section class="panel-section" aria-labelledby="healthTitle">
                     <div class="section-heading">
-                        <span class="section-index">05</span>
+                        <span class="section-index">04</span>
                         <div>
                             <h2 id="healthTitle">Kiểm tra hệ thống</h2>
                             <p>Health check và thời gian phản hồi backend</p>
@@ -509,6 +460,7 @@
                             /api/health</button>
                     </div>
                 </section>
+
             </aside>
 
             <button id="btnToggleSidebar" class="sidebar-toggle" type="button"
