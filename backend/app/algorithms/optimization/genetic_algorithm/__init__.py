@@ -1,4 +1,4 @@
-from backend.app.algorithms.optimization.genetic_algorithm.genetic_algorithm import (
+from backend.app.algorithms.optimization.genetic_algorithm.algorithm import (
     solve_genetic_algorithm,
 )
 
