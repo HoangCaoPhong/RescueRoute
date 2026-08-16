@@ -71,16 +71,26 @@ def solve_ucs(
             continue
 
         # Build canonical frontier snapshot before expansion
-        remaining_frontier = _active_frontier(open_heap, g_score, expanded_at_cost)
-        current_item = _frontier_item(current, current_g)
-        trace_history.record_expansion(
-            current,
-            [current_item, *remaining_frontier],
-        )
-        legacy_frontier_steps.append(
-            [current, *[item["node_id"] for item in remaining_frontier]]
-        )
+        if len(legacy_frontier_steps) < 500:
+            remaining_frontier = _active_frontier(
+                open_heap,
+                g_score,
+                expanded_at_cost,
+                max_items=24,
+            )
+            current_item = _frontier_item(current, current_g)
+            trace_history.record_expansion(
+                current,
+                [current_item, *remaining_frontier],
+            )
+            legacy_frontier_steps.append(
+                [current, *[item["node_id"] for item in remaining_frontier]]
+            )
+        else:
+            trace_history.record_expansion(current, [])
+            legacy_frontier_steps.append([current])
         expanded_at_cost[current] = current_g
+
 
         if current == goal_node_id:
             path = reconstruct_path(parent, goal_node_id)
@@ -143,8 +153,9 @@ def _active_frontier(
     heap: list[tuple[float, int, NodeId]],
     g_score: dict[NodeId, float],
     expanded_at_cost: dict[NodeId, float],
-    max_items: int = 250,
+    max_items: int = 24,
 ) -> list[dict[str, Any]]:
+
     """Return the effective heap frontier in deterministic cost order."""
     frontier: list[dict[str, Any]] = []
     seen: set[NodeId] = set()
