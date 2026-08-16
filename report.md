@@ -31,6 +31,10 @@
    * Bắt sạch các trang lỗi HTML 502/504 từ reverse proxy, tránh chèn mã HTML thô vào giao diện.
 7. **Gỡ bỏ khối mô phỏng ùn tắc thủ công ([dashboard.html](file:///D:/RescueRoute/frontend/dashboard.html)):**
    * *(Theo ý kiến đóng góp từ **Nhân**)*: Đã xóa bỏ hoàn toàn phần **"04. Mô phỏng ùn tắc"** trên giao diện, vì hệ thống hiện tại đã tự động tính toán chi phí giao thông động từ dữ liệu thực tế theo các khung giờ (period) của backend mà không cần người dùng phải thao tác mô phỏng thủ công.
+8. **Sửa lỗi JSON Serialization của `numpy.bool_` trong Hill Climbing & Search Trace ([algorithm.py](file:///D:/RescueRoute/backend/app/algorithms/optimization/hill_climbing/algorithm.py), [search_trace.py](file:///D:/RescueRoute/backend/app/services/search_trace.py)):**
+   * Khắc phục lỗi `TypeError: 'numpy.bool' object is not iterable` khi FastAPI serialize response của Hill Climbing (do trường `selected` chứa giá trị kiểu `numpy.bool_` sinh ra từ phép so sánh ID node dạng numpy).
+   * Ép kiểu chuẩn sang `bool` nguyên bản của Python và bổ sung cơ chế chuẩn hóa kiểu dữ liệu an toàn (`bool`, `float`, `int`) trong `normalize_frontier_item`.
+
 
 
 

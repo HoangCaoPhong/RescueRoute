@@ -65,6 +65,8 @@ def normalize_frontier_item(
             "node_id",
             item.get("id")
         )
+        if node_id is not None and hasattr(node_id, "item"):
+            node_id = node_id.item()
 
         normalized = {
             "node_id": node_id
@@ -79,14 +81,23 @@ def normalize_frontier_item(
             "selected",
         ):
             if key in item:
-                normalized[key] = item[key]
+                val = item[key]
+                if key == "selected" or isinstance(val, bool) or str(type(val)).find("bool") != -1:
+                    normalized[key] = bool(val)
+                elif hasattr(val, "item"):
+                    normalized[key] = val.item()
+                else:
+                    normalized[key] = val
 
         return normalized
 
-    # BFS / DFS hiện tại chỉ trả node ID
+    node_id = item
+    if hasattr(node_id, "item"):
+        node_id = node_id.item()
     return {
-        "node_id": item
+        "node_id": node_id
     }
+
 
 
 def build_search_trace(

@@ -656,9 +656,10 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
                         "node_id": node_id,
                         "h": round(score, 6),
                         "priority": round(score, 6),
-                        "selected": node_id == selected,
+                        "selected": bool(node_id == selected),
                     }
                     for score, _key, node_id in ranked
+
                 ],
             )
             if selected is None:
