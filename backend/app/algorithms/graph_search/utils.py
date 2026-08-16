@@ -102,46 +102,57 @@ def calculate_path_metrics(
     path: list[NodeId],
     cost_profile: Any = None,
     edge_cost: EdgeCost | None = None,
-) -> tuple[float | None, float | None, float]:
+) -> tuple[float | None, float | None, float | None]:
     """Calculate route metrics while deferring to the graph contract when present."""
     if hasattr(graph, "calculate_path_metrics"):
         distance, estimated_time, total_cost = graph.calculate_path_metrics(
             path, cost_profile
         )
-        return distance, estimated_time, float(total_cost)
+        return distance, estimated_time, float(total_cost) if total_cost is not None else None
 
     total_cost = 0.0
+    has_cost = True
     total_distance = 0.0
     has_distance = True
     estimated_time = 0.0
     has_time = True
 
-    for source, target in zip(path, path[1:]):
-        total_cost += resolve_edge_cost(
-            graph, source, target, cost_profile, edge_cost
-        )
-        edge = get_edge_data(graph, source, target)
-
-        if isinstance(edge, Mapping) and "distance" in edge:
-            total_distance += float(edge["distance"])
-        elif (
-            isinstance(edge, Sequence)
-            and not isinstance(edge, (str, bytes))
-            and len(edge) > 2
-        ):
-            total_distance += float(edge[2])
-        else:
+    if isinstance(graph, Mapping):
+        first_node = next(iter(graph), None)
+        if first_node is not None and not isinstance(graph[first_node], Mapping):
+            has_cost = False
             has_distance = False
-
-        if isinstance(edge, Mapping) and "estimated_time" in edge:
-            estimated_time += float(edge["estimated_time"])
-        elif isinstance(edge, Mapping) and "time" in edge:
-            estimated_time += float(edge["time"])
-        else:
             has_time = False
+
+    if has_cost or has_distance or has_time:
+        for source, target in zip(path, path[1:]):
+            if has_cost:
+                total_cost += resolve_edge_cost(
+                    graph, source, target, cost_profile, edge_cost
+                )
+            edge = get_edge_data(graph, source, target)
+
+            if isinstance(edge, Mapping) and "distance" in edge:
+                total_distance += float(edge["distance"])
+            elif (
+                isinstance(edge, Sequence)
+                and not isinstance(edge, (str, bytes))
+                and len(edge) > 2
+            ):
+                total_distance += float(edge[2])
+            else:
+                has_distance = False
+
+            if isinstance(edge, Mapping) and "estimated_time" in edge:
+                estimated_time += float(edge["estimated_time"])
+            elif isinstance(edge, Mapping) and "time" in edge:
+                estimated_time += float(edge["time"])
+            else:
+                has_time = False
 
     return (
         total_distance if has_distance else None,
         estimated_time if has_time else None,
-        total_cost,
+        total_cost if has_cost else None,
     )
+

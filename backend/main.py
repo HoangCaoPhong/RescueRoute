@@ -189,7 +189,12 @@ class GraphManager:
             eh_coords_rad = np.radians(np.array(eh_coords))
             self.emergency_hospital_kdtree = cKDTree(eh_coords_rad)
 
+        # Giải phóng các dataframe tạm và dọn rác bộ nhớ để tối ưu cho 512MB RAM
+        del df_nodes, df_train, df_base, df_road_subset, df_poi_subset
+        gc.collect()
+
         self.is_loaded = True
+
         
     def find_nearest_road_node(self, lat: float, lng: float) -> Tuple[Optional[Dict[str, Any]], float]:
         if self.kdtree is None or len(self.road_node_ids_array) == 0:
@@ -470,7 +475,7 @@ async def update_ambulance_location(body: AmbulanceLocationRequest):
 
 @app.post("/api/route")
 @app.post("/api/v1/route")
-async def calculate_route(body: RouteRequest):
+def calculate_route(body: RouteRequest):
     """Run A*, Dijkstra, BFS, DFS, UCS, or Hill Climbing and draw the route."""
     start_id = body.start_node_id
     if start_id is None:
@@ -485,7 +490,7 @@ async def calculate_route(body: RouteRequest):
 
 @app.post("/api/route/multi-location", response_model=MultiLocationRouteResponse)
 @app.post("/api/v1/route/multi-location", response_model=MultiLocationRouteResponse)
-async def calculate_multi_location_route(body: MultiLocationRouteRequest):
+def calculate_multi_location_route(body: MultiLocationRouteRequest):
     """Optimize waypoint order with Nearest Neighbor or Held-Karp."""
 
     start_id = body.start_node_id
@@ -511,7 +516,7 @@ async def calculate_multi_location_route(body: MultiLocationRouteRequest):
 
 @app.post("/api/route/nearest-hospital")
 @app.post("/api/v1/route/nearest-hospital")
-async def calculate_nearest_hospital_route(body: NearestHospitalRouteRequest):
+def calculate_nearest_hospital_route(body: NearestHospitalRouteRequest):
     """Tự động dùng thuật toán AI dò đường trên mạng lưới đồ thị để tìm bệnh viện cấp cứu tối ưu nhất mà không cần biết trước điểm đích"""
     start_id = body.start_node_id
     if start_id is None:
@@ -519,6 +524,7 @@ async def calculate_nearest_hospital_route(body: NearestHospitalRouteRequest):
         start_id = nearest_node["id"] if nearest_node else list(graph_mgr.road_nodes.keys())[0]
 
     return run_search_nearest_hospital(graph_mgr, start_id, body.algorithm, emergency_only=body.emergency_only)
+
 
 @app.post("/api/edges/congestion")
 @app.post("/api/v1/edges/congestion")

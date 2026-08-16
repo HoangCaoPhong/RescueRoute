@@ -121,11 +121,12 @@ def solve_hill_climbing(
                     "node_id": node,
                     "h": round(score, 6),
                     "priority": round(score, 6),
-                    "selected": node == next_node and (improves or sideways),
+                    "selected": bool(node == next_node and (improves or sideways)),
                 }
                 for score, _key, node in ranked
             ],
         )
+
         if not improves and not sideways:
             _raise_search_failure(
                 trace_history,
