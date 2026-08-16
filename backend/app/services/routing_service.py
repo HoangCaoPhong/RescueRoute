@@ -50,8 +50,9 @@ def build_priority_frontier_snapshot(
     priority_queue: List[tuple],
     best_scores: Dict[int, float],
     heuristic: Optional[Callable[[int], float]] = None,
-    max_items: int = 250,
+    max_items: int = 24,
 ) -> List[Dict[str, Any]]:
+
     """Build one shared priority-queue snapshot for UCS, A*, and Dijkstra."""
 
     def format_item(node_id: int, cost: float, priority: float) -> Dict[str, Any]:
@@ -677,16 +678,20 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             if d > best_dist.get(curr, float('inf')):
                 continue
             nodes_expanded += 1
-            trace_history.record_expansion(
-                curr,
-                build_priority_frontier_snapshot(
+            if nodes_expanded < 500:
+                trace_history.record_expansion(
                     curr,
-                    d,
-                    d,
-                    pq,
-                    best_dist,
-                ),
-            )
+                    build_priority_frontier_snapshot(
+                        curr,
+                        d,
+                        d,
+                        pq,
+                        best_dist,
+                        max_items=24,
+                    ),
+                )
+            else:
+                trace_history.record_expansion(curr, [])
             if curr in goal_node_set:
                 found_goal_id = curr
                 break
@@ -712,17 +717,22 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             if g > g_scores.get(curr, float('inf')):
                 continue
             nodes_expanded += 1
-            trace_history.record_expansion(
-                curr,
-                build_priority_frontier_snapshot(
+            if nodes_expanded < 500:
+                trace_history.record_expansion(
                     curr,
-                    g,
-                    f,
-                    pq,
-                    g_scores,
-                    h_multi,
-                ),
-            )
+                    build_priority_frontier_snapshot(
+                        curr,
+                        g,
+                        f,
+                        pq,
+                        g_scores,
+                        h_multi,
+                        max_items=24,
+                    ),
+                )
+            else:
+                trace_history.record_expansion(curr, [])
+
             if curr in goal_node_set:
                 found_goal_id = curr
                 break
