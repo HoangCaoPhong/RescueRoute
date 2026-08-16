@@ -15,7 +15,10 @@ from backend.app.algorithms.optimization.held_karp import optimize_held_karp
 from backend.app.algorithms.optimization.nearest_neighbor import optimize_nearest_neighbor
 from backend.app.algorithms.optimization.genetic_algorithm import solve_genetic_algorithm
 from backend.app.algorithms.optimization.simulated_annealing import solve_simulated_annealing
-from backend.app.algorithms.graph_search.dfs.dfs import solve_dfs
+from backend.app.algorithms.graph_search.dfs import (
+    solve_depth_limited_dfs,
+    solve_dfs,
+)
 from backend.app.algorithms.graph_search.trace_history import SearchFailure, SearchTraceHistory
 from backend.app.services.search_trace import build_search_trace
 
@@ -47,7 +50,9 @@ def build_priority_frontier_snapshot(
     priority_queue: List[tuple],
     best_scores: Dict[int, float],
     heuristic: Optional[Callable[[int], float]] = None,
+    max_items: int = 24,
 ) -> List[Dict[str, Any]]:
+
     """Build one shared priority-queue snapshot for UCS, A*, and Dijkstra."""
 
     def format_item(node_id: int, cost: float, priority: float) -> Dict[str, Any]:
@@ -62,7 +67,12 @@ def build_priority_frontier_snapshot(
 
     snapshot = [format_item(current_node, current_cost, current_priority)]
     included_nodes = {current_node}
-    for entry in sorted(priority_queue):
+    candidates = (
+        heapq.nsmallest(max_items * 3, priority_queue)
+        if len(priority_queue) > max_items * 3
+        else sorted(priority_queue)
+    )
+    for entry in candidates:
         if len(entry) == 2:
             priority, node_id = entry
             cost = priority
@@ -72,7 +82,10 @@ def build_priority_frontier_snapshot(
             continue
         included_nodes.add(node_id)
         snapshot.append(format_item(node_id, cost, priority))
+        if len(snapshot) >= max_items:
+            break
     return snapshot
+
 
 
 def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[str, Any]:
@@ -183,10 +196,13 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
         response["is_optimal"] = result.get("is_optimal")
         return response
 
-    elif algo == "dfs":
+    elif algo in {"dfs", "dls", "bounded_dfs", "dfs_limited"}:
         try:
-            result = solve_dfs(graph_mgr.adj, start_id, goal_id)
+            result = solve_depth_limited_dfs(
+                graph_mgr.adj, start_id, goal_id, max_expansions=3000
+            )
             exec_time = (time.perf_counter() - t0) * 1000
+
 
             if not result.get("found", True) or not result.get("path"):
                 return {
@@ -213,6 +229,7 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
                     graph_mgr, error.result, "dfs"
                 ),
             }
+
 
     elif algo in {"astar", "ucs", "dijkstra", "hill_climbing", "hill-climbing"}:
         def h(n_id: int) -> float:
@@ -474,11 +491,16 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
     found_goal_id = None
     trace_history = SearchTraceHistory()
 
+    goal_distance_cache: Dict[int, float] = {}
+
     def nearest_goal_distance(node_id: int) -> float:
         """Estimate straight-line distance to the closest candidate hospital."""
+        if node_id in goal_distance_cache:
+            return goal_distance_cache[node_id]
 
         node = graph_mgr.road_nodes.get(node_id)
         if not node:
+            goal_distance_cache[node_id] = 0.0
             return 0.0
         tree = (
             graph_mgr.emergency_hospital_kdtree
@@ -488,7 +510,10 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
         if tree is not None:
             query = np.radians([node["lat"], node["lng"]])
             distance_radians, _ = tree.query(query)
-            return float(distance_radians * 6371000.0)
+            res = float(distance_radians * 6371000.0)
+            goal_distance_cache[node_id] = res
+            return res
+
 
         distances = []
         for hospital in target_hospitals:
@@ -585,9 +610,10 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             curr, p = stack.pop()
             if curr in visited:
                 continue
+            frontier_preview = [node for node, _ in stack[:249]] + [curr]
             trace_history.record_expansion(
                 curr,
-                [node for node, _ in stack] + [curr],
+                frontier_preview,
             )
             visited.add(curr)
             parent[curr] = p
@@ -595,9 +621,12 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             if curr in goal_node_set:
                 found_goal_id = curr
                 break
+            if nodes_expanded >= 3000:
+                break
             for nbr in graph_mgr.adj.get(curr, {}):
                 if nbr not in visited:
                     stack.append((nbr, curr))
+
 
     elif algo in {"hill_climbing", "hill-climbing"}:
         current = start_id
@@ -628,9 +657,10 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
                         "node_id": node_id,
                         "h": round(score, 6),
                         "priority": round(score, 6),
-                        "selected": node_id == selected,
+                        "selected": bool(node_id == selected),
                     }
                     for score, _key, node_id in ranked
+
                 ],
             )
             if selected is None:
@@ -648,16 +678,20 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             if d > best_dist.get(curr, float('inf')):
                 continue
             nodes_expanded += 1
-            trace_history.record_expansion(
-                curr,
-                build_priority_frontier_snapshot(
+            if nodes_expanded < 500:
+                trace_history.record_expansion(
                     curr,
-                    d,
-                    d,
-                    pq,
-                    best_dist,
-                ),
-            )
+                    build_priority_frontier_snapshot(
+                        curr,
+                        d,
+                        d,
+                        pq,
+                        best_dist,
+                        max_items=24,
+                    ),
+                )
+            else:
+                trace_history.record_expansion(curr, [])
             if curr in goal_node_set:
                 found_goal_id = curr
                 break
@@ -683,17 +717,22 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             if g > g_scores.get(curr, float('inf')):
                 continue
             nodes_expanded += 1
-            trace_history.record_expansion(
-                curr,
-                build_priority_frontier_snapshot(
+            if nodes_expanded < 500:
+                trace_history.record_expansion(
                     curr,
-                    g,
-                    f,
-                    pq,
-                    g_scores,
-                    h_multi,
-                ),
-            )
+                    build_priority_frontier_snapshot(
+                        curr,
+                        g,
+                        f,
+                        pq,
+                        g_scores,
+                        h_multi,
+                        max_items=24,
+                    ),
+                )
+            else:
+                trace_history.record_expansion(curr, [])
+
             if curr in goal_node_set:
                 found_goal_id = curr
                 break

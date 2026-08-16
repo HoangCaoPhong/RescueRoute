@@ -65,6 +65,8 @@ def normalize_frontier_item(
             "node_id",
             item.get("id")
         )
+        if node_id is not None and hasattr(node_id, "item"):
+            node_id = node_id.item()
 
         normalized = {
             "node_id": node_id
@@ -79,14 +81,23 @@ def normalize_frontier_item(
             "selected",
         ):
             if key in item:
-                normalized[key] = item[key]
+                val = item[key]
+                if key == "selected" or isinstance(val, bool) or str(type(val)).find("bool") != -1:
+                    normalized[key] = bool(val)
+                elif hasattr(val, "item"):
+                    normalized[key] = val.item()
+                else:
+                    normalized[key] = val
 
         return normalized
 
-    # BFS / DFS hiện tại chỉ trả node ID
+    node_id = item
+    if hasattr(node_id, "item"):
+        node_id = node_id.item()
     return {
-        "node_id": item
+        "node_id": node_id
     }
+
 
 
 def build_search_trace(
@@ -110,6 +121,8 @@ def build_search_trace(
     # ======================================
     # BUILD SEARCH STEPS
     # ======================================
+
+    MAX_TRACE_STEPS = 500
 
     if history_events:
         event_source = history_events
@@ -138,6 +151,13 @@ def build_search_trace(
             for event in history_events
             if event.get("current_node") is not None
         ]
+
+    if len(event_source) > MAX_TRACE_STEPS:
+        step_stride = max(1, len(event_source) // MAX_TRACE_STEPS)
+        sampled_indices = set(range(0, len(event_source), step_stride))
+        sampled_indices.add(len(event_source) - 1)
+        event_source = [event_source[i] for i in sorted(sampled_indices)]
+
 
     for index, event in enumerate(event_source):
         current_node = event.get("current_node")

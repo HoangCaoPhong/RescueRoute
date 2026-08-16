@@ -33,7 +33,10 @@ class SearchTraceHistory:
         """Save one immutable snapshot before expanding ``current_node``."""
 
         frontier_items = list(frontier)
-        frontier_snapshot = deepcopy(frontier_items[:MAX_FRONTIER_ITEMS])
+        frontier_snapshot = [
+            dict(item) if isinstance(item, dict) else item
+            for item in frontier_items[:MAX_FRONTIER_ITEMS]
+        ]
         self._visited_order.append(current_node)
         self._events.append(
             {
@@ -59,15 +62,15 @@ class SearchTraceHistory:
         stream for new consumers.
         """
 
-        events = deepcopy(self._events)
         return {
             "visited_order": list(self._visited_order),
             "frontier_steps": [
                 event["frontier"]
-                for event in events
+                for event in self._events
             ],
             "trace_history": {
                 "version": TRACE_HISTORY_VERSION,
-                "events": events,
+                "events": list(self._events),
             },
         }
+

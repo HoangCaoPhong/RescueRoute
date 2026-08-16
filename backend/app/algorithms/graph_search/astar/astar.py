@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from heapq import heappop, heappush
+from heapq import heappop, heappush, nsmallest
 from itertools import count
 from math import isfinite
 from time import perf_counter
@@ -73,26 +73,32 @@ def solve_astar(
         if current_cost >= expanded_at_cost.get(current, float("inf")):
             continue
 
-        remaining_frontier = _active_frontier(
-            open_heap,
-            g_score,
-            expanded_at_cost,
-            estimate,
-        )
-        current_item = _frontier_item(
-            current,
-            current_cost,
-            estimate(current),
-            current_f,
-        )
-        trace_history.record_expansion(
-            current,
-            [current_item, *remaining_frontier],
-        )
-        legacy_frontier_steps.append(
-            [current, *[item["node_id"] for item in remaining_frontier]]
-        )
+        if len(legacy_frontier_steps) < 500:
+            remaining_frontier = _active_frontier(
+                open_heap,
+                g_score,
+                expanded_at_cost,
+                estimate,
+                max_items=24,
+            )
+            current_item = _frontier_item(
+                current,
+                current_cost,
+                estimate(current),
+                current_f,
+            )
+            trace_history.record_expansion(
+                current,
+                [current_item, *remaining_frontier],
+            )
+            legacy_frontier_steps.append(
+                [current, *[item["node_id"] for item in remaining_frontier]]
+            )
+        else:
+            trace_history.record_expansion(current, [])
+            legacy_frontier_steps.append([current])
         expanded_at_cost[current] = current_cost
+
         if current == goal_node_id:
             path = reconstruct_path(parent, goal_node_id)
             distance, estimated_time, total_cost = calculate_path_metrics(
@@ -164,11 +170,14 @@ def _active_frontier(
     g_score: dict[NodeId, float],
     expanded_at_cost: dict[NodeId, float],
     estimate: Callable[[NodeId], float],
+    max_items: int = 24,
 ) -> list[dict[str, Any]]:
+
     """Return the effective heap frontier in deterministic priority order."""
     frontier: list[dict[str, Any]] = []
     seen: set[NodeId] = set()
-    for _f_score, cost, _order, node_id in sorted(heap):
+    candidates = nsmallest(max_items * 3, heap) if len(heap) > max_items * 3 else sorted(heap)
+    for _f_score, cost, _order, node_id in candidates:
         if node_id in seen or cost != g_score.get(node_id):
             continue
         if cost >= expanded_at_cost.get(node_id, float("inf")):
@@ -176,7 +185,10 @@ def _active_frontier(
         seen.add(node_id)
         heuristic = estimate(node_id)
         frontier.append(_frontier_item(node_id, cost, heuristic, cost + heuristic))
+        if len(frontier) >= max_items:
+            break
     return frontier
+
 
 
 def _frontier_item(

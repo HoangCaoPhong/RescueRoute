@@ -8,7 +8,7 @@ algorithms through the same ``build_success_response`` path.
 
 from __future__ import annotations
 
-from heapq import heappop, heappush
+from heapq import heappop, heappush, nsmallest
 from itertools import count
 from time import perf_counter
 from typing import Any
@@ -26,6 +26,7 @@ from backend.app.algorithms.graph_search.utils import (
     reconstruct_path,
     resolve_edge_cost,
 )
+
 
 
 def solve_ucs(
@@ -70,16 +71,26 @@ def solve_ucs(
             continue
 
         # Build canonical frontier snapshot before expansion
-        remaining_frontier = _active_frontier(open_heap, g_score, expanded_at_cost)
-        current_item = _frontier_item(current, current_g)
-        trace_history.record_expansion(
-            current,
-            [current_item, *remaining_frontier],
-        )
-        legacy_frontier_steps.append(
-            [current, *[item["node_id"] for item in remaining_frontier]]
-        )
+        if len(legacy_frontier_steps) < 500:
+            remaining_frontier = _active_frontier(
+                open_heap,
+                g_score,
+                expanded_at_cost,
+                max_items=24,
+            )
+            current_item = _frontier_item(current, current_g)
+            trace_history.record_expansion(
+                current,
+                [current_item, *remaining_frontier],
+            )
+            legacy_frontier_steps.append(
+                [current, *[item["node_id"] for item in remaining_frontier]]
+            )
+        else:
+            trace_history.record_expansion(current, [])
+            legacy_frontier_steps.append([current])
         expanded_at_cost[current] = current_g
+
 
         if current == goal_node_id:
             path = reconstruct_path(parent, goal_node_id)
@@ -142,18 +153,24 @@ def _active_frontier(
     heap: list[tuple[float, int, NodeId]],
     g_score: dict[NodeId, float],
     expanded_at_cost: dict[NodeId, float],
+    max_items: int = 24,
 ) -> list[dict[str, Any]]:
+
     """Return the effective heap frontier in deterministic cost order."""
     frontier: list[dict[str, Any]] = []
     seen: set[NodeId] = set()
-    for cost, _order, node_id in sorted(heap):
+    candidates = nsmallest(max_items * 3, heap) if len(heap) > max_items * 3 else sorted(heap)
+    for cost, _order, node_id in candidates:
         if node_id in seen or cost != g_score.get(node_id):
             continue
         if cost >= expanded_at_cost.get(node_id, float("inf")):
             continue
         seen.add(node_id)
         frontier.append(_frontier_item(node_id, cost))
+        if len(frontier) >= max_items:
+            break
     return frontier
+
 
 
 def _frontier_item(node_id: NodeId, cost: float) -> dict[str, Any]:
