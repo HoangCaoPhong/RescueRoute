@@ -2012,7 +2012,6 @@ function renderHospitalsOnMap() {
         markers.forEach((marker) => map.removeLayer(marker)),
     );
     hospitalMarkers = new Map();
-    if (!showPOIIcons) return;
 
     hospitalsData.forEach((hospital) => {
         const type = String(hospital.type || "Cơ sở y tế");
@@ -2020,15 +2019,23 @@ function renderHospitalsOnMap() {
             type.toLowerCase().includes("hospital") ||
             type.toLowerCase().includes("bệnh viện");
         const emoji = isHospital ? "🏥" : "✚";
-        const icon = L.divIcon({
-            className: `custom-div-icon ${isHospital ? "icon-hospital" : "icon-clinic"}`,
-            html: `<span>${emoji}</span>`,
-            iconSize: [34, 34],
-            iconAnchor: [17, 17],
-        });
+        const icon = showPOIIcons
+            ? L.divIcon({
+                  className: `custom-div-icon ${isHospital ? "icon-hospital" : "icon-clinic"}`,
+                  html: `<span>${emoji}</span>`,
+                  iconSize: [34, 34],
+                  iconAnchor: [17, 17],
+              })
+            : L.divIcon({
+                  className: `poi-dot-icon ${isHospital ? "dot-hospital" : "dot-clinic"}`,
+                  html: '<span class="poi-dot-inner"></span>',
+                  iconSize: [14, 14],
+                  iconAnchor: [7, 7],
+              });
         const marker = L.marker([hospital.lat, hospital.lng], {
             icon,
-            zIndexOffset: 1000,
+            zIndexOffset: showPOIIcons ? 1000 : 800,
+            title: hospital.name || "Cơ sở y tế",
         }).addTo(map);
         marker.bindPopup(`
             <div class="popup-content">

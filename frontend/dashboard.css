@@ -1141,6 +1141,41 @@ tr.best-row td {
     font-size: 0.95rem;
 }
 
+.poi-dot-icon {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+}
+
+.poi-dot-icon .poi-dot-inner {
+    border-radius: 50%;
+    box-sizing: border-box;
+    display: block;
+    height: 9px;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease;
+    width: 9px;
+}
+
+.poi-dot-icon.dot-hospital .poi-dot-inner {
+    background: #e84d6d;
+    border: 2px solid #ffd0da;
+    box-shadow: 0 0 6px rgba(232, 77, 109, 0.5), 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+.poi-dot-icon.dot-clinic .poi-dot-inner {
+    background: #1eae79;
+    border: 2px solid #b7f5d7;
+    box-shadow: 0 0 6px rgba(30, 174, 121, 0.5), 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+.poi-dot-icon:hover .poi-dot-inner {
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 2px 8px rgba(0, 0, 0, 0.5);
+    transform: scale(1.5);
+}
+
 .icon-ambulance {
     animation: ambulance-pulse 1.4s infinite;
     background: #e84d6d;
