@@ -1627,7 +1627,7 @@ function renderSearchStep(stepIndex) {
             opacity: 0.9,
             weight: 1.5,
         })
-            .bindTooltip(String(nodeId))
+            .bindTooltip(getNodeLabel(nodeId))
             .addTo(searchVisitedLayer);
         visitedMarkersDrawn += 1;
     });
@@ -1675,10 +1675,10 @@ function renderSearchStep(stepIndex) {
         })
             .bindTooltip(
                 isFullTrace
-                    ? `Đang mở: ${mapCurrentNodeId}`
-                    : `Tuyến đã hiện: ${mapCurrentNodeId}`,
+                    ? `Đang mở: ${getNodeLabel(mapCurrentNodeId)}`
+                    : `Tuyến đã hiện: ${getNodeLabel(mapCurrentNodeId)}`,
                 {
-                permanent: true,
+                    permanent: true,
                 direction: "top",
                 },
             )
@@ -1805,7 +1805,7 @@ function formatFrontierItem(item) {
         .filter((key) => item[key] !== undefined)
         .map((key) => `${key}=${Number(item[key]).toFixed(2)}`);
     const selection = item.selected ? "✓ được chọn" : null;
-    return [String(item.node_id ?? "—"), ...costs, selection]
+    return [getNodeLabel(item.node_id ?? "—"), ...costs, selection]
         .filter(Boolean)
         .join(" · ");
 }
