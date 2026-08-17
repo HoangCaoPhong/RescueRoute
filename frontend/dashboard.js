@@ -965,6 +965,7 @@ function renderRouteResult(aggregate, input, originalAggregate) {
     setText("resExpanded", aggregate.totalExpanded.toLocaleString("vi-VN"));
     setText("resTime", `${aggregate.totalProcessingTime.toFixed(2)} ms`);
 
+    renderPathNodes(aggregate.pathNodes, aggregate.visitingOrder);
     renderVisitingOrder(aggregate.visitingOrder);
     renderOrderComparison(
         aggregate,
@@ -1007,8 +1008,68 @@ function renderRouteSummary(aggregate, input) {
     });
 }
 
+function renderPathNodes(pathNodes = [], visitingOrder = []) {
+    const container = byId("pathNodesFlow");
+    if (!container) return;
+    container.replaceChildren();
+
+    const countBadge = byId("pathNodeCountBadge");
+    if (countBadge) countBadge.textContent = `${pathNodes.length} nút`;
+
+    if (!pathNodes.length) {
+        container.textContent = "Chưa có dữ liệu nút.";
+        return;
+    }
+
+    const waypoints = visitingOrder.slice(1, -1);
+
+    pathNodes.forEach((nodeId, index) => {
+        if (index > 0) {
+            const arrow = document.createElement("span");
+            arrow.className = "path-arrow";
+            arrow.textContent = "→";
+            container.append(arrow);
+        }
+
+        const chip = document.createElement("span");
+        chip.className = "path-node";
+
+        const isStart = index === 0;
+        const isGoal = index === pathNodes.length - 1;
+        const isWaypoint = waypoints.includes(nodeId);
+
+        if (isStart) {
+            chip.classList.add("node-start");
+            chip.textContent = `🚩 ${getNodeLabel(nodeId)} (${nodeId})`;
+        } else if (isGoal) {
+            chip.classList.add("node-goal");
+            chip.textContent = `🏁 ${getNodeLabel(nodeId)} (${nodeId})`;
+        } else if (isWaypoint) {
+            chip.classList.add("node-waypoint");
+            chip.textContent = `📍 ${getNodeLabel(nodeId)} (${nodeId})`;
+        } else {
+            chip.classList.add("node-inter");
+            const label = getNodeLabel(nodeId);
+            chip.textContent = label.startsWith("Node ") ? String(nodeId) : `${label} (${nodeId})`;
+        }
+
+        chip.title = `Nút ${index + 1}/${pathNodes.length}: ID ${nodeId}`;
+        container.append(chip);
+    });
+}
+
 function renderVisitingOrder(order) {
+    const block = byId("multiLocationOrderBlock");
     const container = byId("visitingOrder");
+    if (!container) return;
+
+    if (order.length <= 2) {
+        if (block) block.hidden = true;
+        container.replaceChildren();
+        return;
+    }
+
+    if (block) block.hidden = false;
     container.replaceChildren();
     order.forEach((nodeId, index) => {
         if (index > 0) {
@@ -1019,16 +1080,31 @@ function renderVisitingOrder(order) {
         }
         const chip = document.createElement("span");
         chip.className = "path-node";
-        chip.textContent = `${getNodeLabel(nodeId)} · ${nodeId}`;
+        if (index === 0) {
+            chip.classList.add("node-start");
+            chip.textContent = `🚩 ${getNodeLabel(nodeId)}`;
+        } else if (index === order.length - 1) {
+            chip.classList.add("node-goal");
+            chip.textContent = `🏁 ${getNodeLabel(nodeId)}`;
+        } else {
+            chip.classList.add("node-waypoint");
+            chip.textContent = `📍 Trạm ${index}: ${getNodeLabel(nodeId)}`;
+        }
         container.append(chip);
     });
 }
 
 function renderOrderComparison(optimized, original, criterion, method) {
     const container = byId("orderComparison");
-    if (!original) {
-        container.hidden = true;
-        container.textContent = "";
+    if (!container) return;
+    if (!original || method === "input" || optimized.visitingOrder.length <= 3) {
+        if (optimized.visitingOrder.length <= 2) {
+            container.innerHTML = `<span style="font-size: 0.65rem; color: var(--text-muted);">💡 <em>Tuyến 2 điểm (Xuất phát ➔ Đích). Nhập thêm các điểm trung gian (hoặc bấm chọn trên bản đồ) để kích hoạt thuật toán tối ưu thứ tự ghé thăm (TSP).</em></span>`;
+            container.hidden = false;
+        } else {
+            container.hidden = true;
+            container.textContent = "";
+        }
         return;
     }
 
@@ -1037,14 +1113,14 @@ function renderOrderComparison(optimized, original, criterion, method) {
     const difference = originalScore
         ? ((originalScore - optimizedScore) / originalScore) * 100
         : 0;
-    const originalOrder = original.visitingOrder.join(" → ");
-    const optimizedOrder = optimized.visitingOrder.join(" → ");
+    const originalOrder = original.visitingOrder.map(getNodeLabel).join(" → ");
+    const optimizedOrder = optimized.visitingOrder.map(getNodeLabel).join(" → ");
     const outcome =
         difference >= 0
             ? `cải thiện ${difference.toFixed(1)}%`
             : `cao hơn ${Math.abs(difference).toFixed(1)}%`;
-    const guarantee = method === "held_karp" ? "phương án tối ưu" : "phương án xấp xỉ";
-    container.textContent = `Thứ tự nhập: ${originalOrder}. Thứ tự ${visitOrderLabel(method)}: ${optimizedOrder}. Theo “${CRITERION_LABELS[criterion]}”, ${guarantee} ${outcome}.`;
+    const guarantee = method === "held_karp" ? "phương án tối ưu toàn cục" : "phương án xấp xỉ";
+    container.textContent = `Thứ tự ban đầu: ${originalOrder}. Thứ tự tối ưu (${visitOrderLabel(method)}): ${optimizedOrder}. Theo “${CRITERION_LABELS[criterion]}”, ${guarantee} ${outcome}.`;
     container.hidden = false;
 }
 
@@ -2179,7 +2255,10 @@ function renderHospitalsOnMap() {
                 <strong>${emoji} ${escapeHtml(hospital.name || "Cơ sở y tế")}</strong>
                 <span>Loại: ${escapeHtml(type)}</span>
                 <span>Road node: ${Number(hospital.node_id)}</span>
-                <button type="button" onclick="setDestination(${Number(hospital.node_id)})">Chọn làm đích đến</button>
+                <div style="display: flex; gap: 5px; margin-top: 6px;">
+                    <button type="button" onclick="setDestination(${Number(hospital.node_id)})">🎯 Chọn làm đích</button>
+                    <button type="button" onclick="addWaypoint(${Number(hospital.node_id)})" style="background: rgba(119, 135, 255, 0.2); border-color: rgba(119, 135, 255, 0.4);">➕ Thêm điểm ghé</button>
+                </div>
             </div>
         `);
         const markers = hospitalMarkers.get(Number(hospital.node_id)) || [];
@@ -2331,6 +2410,24 @@ function setDestination(nodeId) {
     onHospitalSelectChange();
     map?.closePopup();
     showToast(`Đã chọn ${getNodeLabel(Number(nodeId))} làm đích đến.`);
+}
+
+function addWaypoint(nodeId) {
+    const input = byId("inputWaypoints");
+    if (!input) return;
+    const current = parseNodeIdList(input.value);
+    if (!current.includes(Number(nodeId))) {
+        if (current.length >= MAX_WAYPOINTS) {
+            showToast(`Đã đạt tối đa ${MAX_WAYPOINTS} điểm trung gian.`, true);
+            return;
+        }
+        current.push(Number(nodeId));
+        input.value = current.join(", ");
+        showToast(`Đã thêm ${getNodeLabel(Number(nodeId))} vào điểm trung gian (${current.length}/${MAX_WAYPOINTS}).`);
+    } else {
+        showToast(`Điểm ${getNodeLabel(Number(nodeId))} đã có trong danh sách trung gian.`, true);
+    }
+    map?.closePopup();
 }
 
 function onHospitalSelectChange() {

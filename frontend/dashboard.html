@@ -13,7 +13,7 @@
             rel="stylesheet">
         <link rel="stylesheet"
             href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-        <link rel="stylesheet" href="dashboard.css?v=20260817-theme5">
+        <link rel="stylesheet" href="dashboard.css?v=20260817-theme7">
     </head>
     <body>
         <header class="app-header">
@@ -329,7 +329,15 @@
                             </div>
 
                             <div class="result-block">
-                                <h4>Thứ tự ghé thăm</h4>
+                                <div class="path-flow-header">
+                                    <h4>🗺️ Lộ trình chi tiết các nút (Path Nodes)</h4>
+                                    <span id="pathNodeCountBadge" class="path-node-count">0 nút</span>
+                                </div>
+                                <div id="pathNodesFlow" class="node-sequence-box"></div>
+                            </div>
+
+                            <div id="multiLocationOrderBlock" class="result-block" hidden>
+                                <h4>📍 Thứ tự trạm dừng (Waypoints Order)</h4>
                                 <div id="visitingOrder" class="path-flow"></div>
                                 <div id="orderComparison"
                                     class="order-comparison" hidden></div>
@@ -517,6 +525,6 @@
         <div id="toast" role="status" aria-live="polite"></div>
 
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script src="dashboard.js?v=20260817-theme5"></script>
+        <script src="dashboard.js?v=20260817-theme7"></script>
     </body>
 </html>
