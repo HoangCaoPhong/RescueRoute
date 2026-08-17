@@ -36,7 +36,7 @@ def enrich_segments():
     df_segments['base_congestion'] = avg_congestion
     df_segments['base_risk'] = avg_risk
 
-    # Calculate the base cost using your calc_cost logic
+    # Calculate the base cost
     def calc_cost(time, congestion, risk, parameters=(0.648, 0.23, 0.122)):
         return parameters[0]*time + parameters[1]*congestion + parameters[2]*risk
 
