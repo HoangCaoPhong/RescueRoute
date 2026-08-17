@@ -105,6 +105,54 @@ let searchVisitedLayer = null;
 let searchFrontierLayer = null;
 let searchCurrentLayer = null;
 
+let currentTheme = "dark";
+try {
+    if (typeof localStorage !== "undefined") {
+        currentTheme = localStorage.getItem("rescueroute_theme") || "dark";
+    }
+} catch (e) {
+    currentTheme = "dark";
+}
+
+function applyTheme(theme) {
+    currentTheme = theme === "light" ? "light" : "dark";
+    if (typeof document !== "undefined") {
+        if (document.documentElement && typeof document.documentElement.setAttribute === "function") {
+            document.documentElement.setAttribute("data-theme", currentTheme);
+        }
+        if (document.body && typeof document.body.setAttribute === "function") {
+            document.body.setAttribute("data-theme", currentTheme);
+        }
+    }
+    try {
+        if (typeof localStorage !== "undefined") {
+            localStorage.setItem("rescueroute_theme", currentTheme);
+        }
+    } catch (e) {}
+
+    const btn = byId("themeToggleBtn");
+    if (btn) {
+        const icon = btn.querySelector(".theme-icon");
+        const label = btn.querySelector(".theme-label");
+        if (currentTheme === "light") {
+            if (icon) icon.textContent = "☀️";
+            if (label) label.textContent = "Sáng";
+            btn.setAttribute("title", "Đang ở chế độ Sáng. Nhấp để chuyển sang Tối");
+            btn.setAttribute("aria-label", "Chuyển sang chế độ Tối");
+        } else {
+            if (icon) icon.textContent = "🌙";
+            if (label) label.textContent = "Tối";
+            btn.setAttribute("title", "Đang ở chế độ Tối. Nhấp để chuyển sang Sáng");
+            btn.setAttribute("aria-label", "Chuyển sang chế độ Sáng");
+        }
+    }
+}
+
+function toggleTheme() {
+    const nextTheme = currentTheme === "dark" ? "light" : "dark";
+    applyTheme(nextTheme);
+}
+
 function byId(id) {
     return document.getElementById(id);
 }
@@ -113,6 +161,10 @@ function setText(id, value) {
     const element = byId(id);
     if (element) element.textContent = value;
 }
+
+try {
+    applyTheme(currentTheme);
+} catch (e) {}
 
 function mountSearchPlaybackDock() {
     const dock = byId("searchPlaybackDock");
@@ -207,6 +259,7 @@ function setButtonBusy(buttonId, isBusy, busyLabel, idleLabel) {
 }
 
 function initMap() {
+    applyTheme(currentTheme);
     mountSearchPlaybackDock();
     if (typeof L === "undefined") {
         setConnectionStatus("offline", "Không tải được Leaflet");

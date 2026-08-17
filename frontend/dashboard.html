@@ -13,7 +13,7 @@
             rel="stylesheet">
         <link rel="stylesheet"
             href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-        <link rel="stylesheet" href="dashboard.css?v=20260813-11">
+        <link rel="stylesheet" href="dashboard.css?v=20260817-theme2">
     </head>
     <body>
         <header class="app-header">
@@ -31,6 +31,10 @@
                     <span class="status-dot" aria-hidden="true"></span>
                     Đang kết nối API
                 </span>
+                <button id="themeToggleBtn" type="button" class="btn-theme-toggle" onclick="toggleTheme()" aria-label="Chuyển đổi giao diện Sáng / Tối" title="Chuyển đổi giao diện Sáng / Tối">
+                    <span class="theme-icon" aria-hidden="true">🌙</span>
+                    <span class="theme-label">Tối</span>
+                </button>
                 <a href="/docs" target="_blank" rel="noopener noreferrer"
                     class="btn-docs">Tài liệu API</a>
             </div>
@@ -483,6 +487,6 @@
         <div id="toast" role="status" aria-live="polite"></div>
 
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script src="dashboard.js?v=20260817-01"></script>
+        <script src="dashboard.js?v=20260817-theme2"></script>
     </body>
 </html>
