@@ -13,7 +13,7 @@
             rel="stylesheet">
         <link rel="stylesheet"
             href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-        <link rel="stylesheet" href="dashboard.css?v=20260813-11">
+        <link rel="stylesheet" href="dashboard.css?v=20260817-theme8">
     </head>
     <body>
         <header class="app-header">
@@ -31,6 +31,10 @@
                     <span class="status-dot" aria-hidden="true"></span>
                     Đang kết nối API
                 </span>
+                <button id="themeToggleBtn" type="button" class="btn-theme-toggle" onclick="toggleTheme()" aria-label="Chuyển đổi giao diện Sáng / Tối" title="Chuyển đổi giao diện Sáng / Tối">
+                    <span class="theme-icon" aria-hidden="true">🌙</span>
+                    <span class="theme-label">Tối</span>
+                </button>
                 <a href="/docs" target="_blank" rel="noopener noreferrer"
                     class="btn-docs">Tài liệu API</a>
             </div>
@@ -137,20 +141,20 @@
                             </div>
 
                             <div class="control-block full-width">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                    <label for="selectHospital" style="margin-bottom: 0;">Bệnh viện / cơ sở y tế đích</label>
-                                    <button type="button" class="btn-secondary" style="padding: 2px 8px; font-size: 0.75rem; color: #fda4af; border-color: rgba(244, 63, 94, 0.5);" onclick="selectNearestHospital()">🚨 Dò BV gần nhất</button>
+                                <div class="hospital-search-header">
+                                    <label for="selectHospital">Bệnh viện / cơ sở y tế đích</label>
+                                    <button type="button" class="btn-find-nearest" onclick="selectNearestHospital()">🚨 Dò BV gần nhất</button>
                                 </div>
                                 <input type="text" id="inputSearchHospital"
+                                    class="input-search-hospital"
                                     placeholder="🔍 Gõ tìm BV (VD: Chợ Rẫy, 115...)"
-                                    style="width: 100%; box-sizing: border-box; padding: 6px 10px; background: rgba(0,0,0,0.35); border: 1px solid var(--border-neutral); border-radius: 6px; color: inherit; font-size: 0.8rem; margin-bottom: 6px;"
                                     oninput="populateHospitalSelect()" />
-                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; margin-bottom: 6px;">
-                                    <label style="cursor: pointer; display: flex; align-items: center; gap: 5px; margin-bottom: 0;">
-                                        <input type="checkbox" id="chkEmergencyOnly" checked onchange="populateHospitalSelect()" style="accent-color: var(--color-rose);" />
-                                        🚨 Lọc BV Cấp Cứu / Đa Khoa
+                                <div class="hospital-filter-row">
+                                    <label class="hospital-filter-label" for="chkEmergencyOnly">
+                                        <input type="checkbox" id="chkEmergencyOnly" checked onchange="populateHospitalSelect()" />
+                                        <span>🚨 Lọc BV Cấp Cứu / Đa Khoa</span>
                                     </label>
-                                    <span id="hospitalCountBadge" style="color: var(--text-muted);">(Đang tải...)</span>
+                                    <span id="hospitalCountBadge" class="hospital-count-badge">(Đang tải...)</span>
                                 </div>
                                 <select id="selectHospital"
                                     onchange="onHospitalSelectChange()"
@@ -294,8 +298,46 @@
                                 quãng đường và mức ùn tắc quan sát được; không
                                 phải metric do API trả về.</p>
 
+                            <div class="result-block explanation-block">
+                                <div class="explanation-header">
+                                    <span class="eyebrow">Giải thích thông minh</span>
+                                    <h4>💡 Đánh giá &amp; Lý do lựa chọn tuyến đường</h4>
+                                </div>
+                                <div id="routeNarrative" class="route-narrative"></div>
+                                <div class="explanation-grid">
+                                    <div class="explanation-item">
+                                        <span class="explanation-tag">🎯 1. Lý do lựa chọn</span>
+                                        <p id="expWhyChosen">—</p>
+                                    </div>
+                                    <div class="explanation-item">
+                                        <span class="explanation-tag">📊 2. Đặc tính tối ưu</span>
+                                        <p id="expMetricType">—</p>
+                                    </div>
+                                    <div class="explanation-item">
+                                        <span class="explanation-tag">🚦 3. Đoạn đường ùn tắc cao</span>
+                                        <p id="expCongestion">—</p>
+                                    </div>
+                                    <div class="explanation-item">
+                                        <span class="explanation-tag">⚖️ 4. So sánh với tuyến đường khác</span>
+                                        <p id="expComparison">—</p>
+                                    </div>
+                                    <div class="explanation-item full-width">
+                                        <span class="explanation-tag">🛡️ 5. Đảm bảo tính tối ưu</span>
+                                        <p id="expOptimality">—</p>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="result-block">
-                                <h4>Thứ tự ghé thăm</h4>
+                                <div class="path-flow-header">
+                                    <h4>🗺️ Lộ trình chi tiết các nút (Path Nodes)</h4>
+                                    <span id="pathNodeCountBadge" class="path-node-count">0 nút</span>
+                                </div>
+                                <div id="pathNodesFlow" class="node-sequence-box"></div>
+                            </div>
+
+                            <div id="multiLocationOrderBlock" class="result-block" hidden>
+                                <h4>📍 Thứ tự trạm dừng (Waypoints Order)</h4>
                                 <div id="visitingOrder" class="path-flow"></div>
                                 <div id="orderComparison"
                                     class="order-comparison" hidden></div>
@@ -483,6 +525,6 @@
         <div id="toast" role="status" aria-live="polite"></div>
 
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script src="dashboard.js?v=20260813-11"></script>
+        <script src="dashboard.js?v=20260817-theme8"></script>
     </body>
 </html>
