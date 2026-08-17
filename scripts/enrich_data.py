@@ -38,7 +38,7 @@ def enrich_segments():
 
     # Calculate the base cost using your calc_cost logic
     def calc_cost(time, congestion, risk, parameters=(0.648, 0.23, 0.122)):
-        return parameters[0]*time + parameters[1]*(congestion**2) + parameters[2]*(risk**2)
+        return parameters[0]*time + parameters[1]*congestion + parameters[2]*risk
 
     df_segments['base_cost'] = df_segments.apply(
         lambda row: calc_cost(row['base_time'], row['base_congestion'], row['base_risk']), axis=1
