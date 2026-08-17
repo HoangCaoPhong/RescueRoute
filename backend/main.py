@@ -31,6 +31,7 @@ DATA_DIR = os.path.abspath(os.path.join(BASE_DIR, "../data/processed"))
 
 # ==========================================
 from scripts import dataset_2_graph
+from backend.app.services.hospital_catalog import deduplicate_hospitals
 
 # ==========================================
 # 3. Quản lý Đồ thị & Dữ liệu trong RAM (Tối ưu cho 512MB)
@@ -120,10 +121,16 @@ class GraphManager:
 
         df_poi_subset = df_nodes[df_nodes['poi_name'].notna() | (df_nodes['poi_label'].fillna('').str.lower() != 'background')]
         hospitals_list = []
-        emergency_hospitals_list = []
         pois_list = []
 
-        for n_id, lat, lng, p_name, p_label in zip(df_poi_subset['_id'], df_poi_subset['lat'], df_poi_subset['long'], df_poi_subset['poi_name'], df_poi_subset['poi_label']):
+        for n_id, lat, lng, p_name, p_label, poi_distance_m in zip(
+            df_poi_subset['_id'],
+            df_poi_subset['lat'],
+            df_poi_subset['long'],
+            df_poi_subset['poi_name'],
+            df_poi_subset['poi_label'],
+            df_poi_subset['distance_meters'],
+        ):
             p_name = str(p_name) if pd.notna(p_name) and str(p_name) != "None" else None
             p_label = str(p_label) if pd.notna(p_label) else "Background"
             lat = float(lat)
@@ -155,11 +162,10 @@ class GraphManager:
                     "lng": lng,
                     "is_hospital": True,
                     "is_emergency": is_emergency,
-                    "category": "Cấp cứu / Đa khoa" if is_emergency else "Cơ sở Y tế / Chuyên khoa"
+                    "category": "Cấp cứu / Đa khoa" if is_emergency else "Cơ sở Y tế / Chuyên khoa",
+                    "source_distance_m": float(poi_distance_m) if pd.notna(poi_distance_m) else float("inf"),
                 }
                 hospitals_list.append(item)
-                if is_emergency:
-                    emergency_hospitals_list.append(item)
             else:
                 pois_list.append({
                     "node_id": n_id,
@@ -172,8 +178,10 @@ class GraphManager:
                     "is_emergency": False
                 })
 
-        self.hospitals = hospitals_list
-        self.emergency_hospitals = emergency_hospitals_list
+        self.hospitals = deduplicate_hospitals(hospitals_list)
+        self.emergency_hospitals = [
+            hospital for hospital in self.hospitals if hospital["is_emergency"]
+        ]
         self.pois = pois_list
         self.nodes = self.road_nodes # Alias cho tương thích
 
