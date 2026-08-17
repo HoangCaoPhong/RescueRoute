@@ -117,6 +117,7 @@ def test_dfs_returns_required_result_fields():
         "path",
         "visited_order",
         "frontier_steps",
+        "trace_history",
         "total_distance",
         "estimated_time",
         "total_cost",
@@ -127,6 +128,15 @@ def test_dfs_returns_required_result_fields():
     }
 
     assert required_fields.issubset(result.keys())
+
+
+def test_dfs_trace_history_matches_legacy_trace_fields():
+    result = solve_dfs(SAMPLE_GRAPH, "A", "D")
+
+    events = result["trace_history"]["events"]
+
+    assert [event["current_node"] for event in events] == result["visited_order"]
+    assert [event["frontier"] for event in events] == result["frontier_steps"]
 
 
 def test_dfs_dict_graph_has_no_route_metrics():
@@ -158,3 +168,58 @@ def test_dfs_invalid_node():
             "UNKNOWN_NODE",
             "D"
         )
+
+
+def test_dfs_reconstructs_actual_traversed_path():
+    # Graph where node B can be reached from A directly or via C.
+    # DFS explores branch C -> B -> D.
+    graph = {
+        "A": ["B", "C"],
+        "C": ["B"],
+        "B": ["D"],
+        "D": []
+    }
+    result = solve_dfs(graph, "A", "D")
+    path = result["path"]
+    # Verify each edge in reconstructed path actually exists in graph
+    for u, v in zip(path[:-1], path[1:]):
+        assert v in graph[u], f"Edge ({u} -> {v}) in path does not exist in graph"
+
+
+def test_depth_limited_dfs_limits_depth():
+    from backend.app.algorithms.graph_search.dfs import solve_depth_limited_dfs
+    from backend.app.algorithms.graph_search.trace_history import SearchFailure
+
+    # Linear graph: A -> B -> C -> D
+    linear_graph = {
+        "A": ["B"],
+        "B": ["C"],
+        "C": ["D"],
+        "D": [],
+    }
+
+    # Depth 2 cannot reach D (at depth 3)
+    with pytest.raises(SearchFailure):
+        solve_depth_limited_dfs(linear_graph, "A", "D", max_depth=2, max_expansions=None)
+
+    # Depth 3 can reach D
+    result = solve_depth_limited_dfs(linear_graph, "A", "D", max_depth=3, max_expansions=None)
+    assert result["found"] is True
+    assert result["path"] == ["A", "B", "C", "D"]
+
+
+def test_depth_limited_dfs_limits_expansions():
+    from backend.app.algorithms.graph_search.dfs import solve_depth_limited_dfs
+    from backend.app.algorithms.graph_search.trace_history import SearchFailure
+
+    linear_graph = {
+        "A": ["B"],
+        "B": ["C"],
+        "C": ["D"],
+        "D": [],
+    }
+
+    # Only 2 expansions allowed -> cannot reach D
+    with pytest.raises(SearchFailure):
+        solve_depth_limited_dfs(linear_graph, "A", "D", max_expansions=2)
+

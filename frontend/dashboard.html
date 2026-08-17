@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="vi">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="description"
+            content="RescueRoute - trực quan hóa thuật toán tìm đường cho xe cấp cứu trong giao thông đô thị Việt Nam.">
+        <title>RescueRoute | Phòng điều phối tìm đường AI</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
+            rel="stylesheet">
+        <link rel="stylesheet"
+            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+        <link rel="stylesheet" href="dashboard.css?v=20260817-theme8">
+    </head>
+    <body>
+        <header class="app-header">
+            <div class="brand">
+                <div class="brand-icon" aria-hidden="true">🚑</div>
+                <div>
+                    <h1 class="brand-title">RescueRoute</h1>
+                    <p class="brand-subtitle">Tìm đường cấp cứu trong giao thông
+                        đô thị Việt Nam</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <span id="connectionStatus" class="connection-badge is-loading"
+                    role="status">
+                    <span class="status-dot" aria-hidden="true"></span>
+                    Đang kết nối API
+                </span>
+                <button id="themeToggleBtn" type="button" class="btn-theme-toggle" onclick="toggleTheme()" aria-label="Chuyển đổi giao diện Sáng / Tối" title="Chuyển đổi giao diện Sáng / Tối">
+                    <span class="theme-icon" aria-hidden="true">🌙</span>
+                    <span class="theme-label">Tối</span>
+                </button>
+                <a href="/docs" target="_blank" rel="noopener noreferrer"
+                    class="btn-docs">Tài liệu API</a>
+            </div>
+        </header>
+
+        <main id="workspace" class="workspace">
+            <aside id="sidebarPanel" class="sidebar" aria-label="Bảng điều khiển tìm đường">
+                <section class="panel-section" aria-labelledby="datasetTitle">
+                    <div class="section-heading">
+                        <span class="section-index">01</span>
+                        <div>
+                            <h2 id="datasetTitle">Dữ liệu đồ thị</h2>
+                            <p>Trạng thái mạng đường đang lưu trong RAM</p>
+                        </div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="card-heading">
+                            <span>Đồ thị giao thông TP.HCM</span>
+                            <span id="datasetBadge"
+                                class="status-badge neutral">Đang tải</span>
+                        </div>
+                        <p id="datasetSummary" class="muted-copy"
+                            aria-live="polite">Đang tải dữ liệu từ backend…</p>
+                        <div class="metrics-grid compact">
+                            <div class="metric-item">
+                                <span class="metric-label">Nút giao thông</span>
+                                <strong class="metric-value"
+                                    id="statNodes">—</strong>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Cạnh có hướng</span>
+                                <strong class="metric-value"
+                                    id="statEdges">—</strong>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Cơ sở y tế</span>
+                                <strong class="metric-value rose"
+                                    id="statHospitals">—</strong>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Độ trễ health
+                                    check</span>
+                                <strong class="metric-value emerald"
+                                    id="statLatency">—</strong>
+                            </div>
+                        </div>
+                        <button id="btnTogglePOIIcon" type="button"
+                            class="toggle-button is-active"
+                            onclick="togglePOIIcons()" aria-pressed="true">
+                            <span>Hiển thị cơ sở y tế</span><span>Bật</span>
+                        </button>
+                    </div>
+                </section>
+
+                <section class="panel-section" aria-labelledby="gpsTitle">
+                    <div class="section-heading">
+                        <span class="section-index">02</span>
+                        <div>
+                            <h2 id="gpsTitle">Vị trí xe cấp cứu</h2>
+                            <p>Ánh xạ GPS sang nút đường gần nhất</p>
+                        </div>
+                    </div>
+                    <div class="feature-card accent-rose-card">
+                        <div class="gps-title"><span
+                                aria-hidden="true">🚑</span> Xe đang trực</div>
+                        <div class="code-block" id="gpsCodeDisplay">GPS:
+                            (10.77300, 106.69800)</div>
+                        <p class="inline-info" id="nearestDisplay">Nút gần nhất:
+                            đang tải…</p>
+                        <div class="button-row">
+                            <button id="btnDeviceGps" class="btn-action danger"
+                                type="button" onclick="getDeviceLocation()">Dùng
+                                GPS thiết bị</button>
+                            <button class="btn-secondary" type="button"
+                                onclick="showToast('Nhấp một vị trí trên bản đồ để đặt lại vị trí xe.')">Chọn
+                                trên bản đồ</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel-section" aria-labelledby="plannerTitle">
+                    <div class="section-heading">
+                        <span class="section-index">03</span>
+                        <div>
+                            <h2 id="plannerTitle">Lập tuyến bằng AI Search</h2>
+                            <p>Hai điểm hoặc nhiều điểm trung gian</p>
+                        </div>
+                    </div>
+                    <div class="feature-card accent-indigo-card">
+                        <div class="route-controls">
+                            <div class="control-block">
+                                <label for="selectStartMode">Điểm xuất
+                                    phát</label>
+                                <select id="selectStartMode"
+                                    onchange="onStartModeChange()">
+                                    <option value="current">Vị trí xe hiện
+                                        tại</option>
+                                    <option value="custom">Nhập mã nút tùy
+                                        chỉnh</option>
+                                </select>
+                                <input id="inputStartNode" type="number"
+                                    inputmode="numeric"
+                                    placeholder="Ví dụ: 373543511" hidden>
+                            </div>
+
+                            <div class="control-block full-width">
+                                <div class="hospital-search-header">
+                                    <label for="selectHospital">Bệnh viện / cơ sở y tế đích</label>
+                                    <button type="button" class="btn-find-nearest" onclick="selectNearestHospital()">🚨 Dò BV gần nhất</button>
+                                </div>
+                                <input type="text" id="inputSearchHospital"
+                                    class="input-search-hospital"
+                                    placeholder="🔍 Gõ tìm BV (VD: Chợ Rẫy, 115...)"
+                                    oninput="populateHospitalSelect()" />
+                                <div class="hospital-filter-row">
+                                    <label class="hospital-filter-label" for="chkEmergencyOnly">
+                                        <input type="checkbox" id="chkEmergencyOnly" checked onchange="populateHospitalSelect()" />
+                                        <span>🚨 Lọc BV Cấp Cứu / Đa Khoa</span>
+                                    </label>
+                                    <span id="hospitalCountBadge" class="hospital-count-badge">(Đang tải...)</span>
+                                </div>
+                                <select id="selectHospital"
+                                    onchange="onHospitalSelectChange()"
+                                    disabled>
+                                    <option>Đang tải danh sách…</option>
+                                </select>
+                            </div>
+
+                            <div class="control-block full-width">
+                                <label for="inputWaypoints">Điểm trung gian
+                                    <span class="optional-label">tùy chọn, tối
+                                        đa 5</span></label>
+                                <textarea id="inputWaypoints" rows="2"
+                                    placeholder="Nhập mã nút, ngăn cách bằng dấu phẩy. Ví dụ: 123, 456"></textarea>
+                                <small>Có thể giữ thứ tự nhập hoặc tối ưu thứ tự
+                                    bằng Nearest Neighbor ở frontend.</small>
+                            </div>
+
+                            <div class="control-block">
+                                <label for="selectVisitOrder">Xử lý nhiều địa
+                                    điểm</label>
+                                <select id="selectVisitOrder">
+                                    <option value="input">Giữ thứ tự đã
+                                        nhập</option>
+                                    <option value="nearest_neighbor">Nearest Neighbor
+                                        (xấp xỉ)</option>
+                                    <option value="held_karp">Held–Karp
+                                        (tối ưu, tối đa 10 điểm)</option>
+                                    <option value="genetic_algorithm">Genetic Algorithm
+                                        (xấp xỉ)</option>
+                                    <option value="simulated_annealing">Simulated Annealing
+                                        (xấp xỉ)</option>
+                                </select>
+                            </div>
+
+                            <div class="control-block">
+                                <label for="selectAlgorithm">Thuật toán</label>
+                                <select id="selectAlgorithm"
+                                    onchange="onAlgorithmChange()">
+                                    <option value="astar">A* Search</option>
+                                    <option value="ucs">Uniform Cost Search
+                                        (UCS)</option>
+                                    <option value="dijkstra">Dijkstra</option>
+                                    <option value="bfs">Breadth-First Search
+                                        (BFS)</option>
+                                    <option value="dfs">Depth-First Search
+                                        (DFS)</option>
+                                    <option value="hill_climbing">Hill Climbing
+                                        (xấp xỉ)</option>
+                                </select>
+                            </div>
+
+                            <div class="control-block full-width">
+                                <label for="selectCriterion">Tiêu chí đánh
+                                    giá</label>
+                                <select id="selectCriterion"
+                                    onchange="onCriterionChange()">
+                                    <option value="cost">Chi phí giao thông tổng
+                                        hợp thấp nhất</option>
+                                    <option value="time">Thời gian di chuyển ước
+                                        tính</option>
+                                    <option value="distance">Tổng quãng đường
+                                        ngắn nhất</option>
+                                    <option value="hops">Ít chặng đường
+                                        nhất</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="criterionNotice" class="criterion-notice"
+                            role="note"></div>
+
+                        <div class="button-row planner-actions">
+                            <button id="btnCalculateRoute"
+                                class="btn-action primary" type="button"
+                                onclick="calculateRoute()">
+                                Tìm tuyến đường
+                            </button>
+                            <button id="btnCompareAlgorithms"
+                                class="btn-secondary" type="button"
+                                onclick="compareAlgorithms()">
+                                So sánh 6 thuật toán
+                            </button>
+                        </div>
+                        <div id="operationStatus" class="operation-status"
+                            role="status" aria-live="polite"></div>
+
+                        <div id="routeResultPanel" class="result-panel" hidden>
+                            <div class="result-heading">
+                                <div>
+                                    <span class="eyebrow">Kết quả tìm
+                                        kiếm</span>
+                                    <h3 id="resultTitle">Đã tìm thấy tuyến
+                                        đường</h3>
+                                </div>
+                                <span id="optimalityBadge"
+                                    class="status-badge neutral">Đang đánh
+                                    giá</span>
+                            </div>
+
+                            <div id="routeSummary" class="route-summary"></div>
+
+                            <div class="metrics-grid result-metrics">
+                                <div class="metric-item">
+                                    <span class="metric-label">Tổng chi
+                                        phí</span>
+                                    <strong class="metric-value"
+                                        id="resCost">—</strong>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">Tổng quãng
+                                        đường</span>
+                                    <strong class="metric-value"
+                                        id="resDistance">—</strong>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">Thời gian di
+                                        chuyển*</span>
+                                    <strong class="metric-value"
+                                        id="resTravelTime">—</strong>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">Số chặng</span>
+                                    <strong class="metric-value"
+                                        id="resHops">—</strong>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">Nút đã mở
+                                        rộng</span>
+                                    <strong class="metric-value"
+                                        id="resExpanded">—</strong>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">Thời gian xử
+                                        lý</span>
+                                    <strong class="metric-value"
+                                        id="resTime">—</strong>
+                                </div>
+                            </div>
+                            <p class="metric-footnote">* Ước tính ở frontend từ
+                                quãng đường và mức ùn tắc quan sát được; không
+                                phải metric do API trả về.</p>
+
+                            <div class="result-block explanation-block">
+                                <div class="explanation-header">
+                                    <span class="eyebrow">Giải thích thông minh</span>
+                                    <h4>💡 Đánh giá &amp; Lý do lựa chọn tuyến đường</h4>
+                                </div>
+                                <div id="routeNarrative" class="route-narrative"></div>
+                                <div class="explanation-grid">
+                                    <div class="explanation-item">
+                                        <span class="explanation-tag">🎯 1. Lý do lựa chọn</span>
+                                        <p id="expWhyChosen">—</p>
+                                    </div>
+                                    <div class="explanation-item">
+                                        <span class="explanation-tag">📊 2. Đặc tính tối ưu</span>
+                                        <p id="expMetricType">—</p>
+                                    </div>
+                                    <div class="explanation-item">
+                                        <span class="explanation-tag">🚦 3. Đoạn đường ùn tắc cao</span>
+                                        <p id="expCongestion">—</p>
+                                    </div>
+                                    <div class="explanation-item">
+                                        <span class="explanation-tag">⚖️ 4. So sánh với tuyến đường khác</span>
+                                        <p id="expComparison">—</p>
+                                    </div>
+                                    <div class="explanation-item full-width">
+                                        <span class="explanation-tag">🛡️ 5. Đảm bảo tính tối ưu</span>
+                                        <p id="expOptimality">—</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="result-block">
+                                <div class="path-flow-header">
+                                    <h4>🗺️ Lộ trình chi tiết các nút (Path Nodes)</h4>
+                                    <span id="pathNodeCountBadge" class="path-node-count">0 nút</span>
+                                </div>
+                                <div id="pathNodesFlow" class="node-sequence-box"></div>
+                            </div>
+
+                            <div id="multiLocationOrderBlock" class="result-block" hidden>
+                                <h4>📍 Thứ tự trạm dừng (Waypoints Order)</h4>
+                                <div id="visitingOrder" class="path-flow"></div>
+                                <div id="orderComparison"
+                                    class="order-comparison" hidden></div>
+                            </div>
+
+                            <div id="searchVisualizationPanel"
+
+                                class="search-visualization" hidden>
+                                <div class="search-viz-header">
+                                    <div>
+                                        <span class="eyebrow">Mô phỏng từng
+                                            bước</span>
+                                        <h4><span id="vizAlgorithm">—</span> ·
+                                            <span id="vizStep">Bước 0 /
+                                                0</span></h4>
+                                    </div>
+                                    <div class="viz-legend"
+                                        aria-label="Chú thích mô phỏng">
+                                        <span id="vizVisitedLegend"
+                                            class="legend-chip visited">🟡 Tuyến
+                                            đã hiện</span>
+                                        <span id="vizCurrentLegend"
+                                            class="legend-chip current">🟠
+                                            Trên tuyến cuối</span>
+                                        <span class="legend-chip frontier">🔵
+                                            Frontier</span>
+                                    </div>
+                                </div>
+                                <div class="search-viz-stats">
+                                    <div><span>Nút đang mở</span><code
+                                            id="vizCurrentNode">—</code></div>
+                                    <div><span>Đã duyệt</span><strong
+                                            id="vizVisitedCount">0</strong></div>
+                                    <div><span
+                                            id="vizFrontierLabel">Frontier</span><strong
+                                            id="vizFrontierCount">0</strong></div>
+                                </div>
+                                <p id="vizMapStatus" class="viz-map-status"
+                                    role="status"></p>
+                                <details class="search-viz-details">
+                                    <summary>Chi tiết trace &amp; frontier</summary>
+                                    <div class="search-viz-detail-content">
+                                        <div class="search-viz-queue-panel">
+                                            <span class="list-label">Thứ tự đã duyệt gần
+                                                nhất</span>
+                                            <div class="search-viz-list"
+                                                id="vizVisitedList">—</div>
+                                        </div>
+                                        <div class="search-viz-queue-panel">
+                                            <span class="list-label">Frontier / open
+                                                list</span>
+                                            <div class="search-viz-list"
+                                                id="vizFrontierList">—</div>
+                                        </div>
+                                        <label class="follow-search-control"
+                                            for="followSearchNode">
+                                            <input id="followSearchNode" type="checkbox"
+                                                checked>
+                                            <span id="followSearchLabel">Tự động đưa node thuộc tuyến cuối vào
+                                                giữa bản đồ</span>
+                                        </label>
+                                        <p id="vizExplanation"
+                                            class="search-viz-explanation"></p>
+                                    </div>
+                                </details>
+                                <div class="search-viz-toolbar">
+                                    <div class="search-viz-playback"
+                                        aria-label="Điều khiển mô phỏng">
+                                        <button type="button"
+                                            onclick="previousSearchStep()"
+                                            aria-label="Bước trước">←</button>
+                                        <button type="button" id="btnPlaySearch"
+                                            onclick="toggleSearchAnimation()">▶
+                                            Phát</button>
+                                        <button type="button"
+                                            onclick="nextSearchStep()"
+                                            aria-label="Bước tiếp theo">→</button>
+                                    </div>
+                                    <label class="viz-select-control"
+                                        for="searchSpeed">
+                                        <span>Tốc độ</span>
+                                        <select id="searchSpeed">
+                                            <option value="700">Chậm</option>
+                                            <option value="350"
+                                                selected>Vừa</option>
+                                            <option value="120">Nhanh</option>
+                                        </select>
+                                    </label>
+                                    <label class="viz-select-control mode"
+                                        for="mapTraceMode">
+                                        <span>Hiển thị map</span>
+                                        <select id="mapTraceMode"
+                                            onchange="onMapTraceModeChange()">
+                                            <option value="route_frontier" selected>Tuyến
+                                                cuối + frontier</option>
+                                            <option value="full_trace">Toàn bộ search
+                                                trace</option>
+                                        </select>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <details class="route-details">
+                                <summary>Đường đi theo từng chặng</summary>
+                                <div id="routeSegmentList"
+                                    class="route-segment-list"></div>
+                            </details>
+                        </div>
+
+                        <div id="comparisonPanel" class="comparison-panel"
+                            hidden>
+                            <div class="result-heading">
+                                <div>
+                                    <span class="eyebrow">Cùng đầu vào, cùng dữ
+                                        liệu</span>
+                                    <h3>So sánh thuật toán</h3>
+                                </div>
+                                <button class="icon-button" type="button"
+                                    onclick="closeComparison()"
+                                    aria-label="Đóng bảng so sánh">×</button>
+                            </div>
+                            <div class="table-scroll">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Thuật toán</th>
+                                            <th>Chi phí</th>
+                                            <th>Quãng đường</th>
+                                            <th>Thời gian*</th>
+                                            <th>Số chặng</th>
+                                            <th>Nút mở rộng</th>
+                                            <th>Xử lý</th>
+                                            <th>Bảo đảm</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="comparisonBody"></tbody>
+                                </table>
+                            </div>
+                            <p id="comparisonNote" class="metric-footnote"></p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel-section" aria-labelledby="healthTitle">
+                    <div class="section-heading">
+                        <span class="section-index">04</span>
+                        <div>
+                            <h2 id="healthTitle">Kiểm tra hệ thống</h2>
+                            <p>Health check và thời gian phản hồi backend</p>
+                        </div>
+                    </div>
+                    <div class="feature-card">
+                        <button id="btnHealth" class="btn-secondary"
+                            type="button" onclick="checkSystemHealth()">Ping GET
+                            /api/health</button>
+                    </div>
+                </section>
+
+            </aside>
+
+            <button id="btnToggleSidebar" class="sidebar-toggle" type="button"
+                onclick="toggleSidebar()" aria-controls="sidebarPanel"
+                aria-expanded="true" aria-label="Thu gọn bảng điều khiển"
+                title="Thu gọn bảng điều khiển">
+                <span id="sidebarToggleIcon" aria-hidden="true">‹</span>
+            </button>
+
+            <section class="map-shell" aria-label="Bản đồ giao thông">
+                <div id="map"></div>
+                <div id="mapOverlayHost" class="map-overlay-host">
+                    <div id="searchPlaybackDock" class="search-playback-dock"
+                        aria-label="Điều khiển mô phỏng" hidden></div>
+                </div>
+                <div class="map-instruction"><span aria-hidden="true">⌖</span>
+                    Nhấp bản đồ để đặt vị trí xe</div>
+                <div class="map-legend">
+                    <strong>Chú thích</strong>
+                    <span><i class="map-line route"></i>Tuyến cuối cùng</span>
+                    <span><i class="map-line road"></i>Mạng đường</span>
+                    <span><i class="map-marker hospital"></i>Cơ sở y tế</span>
+                </div>
+            </section>
+        </main>
+
+        <div id="toast" role="status" aria-live="polite"></div>
+
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="dashboard.js?v=20260817-theme8"></script>
+    </body>
+</html>

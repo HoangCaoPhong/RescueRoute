@@ -14,6 +14,8 @@ Mỗi thuật toán có một folder riêng để thành viên có thể code, t
 | Optimization | `optimization/hill_climbing/` | Hill Climbing | Phong | `feature/hill-climbing` |
 | Optimization | `optimization/simulated_annealing/` | Simulated Annealing | Nhân | `feature/simulated-annealing` |
 | Optimization | `optimization/genetic_algorithm/` | Genetic Algorithm | Hòa | `feature/genetic-algorithm` |
+| Optimization | `optimization/nearest_neighbor/` | Nearest Neighbor | Shared | `temp/trace-history-merge-dev` |
+| Optimization | `optimization/held_karp/` | Held-Karp Dynamic Programming | Shared | `temp/trace-history-merge-dev` |
 
 ## Cấu trúc chuẩn của một folder
 
@@ -78,4 +80,3 @@ Contract chính xác sẽ nằm trong domain/algorithm common modules sau khi `f
 - Có giải thích tính complete/optimal/approximate trong README hoặc tài liệu thiết kế.
 - Thuật toán ngẫu nhiên nhận seed và test tái lập được.
 - Có số liệu chạy trên cùng dataset mẫu để so sánh công bằng.
-

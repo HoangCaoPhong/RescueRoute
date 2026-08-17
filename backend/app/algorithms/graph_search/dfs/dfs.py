@@ -1,37 +1,27 @@
 from time import perf_counter
-from backend.app.algorithms.graph_search.utils import reconstruct_path, get_neighbors
+from backend.app.algorithms.graph_search.utils import (
+    reconstruct_path,
+    get_neighbors,
+    has_node,
+    calculate_path_metrics,
+)
+from backend.app.algorithms.graph_search.trace_history import SearchFailure, SearchTraceHistory
 
 
-def has_node(graph, node_id):
-    """Check whether node exists in graph."""
-    if isinstance(graph, dict):
-        return node_id in graph
-    return graph.has_node(node_id)
-
-
-def calculate_path_metrics(graph, path, cost_profile):
-    """
-    Calculate route metrics after DFS has found a path.
-    DFS does not use these metrics to choose which node to explore.
-    """
-    if hasattr(graph, "calculate_path_metrics"):
-        return graph.calculate_path_metrics(path, cost_profile)
-    return None, None, None
-
-
-def solve_dfs(
+def solve_depth_limited_dfs(
     graph,
     start_node_id,
     goal_node_id,
-    cost_profile=None
+    cost_profile=None,
+    *,
+    max_depth: int | None = None,
+    max_expansions: int | None = 3000,
 ):
     """
-    Depth-First Search (DFS).
+    Depth-Limited / Bounded Search (DLS / Bounded DFS).
 
-    DFS uses a LIFO stack and explores graph paths as deeply as possible
-    before backtracking.
-
-    It does not guarantee an optimal or minimum-hop path.
+    Explores branches up to a maximum depth or maximum number of node expansions,
+    preventing infinite loops or memory overload on large cyclic road graphs.
     """
     start_time = perf_counter()
 
@@ -42,23 +32,26 @@ def solve_dfs(
             f"goal node '{goal_node_id}' does not exist."
         )
 
-    stack = [start_node_id]
+    # stack items: (node_id, parent_node_id, depth)
+    stack = [(start_node_id, None, 0)]
     visited = set()
-    parent = {start_node_id: None}
+    parent = {}
 
-    visited_order = []
-    frontier_steps = []
+    trace_history = SearchTraceHistory()
 
     while stack:
-        # Record frontier before expanding current node
-        frontier_steps.append(list(stack))
-        current_node = stack.pop()
+        current_node, current_parent, current_depth = stack.pop()
 
         if current_node in visited:
             continue
 
+        frontier_preview = [node for node, _, _ in stack[:249]] + [current_node]
+        trace_history.record_expansion(
+            current_node,
+            frontier_preview,
+        )
         visited.add(current_node)
-        visited_order.append(current_node)
+        parent[current_node] = current_parent
 
         # Goal found
         if current_node == goal_node_id:
@@ -69,32 +62,87 @@ def solve_dfs(
             processing_time_ms = (perf_counter() - start_time) * 1000.0
 
             return {
+                "found": True,
                 "path": path,
-                "visited_order": visited_order,
-                "frontier_steps": frontier_steps,
+                **trace_history.as_result_fields(),
                 "total_distance": total_distance,
                 "estimated_time": estimated_time,
                 "total_cost": total_cost,
-                "explored_nodes": len(visited_order),
+                "explored_nodes": trace_history.explored_nodes,
                 "processing_time_ms": processing_time_ms,
                 "is_optimal": False,
                 "explanation_data": {
-                    "algorithm": "DFS",
+                    "algorithm": "DFS (Depth-Limited)",
                     "optimality": "none",
                     "message": (
-                        "DFS explores graph branches to maximum depth. "
+                        "DFS explores graph branches to maximum depth with expansion limits. "
                         "It does not guarantee minimum distance, time, or cost."
                     )
                 },
             }
 
+        if max_expansions is not None and trace_history.explored_nodes >= max_expansions:
+            message = (
+                f"DFS reached maximum expansion limit ({max_expansions}) "
+                f"without finding goal '{goal_node_id}'."
+            )
+            raise SearchFailure(
+                message,
+                {
+                    "found": False,
+                    "path": [],
+                    **trace_history.as_result_fields(),
+                    "explored_nodes": trace_history.explored_nodes,
+                    "processing_time_ms": (perf_counter() - start_time) * 1000.0,
+                    "message": message,
+                },
+            )
+
+        if max_depth is not None and current_depth >= max_depth:
+            continue
+
         # Expand neighbors: push in reverse order so LIFO pops smaller IDs first
         neighbors = get_neighbors(graph, current_node)
         for neighbor_node in reversed(neighbors):
             if neighbor_node not in visited:
-                if neighbor_node not in parent:
-                    parent[neighbor_node] = current_node
-                stack.append(neighbor_node)
+                stack.append((neighbor_node, current_node, current_depth + 1))
 
     # No route found
-    raise ValueError(f"No route found from '{start_node_id}' to '{goal_node_id}'.")
+    message = f"No route found from '{start_node_id}' to '{goal_node_id}'."
+    raise SearchFailure(
+        message,
+        {
+            "found": False,
+            "path": [],
+            **trace_history.as_result_fields(),
+            "explored_nodes": trace_history.explored_nodes,
+            "processing_time_ms": (perf_counter() - start_time) * 1000.0,
+            "message": message,
+        },
+    )
+
+
+def solve_dfs(
+    graph,
+    start_node_id,
+    goal_node_id,
+    cost_profile=None,
+):
+    """
+    Standard Depth-First Search (DFS).
+
+    Pure, unconstrained DFS exploring graph paths using a LIFO stack.
+    """
+    return solve_depth_limited_dfs(
+        graph,
+        start_node_id,
+        goal_node_id,
+        cost_profile=cost_profile,
+        max_depth=None,
+        max_expansions=None,
+    )
+
+
+solve_bounded_dfs = solve_depth_limited_dfs
+
+

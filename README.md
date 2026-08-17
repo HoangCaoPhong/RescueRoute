@@ -2,7 +2,9 @@
 
 RescueRoute là ứng dụng web mô phỏng tìm đường tối ưu cho xe cấp cứu trong bối cảnh giao thông đô thị Việt Nam. Hệ thống biểu diễn mạng lưới đường dưới dạng đồ thị, so sánh các thuật toán tìm kiếm AI và giải thích vì sao một tuyến đường được chọn dựa trên thời gian, ùn tắc và rủi ro.
 
-> Trạng thái hiện tại: repository mới được khởi tạo ở mức cấu trúc. Chưa có mã nguồn chạy được.
+> Trạng thái hiện tại: đã có FastAPI backend, dashboard Leaflet prototype,
+> sáu thuật toán tìm đường có unified trace và API tối ưu nhiều
+> waypoint. Khung React/TypeScript vẫn là hướng phát triển tiếp theo.
 
 ## Mục tiêu chính
 
@@ -13,20 +15,21 @@ RescueRoute là ứng dụng web mô phỏng tìm đường tối ưu cho xe c�
 - Báo cáo quãng đường, thời gian dự kiến, tổng chi phí, số node đã mở rộng và thời gian xử lý.
 - Giải thích tuyến đường, ảnh hưởng của ùn tắc/rủi ro và tính tối ưu hoặc xấp xỉ của thuật toán.
 
-## Kiến trúc dự kiến
+## Kiến trúc hiện tại
 
 ```text
-React + Leaflet/OpenStreetMap
+HTML/JavaScript + Leaflet/OpenStreetMap
           |
-          | HTTP / WebSocket
+          | HTTP/JSON
           v
 FastAPI API -> application services -> search/optimization algorithms
-          |                              |
-          v                              v
-Supabase/PostgreSQL                 graph dataset in RAM
+          |
+          v
+processed CSV -> graph dataset in RAM
 ```
 
-- `frontend/`: React UI, bản đồ, chọn thuật toán và mô phỏng quá trình tìm kiếm.
+- `frontend/`: dashboard Leaflet prototype, chọn thuật toán và mô phỏng
+  search trace; `frontend/src/` giữ khung React/TypeScript cho giai đoạn sau.
 - `backend/`: FastAPI, mô hình đồ thị, thuật toán, nghiệp vụ định tuyến và tích hợp ngoài.
 - `data/`: dữ liệu gốc, dữ liệu đã chuẩn hóa và bộ dữ liệu mẫu dùng cho demo/test.
 - `infra/`: cấu hình Render, Supabase và các tài nguyên triển khai.
@@ -51,6 +54,18 @@ edge_cost      = alpha * estimated_time
 
 Các trọng số mặc định dự kiến là `alpha = 0.6`, `beta = 0.3`, `gamma = 0.1`. Giá trị cuối cùng phải được kiểm chứng bằng benchmark và ghi rõ giả định trong báo cáo.
 
+## Dataset demo và test
+
+- `data/samples/simulated_vietnamese_traffic/`: fixture nhỏ 40 node/60 edge,
+  dùng cho unit test deterministic.
+- `data/samples/HCMUS_surrounding_filter/Minimap_ouput/`: minimap thực tế quanh
+  HCMUS, gồm 3.364 node/4.918 edge. File `edges.csv` đã gom distance,
+  estimated time, congestion level và road type theo contract của đề.
+- `data/processed/`: graph hiện được FastAPI dashboard nạp vào RAM.
+
+Xem data dictionary, nguồn và chính sách fallback tại
+[`data/README.md`](data/README.md).
+
 ## Cấu trúc repository
 
 ```text
@@ -68,7 +83,9 @@ RescueRoute/
 │   │   │   │   └── ucs/
 │   │   │   └── optimization/
 │   │   │       ├── genetic_algorithm/
+│   │   │       ├── held_karp/
 │   │   │       ├── hill_climbing/
+│   │   │       ├── nearest_neighbor/
 │   │   │       └── simulated_annealing/
 │   │   ├── core/            # Config, logging, constants
 │   │   ├── domain/          # Node, Edge, Graph, Route và luật nghiệp vụ
@@ -142,18 +159,22 @@ Không đặt FastAPI route, database query hoặc API call trong folder thuật
 
 ## Bắt đầu phát triển
 
-Khung hiện tại chưa khóa package manager hoặc phiên bản dependency vì frontend/backend chưa được scaffold bằng công cụ chính thức. Khi bắt đầu Sprint 1:
+- Cài dependency: `python -m pip install -r backend/requirements.txt`.
+- Chạy API/dashboard từ root: `python -m uvicorn backend.main:app --reload`.
+- Chạy backend tests: `python -m pytest backend/tests -q`.
+- Tái tạo HCMUS normalized edges:
+  `python scripts/build_hcmus_minimap_edges.py`.
 
-- Backend tạo môi trường Python 3.10+ và FastAPI/Uvicorn trong `backend/`.
-- Frontend scaffold React + TypeScript trong `frontend/`, ưu tiên Vite và Leaflet.
-- Sao chép `.env.example` thành `.env`, điền cấu hình local và tuyệt đối không commit secret.
-- Mỗi thuật toán phải dùng chung contract đầu vào/đầu ra và có test trên cùng dataset mẫu.
+Khung React + TypeScript trong `frontend/src/` chưa thay thế dashboard HTML/JS
+prototype. Không commit `.env`, virtual environment hoặc GPS người dùng.
 
 Đọc [`backend/README.md`](backend/README.md) và [`CODING_RULES.md`](CODING_RULES.md) trước khi viết code.
 
 ## Tài liệu nguồn
 
-Đề bài và kế hoạch ban đầu được giữ nguyên trong `docs/`. Khi tài liệu thay đổi, cập nhật chỉ mục và ghi quyết định kỹ thuật mới trong `docs/architecture/` thay vì sửa lịch sử họp cũ.
+PDF/DOCX của đề bài và kế hoạch ban đầu chỉ được giữ local trong `docs/` và bị
+Git bỏ qua. Khi yêu cầu thay đổi, cập nhật chỉ mục Markdown và ghi quyết định
+kỹ thuật mới trong `docs/architecture/` thay vì commit lại tài liệu nhị phân.
 
 ## Nhóm thực hiện
 
