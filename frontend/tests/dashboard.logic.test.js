@@ -290,3 +290,41 @@ test('missing final-route coordinates are interpolated on the client', () => {
     assert.ok(Math.abs(coords[0] - 10.8) < 1e-12);
     assert.ok(Math.abs(coords[1] - 106.7) < 1e-12);
 });
+
+test('renderExplanation populates narrative and all 5 evaluation criteria points', () => {
+    const context = loadDashboardContext();
+    const elements = vm.runInContext(`(() => {
+        const store = {};
+        byId = (id) => {
+            if (!store[id]) store[id] = { textContent: '', innerHTML: '' };
+            return store[id];
+        };
+        const aggregate = {
+            visitingOrder: [101, 202],
+            totalCost: 15.5,
+            totalDistance: 2500,
+            totalTravelTime: 300,
+            totalHops: 4,
+            segments: [{ result: {} }],
+            congestion: {
+                highCongestionEdges: [{ edgeId: 'e1', name: 'Đường Nguyễn Huệ', level: 5 }],
+                averageKnownLevel: 2.8
+            }
+        };
+        const input = {
+            algorithm: 'astar',
+            criterion: 'cost',
+            visitOrderMode: 'input'
+        };
+        renderExplanation(aggregate, input, ALGORITHM_SPECS.astar);
+        return store;
+    })()`, context);
+
+    assert.ok(elements.routeNarrative.innerHTML.includes('A* Search'));
+    assert.ok(elements.routeNarrative.innerHTML.includes('15.50'));
+    assert.ok(elements.expWhyChosen.textContent.includes('A* Search'));
+    assert.ok(elements.expMetricType.textContent.includes('TỔNG CHI PHÍ GIAO THÔNG'));
+    assert.ok(elements.expCongestion.textContent.includes('Đường Nguyễn Huệ'));
+    assert.ok(elements.expComparison.textContent.includes('Dijkstra'));
+    assert.ok(elements.expOptimality.textContent.includes('admissible'));
+});

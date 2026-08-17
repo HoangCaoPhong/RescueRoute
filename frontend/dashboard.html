@@ -13,7 +13,7 @@
             rel="stylesheet">
         <link rel="stylesheet"
             href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-        <link rel="stylesheet" href="dashboard.css?v=20260817-theme3">
+        <link rel="stylesheet" href="dashboard.css?v=20260817-theme5">
     </head>
     <body>
         <header class="app-header">
@@ -298,6 +298,36 @@
                                 quãng đường và mức ùn tắc quan sát được; không
                                 phải metric do API trả về.</p>
 
+                            <div class="result-block explanation-block">
+                                <div class="explanation-header">
+                                    <span class="eyebrow">Giải thích thông minh</span>
+                                    <h4>💡 Đánh giá &amp; Lý do lựa chọn tuyến đường</h4>
+                                </div>
+                                <div id="routeNarrative" class="route-narrative"></div>
+                                <div class="explanation-grid">
+                                    <div class="explanation-item">
+                                        <span class="explanation-tag">🎯 1. Lý do lựa chọn</span>
+                                        <p id="expWhyChosen">—</p>
+                                    </div>
+                                    <div class="explanation-item">
+                                        <span class="explanation-tag">📊 2. Đặc tính tối ưu</span>
+                                        <p id="expMetricType">—</p>
+                                    </div>
+                                    <div class="explanation-item">
+                                        <span class="explanation-tag">🚦 3. Đoạn đường ùn tắc cao</span>
+                                        <p id="expCongestion">—</p>
+                                    </div>
+                                    <div class="explanation-item">
+                                        <span class="explanation-tag">⚖️ 4. So sánh với tuyến đường khác</span>
+                                        <p id="expComparison">—</p>
+                                    </div>
+                                    <div class="explanation-item full-width">
+                                        <span class="explanation-tag">🛡️ 5. Đảm bảo tính tối ưu</span>
+                                        <p id="expOptimality">—</p>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="result-block">
                                 <h4>Thứ tự ghé thăm</h4>
                                 <div id="visitingOrder" class="path-flow"></div>
@@ -487,6 +517,6 @@
         <div id="toast" role="status" aria-live="polite"></div>
 
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script src="dashboard.js?v=20260817-theme3"></script>
+        <script src="dashboard.js?v=20260817-theme5"></script>
     </body>
 </html>
