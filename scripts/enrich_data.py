@@ -36,12 +36,20 @@ def enrich_segments():
     df_segments['base_congestion'] = avg_congestion
     df_segments['base_risk'] = avg_risk
 
+    # Scale time to [0, 5]
+    min_time = df_segments['base_time'].min()
+    max_time = df_segments['base_time'].max()
+    if max_time > min_time:
+        df_segments['scaled_time'] = 5.0 * (df_segments['base_time'] - min_time) / (max_time - min_time)
+    else:
+        df_segments['scaled_time'] = 0.0
+
     # Calculate the base cost
     def calc_cost(time, congestion, risk, parameters=(0.648, 0.23, 0.122)):
         return parameters[0]*time + parameters[1]*congestion + parameters[2]*risk
 
     df_segments['base_cost'] = df_segments.apply(
-        lambda row: calc_cost(row['base_time'], row['base_congestion'], row['base_risk']), axis=1
+        lambda row: calc_cost(row['scaled_time'], row['base_congestion'], row['base_risk']), axis=1
     )
 
     # Save only the necessary columns

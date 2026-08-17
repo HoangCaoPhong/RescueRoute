@@ -239,7 +239,7 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
             distance = haversine(
                 node["lat"], node["lng"], goal_node["lat"], goal_node["lng"]
             )
-            return distance if algo.startswith("hill") else distance * 0.02414327
+            return distance if algo.startswith("hill") else distance * 0.00135287
 
         try:
             if algo.startswith("hill"):
@@ -707,7 +707,7 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
         def h_multi(n_id: int) -> float:
             if algo == "ucs":
                 return 0.0
-            return nearest_goal_distance(n_id) * 0.02414327
+            return nearest_goal_distance(n_id) * 0.00135287
 
         pq = [(h_multi(start_id), 0.0, start_id)]
         g_scores = {start_id: 0.0}
