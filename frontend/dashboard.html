@@ -13,7 +13,7 @@
             rel="stylesheet">
         <link rel="stylesheet"
             href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-        <link rel="stylesheet" href="dashboard.css?v=20260817-theme2">
+        <link rel="stylesheet" href="dashboard.css?v=20260817-theme3">
     </head>
     <body>
         <header class="app-header">
@@ -141,20 +141,20 @@
                             </div>
 
                             <div class="control-block full-width">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                    <label for="selectHospital" style="margin-bottom: 0;">Bệnh viện / cơ sở y tế đích</label>
-                                    <button type="button" class="btn-secondary" style="padding: 2px 8px; font-size: 0.75rem; color: #fda4af; border-color: rgba(244, 63, 94, 0.5);" onclick="selectNearestHospital()">🚨 Dò BV gần nhất</button>
+                                <div class="hospital-search-header">
+                                    <label for="selectHospital">Bệnh viện / cơ sở y tế đích</label>
+                                    <button type="button" class="btn-find-nearest" onclick="selectNearestHospital()">🚨 Dò BV gần nhất</button>
                                 </div>
                                 <input type="text" id="inputSearchHospital"
+                                    class="input-search-hospital"
                                     placeholder="🔍 Gõ tìm BV (VD: Chợ Rẫy, 115...)"
-                                    style="width: 100%; box-sizing: border-box; padding: 6px 10px; background: rgba(0,0,0,0.35); border: 1px solid var(--border-neutral); border-radius: 6px; color: inherit; font-size: 0.8rem; margin-bottom: 6px;"
                                     oninput="populateHospitalSelect()" />
-                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; margin-bottom: 6px;">
-                                    <label style="cursor: pointer; display: flex; align-items: center; gap: 5px; margin-bottom: 0;">
-                                        <input type="checkbox" id="chkEmergencyOnly" checked onchange="populateHospitalSelect()" style="accent-color: var(--color-rose);" />
-                                        🚨 Lọc BV Cấp Cứu / Đa Khoa
+                                <div class="hospital-filter-row">
+                                    <label class="hospital-filter-label" for="chkEmergencyOnly">
+                                        <input type="checkbox" id="chkEmergencyOnly" checked onchange="populateHospitalSelect()" />
+                                        <span>🚨 Lọc BV Cấp Cứu / Đa Khoa</span>
                                     </label>
-                                    <span id="hospitalCountBadge" style="color: var(--text-muted);">(Đang tải...)</span>
+                                    <span id="hospitalCountBadge" class="hospital-count-badge">(Đang tải...)</span>
                                 </div>
                                 <select id="selectHospital"
                                     onchange="onHospitalSelectChange()"
@@ -487,6 +487,6 @@
         <div id="toast" role="status" aria-live="polite"></div>
 
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script src="dashboard.js?v=20260817-theme2"></script>
+        <script src="dashboard.js?v=20260817-theme3"></script>
     </body>
 </html>
