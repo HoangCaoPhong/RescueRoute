@@ -332,21 +332,30 @@ from backend.app.services.routing_service import (
 async def serve_dashboard():
     """Mở trực tiếp giao diện Dashboard bản đồ"""
     if os.path.exists(DASHBOARD_HTML):
-        return FileResponse(DASHBOARD_HTML)
+        return FileResponse(
+            DASHBOARD_HTML,
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
     return {"message": "dashboard.html không tìm thấy"}
 
 @app.get("/dashboard.js", response_class=FileResponse)
 async def serve_dashboard_js():
     """Serve the dashboard javascript file"""
     if os.path.exists(DASHBOARD_JS):
-        return FileResponse(DASHBOARD_JS)
+        return FileResponse(
+            DASHBOARD_JS,
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
     return {"message": "dashboard.js không tìm thấy"}
 
 @app.get("/dashboard.css", response_class=FileResponse)
 async def serve_dashboard_css():
     """Serve the dashboard css file"""
     if os.path.exists(DASHBOARD_CSS):
-        return FileResponse(DASHBOARD_CSS)
+        return FileResponse(
+            DASHBOARD_CSS,
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
     return {"message": "dashboard.css không tìm thấy"}
 
 @app.get("/api/health")
