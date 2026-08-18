@@ -2160,6 +2160,45 @@ function renderSearchStep(stepIndex) {
     searchFrontierLayer?.clearLayers();
     searchCurrentLayer?.clearLayers();
 
+    // -------------------------------------------------------------
+    // Hiệu ứng Rắn / Giun tìm đường (Snake / Worm crawling on graph)
+    // -------------------------------------------------------------
+    if (isFullTrace && mapVisitedOrder.length > 0) {
+        const recentSnakeWindow = 25;
+        const snakeNodes = mapVisitedOrder.slice(-recentSnakeWindow);
+        if (mapCurrentNodeId) snakeNodes.push(mapCurrentNodeId);
+        const snakeCoords = snakeNodes
+            .map((nodeId) =>
+                normalizeMapCoords(nodeCoords[normalizeNodeCoordinateKey(nodeId)]),
+            )
+            .filter(Boolean);
+
+        if (snakeCoords.length >= 2) {
+            // Lớp hào quang thân giun/rắn (Outer Glow Halo)
+            L.polyline(snakeCoords, {
+                pane: "searchVisitedPane",
+                color: "#f59e0b",
+                weight: 8,
+                opacity: 0.38,
+                lineCap: "round",
+                lineJoin: "round",
+                interactive: false,
+            }).addTo(searchVisitedLayer);
+
+            // Lõi thân giun/rắn đang trườn (Vibrant Slithering Snake Spine)
+            L.polyline(snakeCoords, {
+                pane: "searchVisitedPane",
+                color: "#ffd166",
+                weight: 4,
+                opacity: 0.95,
+                lineCap: "round",
+                lineJoin: "round",
+                dashArray: "4, 6",
+                interactive: false,
+            }).addTo(searchVisitedLayer);
+        }
+    }
+
     mapVisitedOrder.slice(-MAX_MAP_TRACE_NODES).forEach((nodeId) => {
         const coords = normalizeMapCoords(
             nodeCoords[normalizeNodeCoordinateKey(nodeId)],
@@ -2178,6 +2217,28 @@ function renderSearchStep(stepIndex) {
             .addTo(searchVisitedLayer);
         visitedMarkersDrawn += 1;
     });
+
+    const currentCoords = normalizeMapCoords(
+        nodeCoords[normalizeNodeCoordinateKey(mapCurrentNodeId)],
+    );
+
+    if (currentCoords && frontier.length > 0) {
+        // Tia cảm biến ngã rẽ từ đầu rắn thăm dò các node biên
+        frontier.slice(0, 12).forEach((item) => {
+            const fCoords = normalizeMapCoords(
+                nodeCoords[normalizeNodeCoordinateKey(item.node_id)],
+            );
+            if (!fCoords) return;
+            L.polyline([currentCoords, fCoords], {
+                pane: "searchFrontierPane",
+                color: "#38bdf8",
+                weight: 2,
+                dashArray: "3, 6",
+                opacity: 0.8,
+                interactive: false,
+            }).addTo(searchFrontierLayer);
+        });
+    }
 
     frontier.slice(0, MAX_MAP_TRACE_NODES).forEach((item) => {
         const coords = normalizeMapCoords(
@@ -2198,9 +2259,6 @@ function renderSearchStep(stepIndex) {
         frontierMarkersDrawn += 1;
     });
 
-    const currentCoords = normalizeMapCoords(
-        nodeCoords[normalizeNodeCoordinateKey(mapCurrentNodeId)],
-    );
     if (currentCoords) {
         L.circleMarker(currentCoords, {
             pane: "searchCurrentPane",
@@ -2226,15 +2284,15 @@ function renderSearchStep(stepIndex) {
                     : `Tuyến đã hiện: ${getNodeLabel(mapCurrentNodeId)}`,
                 {
                     permanent: true,
-                direction: "top",
+                    direction: "top",
                 },
             )
             .addTo(searchCurrentLayer);
         const currentIcon = L.divIcon({
             className: "search-current-marker",
-            html: `<span class="current-marker-label">Node ${escapeHtml(mapCurrentNodeId)}</span><span class="current-marker-core">●</span>`,
-            iconSize: [34, 34],
-            iconAnchor: [17, 17],
+            html: `<div class="snake-sonar-ring"></div><span class="current-marker-label">Node ${escapeHtml(mapCurrentNodeId)}</span><span class="current-marker-core">●</span>`,
+            iconSize: [36, 36],
+            iconAnchor: [18, 18],
         });
         L.marker(currentCoords, {
             icon: currentIcon,

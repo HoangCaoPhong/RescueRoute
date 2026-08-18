@@ -1996,42 +1996,79 @@ tr.best-row td {
 .search-current-marker {
     background: transparent;
     border: 0;
+    pointer-events: none;
+}
+
+.search-current-marker .snake-sonar-ring {
+    animation: snake-sonar-pulse 1.3s infinite cubic-bezier(0.2, 0.8, 0.4, 1);
+    border: 2.5px solid #f59e0b;
+    border-radius: 50%;
+    height: 48px;
+    left: 50%;
+    pointer-events: none;
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 48px;
 }
 
 .search-current-marker .current-marker-core {
     align-items: center;
-    background: #f97316;
-    border: 3px solid #ffeadb;
+    animation: snake-head-wiggle 1.4s infinite ease-in-out;
+    background: radial-gradient(circle at 35% 35%, #ffd166 0%, #f97316 75%, #ea580c 100%);
+    border: 2.5px solid #fff5ea;
     border-radius: 50%;
-    box-shadow: 0 0 0 8px rgba(249, 115, 22, 0.22), 0 7px 22px rgba(0, 0, 0, 0.48);
-    color: #351405;
+    box-shadow: 0 0 16px rgba(249, 115, 22, 0.9), 0 0 30px rgba(245, 158, 11, 0.5), 0 5px 15px rgba(0, 0, 0, 0.5);
+    color: #2b1104;
     display: flex;
     font-family: "JetBrains Mono", monospace;
-    font-size: 0.58rem;
-    font-weight: 800;
-    height: 30px;
+    font-size: 0.64rem;
+    font-weight: 900;
+    height: 28px;
     justify-content: center;
     left: 50%;
     position: absolute;
     top: 50%;
     transform: translate(-50%, -50%);
-    width: 30px;
+    width: 28px;
 }
 
 .search-current-marker .current-marker-label {
-    background: rgba(35, 15, 4, 0.94);
-    border: 1px solid rgba(249, 115, 22, 0.62);
+    background: rgba(28, 12, 4, 0.96);
+    border: 1px solid rgba(249, 115, 22, 0.8);
     border-radius: 6px;
     bottom: 27px;
-    color: #ffd4b5;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    color: #ffe0b2;
     font-family: "JetBrains Mono", monospace;
-    font-size: 0.62rem;
+    font-size: 0.63rem;
     font-weight: 700;
     left: 50%;
-    padding: 4px 6px;
+    padding: 3px 7px;
     position: absolute;
     transform: translateX(-50%);
     white-space: nowrap;
+}
+
+@keyframes snake-sonar-pulse {
+    0% {
+        opacity: 0.95;
+        transform: translate(-50%, -50%) scale(0.35);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.55);
+    }
+}
+
+@keyframes snake-head-wiggle {
+    0%, 100% {
+        transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.15);
+        box-shadow: 0 0 22px rgba(249, 115, 22, 1), 0 0 40px rgba(245, 158, 11, 0.7);
+    }
 }
 
 @keyframes ambulance-pulse {
