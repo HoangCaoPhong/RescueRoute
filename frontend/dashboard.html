@@ -150,10 +150,15 @@
                                     placeholder="🔍 Gõ tìm BV (VD: Chợ Rẫy, 115...)"
                                     oninput="populateHospitalSelect()" />
                                 <div class="hospital-filter-row">
-                                    <label class="hospital-filter-label" for="chkEmergencyOnly">
-                                        <input type="checkbox" id="chkEmergencyOnly" checked onchange="populateHospitalSelect()" />
-                                        <span>🚨 Lọc BV Cấp Cứu / Đa Khoa</span>
+                                    <label class="hospital-filter-label" for="selectHospitalCategory">
+                                        <span>Phân loại:</span>
                                     </label>
+                                    <select id="selectHospitalCategory" class="select-hospital-category" onchange="populateHospitalSelect()">
+                                        <option value="emergency">🚨 Bệnh viện Cấp Cứu / Đa Khoa</option>
+                                        <option value="all">🌐 Tất cả cơ sở y tế</option>
+                                        <option value="clinic">🩺 Phòng khám / Chuyên khoa</option>
+                                        <option value="station">🏥 Trạm Y tế / Khác</option>
+                                    </select>
                                     <span id="hospitalCountBadge" class="hospital-count-badge">(Đang tải...)</span>
                                 </div>
                                 <select id="selectHospital"
@@ -163,30 +168,56 @@
                                 </select>
                             </div>
 
-                            <div class="control-block full-width">
-                                <label for="inputWaypoints">Điểm trung gian
-                                    <span class="optional-label">tùy chọn, tối
-                                        đa 5</span></label>
-                                <textarea id="inputWaypoints" rows="2"
-                                    placeholder="Nhập mã nút, ngăn cách bằng dấu phẩy. Ví dụ: 123, 456"></textarea>
-                                <small>Có thể giữ thứ tự nhập hoặc tối ưu thứ tự
-                                    bằng Nearest Neighbor ở frontend.</small>
+                            <div class="control-block full-width waypoint-manager-block">
+                                <div class="waypoint-header">
+                                    <label for="selectWaypoint">
+                                        📍 Trạm dừng trung gian
+                                        <span class="waypoint-count-badge" id="waypointCountBadge">(0/5)</span>
+                                    </label>
+                                    <button type="button" class="btn-clear-waypoints" id="btnClearWaypoints" onclick="clearAllWaypoints()" title="Xóa tất cả trạm dừng" style="display: none;">
+                                        🗑️ Xóa hết
+                                    </button>
+                                </div>
+
+                                <!-- Thanh tìm kiếm lọc địa điểm trong dropdown -->
+                                <input type="text" id="inputSearchWaypoint"
+                                    class="input-search-waypoint"
+                                    placeholder="🔍 Gõ tìm kiếm địa điểm / BV (VD: Từ Dũ, Sư Phạm...)"
+                                    autocomplete="off"
+                                    oninput="populateWaypointSelect()" />
+
+                                <!-- Thanh Dropdown chọn địa điểm + Nút Thêm -->
+                                <div class="waypoint-select-row">
+                                    <select id="selectWaypoint" class="select-waypoint-dropdown" disabled>
+                                        <option>Đang tải danh sách địa điểm…</option>
+                                    </select>
+                                    <button type="button" class="btn-add-stop" onclick="addSelectedWaypointFromDropdown()" title="Thêm trạm dừng này">
+                                        ➕ Thêm
+                                    </button>
+                                </div>
+
+                                <!-- Danh sách các trạm dừng đã chọn (Google Maps route staging) -->
+                                <div id="waypointStopsList" class="waypoint-stops-list">
+                                    <div class="waypoint-empty-hint">
+                                        <span>Chưa có trạm dừng nào. Chọn địa điểm ở dropdown trên hoặc bấm <strong>➕ Thêm điểm ghé</strong> trên bản đồ.</span>
+                                    </div>
+                                </div>
+
+                                <!-- Textarea đồng bộ ngầm cho mã nút (bảo đảm tương thích 100%) -->
+                                <textarea id="inputWaypoints" rows="1" class="input-waypoints-sync"
+                                    placeholder="Mã nút trung gian..."
+                                    onchange="onInputWaypointsManualChange()" style="display: none;"></textarea>
+                                <small class="waypoint-hint-text">
+                                    💡 Chèn nhiều điểm dừng theo tên từ dropdown như Google Maps, tự do đổi thứ tự hoặc tối ưu lộ trình.
+                                </small>
                             </div>
 
                             <div class="control-block">
-                                <label for="selectVisitOrder">Xử lý nhiều địa
-                                    điểm</label>
+                                <label for="selectVisitOrder">Tối ưu thứ tự điểm ghé</label>
                                 <select id="selectVisitOrder">
-                                    <option value="input">Giữ thứ tự đã
-                                        nhập</option>
-                                    <option value="nearest_neighbor">Nearest Neighbor
-                                        (xấp xỉ)</option>
-                                    <option value="held_karp">Held–Karp
-                                        (tối ưu, tối đa 10 điểm)</option>
-                                    <option value="genetic_algorithm">Genetic Algorithm
-                                        (xấp xỉ)</option>
-                                    <option value="simulated_annealing">Simulated Annealing
-                                        (xấp xỉ)</option>
+                                    <option value="input">Giữ thứ tự đã nhập</option>
+                                    <option value="held_karp">Held–Karp (Tối ưu toàn cục, $\le 10$ điểm)</option>
+                                    <option value="simulated_annealing">Simulated Annealing (Xấp xỉ Metaheuristic)</option>
                                 </select>
                             </div>
 
@@ -511,13 +542,30 @@
                     <div id="searchPlaybackDock" class="search-playback-dock"
                         aria-label="Điều khiển mô phỏng" hidden></div>
                 </div>
-                <div class="map-instruction"><span aria-hidden="true">⌖</span>
-                    Nhấp bản đồ để đặt vị trí xe</div>
                 <div class="map-legend">
-                    <strong>Chú thích</strong>
-                    <span><i class="map-line route"></i>Tuyến cuối cùng</span>
-                    <span><i class="map-line road"></i>Mạng đường</span>
-                    <span><i class="map-marker hospital"></i>Cơ sở y tế</span>
+                    <div class="legend-header">
+                        <strong>🗺️ Chú thích bản đồ</strong>
+                    </div>
+                    <div class="legend-group">
+                        <span class="legend-title">Lộ trình & Điểm mốc</span>
+                        <span><i class="map-line route"></i> Tuyến cứu hộ tối ưu</span>
+                        <span><span class="legend-icon">🚑</span> Xe cấp cứu (Điểm xuất phát)</span>
+                        <span><span class="legend-icon">🎯</span> Bệnh viện đích (Điểm đến)</span>
+                        <span><span class="legend-icon">📍</span> Trạm dừng trung gian</span>
+                    </div>
+                    <div class="legend-group">
+                        <span class="legend-title">Mạng đường & Mức độ giao thông</span>
+                        <span><i class="map-line road-normal"></i> Thông thoáng (Mức 1-2)</span>
+                        <span><i class="map-line road-heavy"></i> Đông xe (Mức 3)</span>
+                        <span><i class="map-line road-severe"></i> Ùn tắc nghiêm trọng (Mức 4-5)</span>
+                        <span><i class="map-marker hospital"></i> Cơ sở y tế / Bệnh viện</span>
+                    </div>
+                    <div class="legend-group">
+                        <span class="legend-title">Mô phỏng thuật toán</span>
+                        <span><i class="map-dot visited"></i> Nút đã duyệt (Visited)</span>
+                        <span><i class="map-dot frontier"></i> Nút biên chờ duyệt (Frontier)</span>
+                        <span><i class="map-dot current"></i> Nút đang xét hiện tại</span>
+                    </div>
                 </div>
             </section>
         </main>

@@ -111,3 +111,24 @@ def test_routing_service_rejects_unknown_algorithm():
 
     assert result["found"] is False
     assert "Unsupported" in result["message"]
+
+
+def test_routing_service_dfs_local_dispatches_standard_dfs(monkeypatch):
+    monkeypatch.delenv("RENDER", raising=False)
+    monkeypatch.delenv("IS_RENDER", raising=False)
+    monkeypatch.delenv("RENDER_SERVICE_ID", raising=False)
+    monkeypatch.delenv("APP_ENV", raising=False)
+
+    result = run_search(FakeGraphManager(), 1, 4, "dfs")
+    assert result["found"] is True
+    assert result["path_nodes"] == [1, 3, 4] or result["path_nodes"] == [1, 2, 4]
+    assert result["explanation_data"]["algorithm"] == "DFS"
+
+
+def test_routing_service_dfs_render_dispatches_depth_limited_dfs(monkeypatch):
+    monkeypatch.setenv("RENDER", "true")
+
+    result = run_search(FakeGraphManager(), 1, 4, "dfs")
+    assert result["found"] is True
+    assert result["explanation_data"]["algorithm"] == "DFS (Depth-Limited)"
+

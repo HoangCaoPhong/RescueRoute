@@ -72,12 +72,13 @@ def solve_depth_limited_dfs(
                 "processing_time_ms": processing_time_ms,
                 "is_optimal": False,
                 "explanation_data": {
-                    "algorithm": "DFS (Depth-Limited)",
+                    "algorithm": "DFS" if max_expansions is None and max_depth is None else "DFS (Depth-Limited)",
                     "optimality": "none",
                     "message": (
-                        "DFS explores graph branches to maximum depth with expansion limits. "
-                        "It does not guarantee minimum distance, time, or cost."
-                    )
+                        "DFS explores graph branches to find a path using a LIFO stack. "
+                        if max_expansions is None and max_depth is None
+                        else "DFS explores graph branches to maximum depth with expansion limits. "
+                    ) + "It does not guarantee minimum distance, time, or cost."
                 },
             }
 

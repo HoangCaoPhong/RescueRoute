@@ -77,6 +77,7 @@ const CRITERION_LABELS = {
 let map;
 let hospitalsData = [];
 let poisData = [];
+let selectedWaypoints = [];
 let edgesData = [];
 let edgeIndex = new Map();
 let graphEdgeCount = 0;
@@ -94,6 +95,7 @@ let showPOIIcons = true;
 let showTraffic = true;
 let edgePolylines = {};
 let activeRoutePolyline = null;
+let backgroundRoutePolyline = null;
 let routeNodeMarkers = [];
 let routeRequestCache = new Map();
 let toastTimer = null;
@@ -344,9 +346,11 @@ async function loadInitialData() {
         graphEdgeCount = Number(health.edges_count || edgesData.length);
 
         populateHospitalSelect();
+        populateWaypointSelect();
         populateEdgeSelect();
         populateStartControls();
         onStartModeChange();
+        renderWaypointStops();
         renderHospitalsOnMap();
         renderEdgesOnMap();
         updateAmbulanceDisplay(currentAmbulanceData);
@@ -368,7 +372,7 @@ async function loadInitialData() {
 function populateHospitalSelect() {
     const select = byId("selectHospital");
     if (!select) return;
-    const emergencyOnly = byId("chkEmergencyOnly")?.checked || false;
+    const category = byId("selectHospitalCategory")?.value || "emergency";
     const query = byId("inputSearchHospital")?.value?.toLowerCase().trim() || "";
     const currentVal = select.value;
 
@@ -396,9 +400,19 @@ function populateHospitalSelect() {
     const filteredHospitals = hospitalsData
         .slice()
         .filter((hospital) => {
-            if (emergencyOnly && !hospital.is_emergency) return false;
             const name = String(hospital.name || "").toLowerCase();
             const type = String(hospital.type || hospital.category || "").toLowerCase();
+
+            if (category === "emergency" && !hospital.is_emergency) {
+                return false;
+            } else if (category === "clinic") {
+                const isClinic = !hospital.is_emergency && (name.includes("phòng khám") || name.includes("clinic") || type.includes("phòng khám") || type.includes("chuyên khoa"));
+                if (!isClinic) return false;
+            } else if (category === "station") {
+                const isStation = !hospital.is_emergency && (name.includes("trạm y tế") || name.includes("trung tâm y tế") || type.includes("trạm y tế"));
+                if (!isStation) return false;
+            }
+
             return !query || name.includes(query) || type.includes(query);
         })
         .sort((a, b) =>
@@ -444,7 +458,8 @@ async function selectNearestHospital() {
         return;
     }
 
-    const emergencyOnly = byId("chkEmergencyOnly")?.checked || false;
+    const category = byId("selectHospitalCategory")?.value || "emergency";
+    const emergencyOnly = category === "emergency";
     const query = byId("inputSearchHospital")?.value?.toLowerCase().trim() || "";
     const currentGps = currentAmbulanceData || {};
     const baseLat = Number(currentGps.lat);
@@ -539,6 +554,62 @@ function updateCriterionNotice() {
     );
 }
 
+function normalizeSearchText(str) {
+    if (!str) return "";
+    return String(str)
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d")
+        .replace(/Đ/g, "D")
+        .toLowerCase()
+        .trim();
+}
+
+function findLocationsByName(query, limit = 8) {
+    const cleanQuery = normalizeSearchText(query);
+    if (!cleanQuery) return [];
+
+    const allLocations = [];
+    const seenNodeIds = new Set();
+    const pool = [...hospitalsData, ...poisData];
+
+    for (const item of pool) {
+        const nodeId = Number(item.node_id ?? item.poi_node_id);
+        if (!Number.isInteger(nodeId) || seenNodeIds.has(nodeId)) continue;
+
+        const name = String(item.name || "");
+        const cleanName = normalizeSearchText(name);
+        const type = String(item.type || item.category || "");
+        const cleanType = normalizeSearchText(type);
+
+        let score = -1;
+        if (cleanName.startsWith(cleanQuery)) {
+            score = 100 - cleanName.length;
+        } else if (cleanName.includes(cleanQuery)) {
+            score = 50 - cleanName.length;
+        } else if (cleanType.includes(cleanQuery)) {
+            score = 20;
+        } else if (String(nodeId).includes(cleanQuery)) {
+            score = 30;
+        }
+
+        if (score >= 0) {
+            seenNodeIds.add(nodeId);
+            allLocations.push({
+                node_id: nodeId,
+                name: name || `Node ${nodeId}`,
+                type: type || (item.is_hospital ? "Cơ sở Y tế" : "Địa điểm"),
+                is_hospital: Boolean(item.is_hospital),
+                is_emergency: Boolean(item.is_emergency),
+                score,
+            });
+        }
+    }
+
+    allLocations.sort((a, b) => b.score - a.score);
+    return allLocations.slice(0, limit);
+}
+
 function parseNodeIdList(rawValue) {
     if (!rawValue) return [];
     const uniqueIds = new Set();
@@ -548,6 +619,227 @@ function parseNodeIdList(rawValue) {
         .filter(Number.isInteger)
         .forEach((value) => uniqueIds.add(value));
     return Array.from(uniqueIds);
+}
+
+function renderWaypointStops() {
+    const listContainer = byId("waypointStopsList");
+    const countBadge = byId("waypointCountBadge");
+    const clearBtn = byId("btnClearWaypoints");
+    const syncInput = byId("inputWaypoints");
+
+    if (countBadge) {
+        countBadge.textContent = `(${selectedWaypoints.length}/${MAX_WAYPOINTS})`;
+    }
+    if (clearBtn) {
+        clearBtn.style.display = selectedWaypoints.length > 0 ? "inline-flex" : "none";
+    }
+    if (syncInput) {
+        syncInput.value = selectedWaypoints.join(", ");
+    }
+
+    if (!listContainer) return;
+    listContainer.replaceChildren();
+
+    if (selectedWaypoints.length === 0) {
+        const emptyHint = document.createElement("div");
+        emptyHint.className = "waypoint-empty-hint";
+        emptyHint.innerHTML = `<span>Chưa có trạm dừng nào. Gõ tên địa điểm ở trên hoặc bấm <strong>➕ Thêm điểm ghé</strong> trên bản đồ.</span>`;
+        listContainer.append(emptyHint);
+        return;
+    }
+
+    selectedWaypoints.forEach((nodeId, index) => {
+        const label = getNodeLabel(nodeId);
+        const card = document.createElement("div");
+        card.className = "waypoint-stop-card";
+
+        const indexBadge = document.createElement("div");
+        indexBadge.className = "stop-index-badge";
+        indexBadge.textContent = String(index + 1);
+
+        const content = document.createElement("div");
+        content.className = "stop-content";
+
+        const nameEl = document.createElement("div");
+        nameEl.className = "stop-name";
+        nameEl.textContent = label;
+        nameEl.title = `${label} (Node ${nodeId})`;
+
+        const idEl = document.createElement("div");
+        idEl.className = "stop-node-id";
+        idEl.textContent = `Node: ${nodeId}`;
+
+        content.append(nameEl, idEl);
+
+        const actions = document.createElement("div");
+        actions.className = "stop-actions";
+
+        const upBtn = document.createElement("button");
+        upBtn.type = "button";
+        upBtn.className = "btn-stop-action";
+        upBtn.textContent = "▲";
+        upBtn.title = "Di chuyển lên trước";
+        upBtn.disabled = index === 0;
+        upBtn.onclick = () => moveWaypoint(index, -1);
+
+        const downBtn = document.createElement("button");
+        downBtn.type = "button";
+        downBtn.className = "btn-stop-action";
+        downBtn.textContent = "▼";
+        downBtn.title = "Di chuyển xuống sau";
+        downBtn.disabled = index === selectedWaypoints.length - 1;
+        downBtn.onclick = () => moveWaypoint(index, 1);
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "btn-stop-action btn-delete";
+        delBtn.textContent = "✕";
+        delBtn.title = "Xóa trạm dừng này";
+        delBtn.onclick = () => removeWaypointAtIndex(index);
+
+        actions.append(upBtn, downBtn, delBtn);
+        card.append(indexBadge, content, actions);
+        listContainer.append(card);
+    });
+}
+
+function addWaypoint(nodeId) {
+    const numId = Number(nodeId);
+    if (!Number.isInteger(numId)) return;
+
+    if (selectedWaypoints.includes(numId)) {
+        showToast(`Điểm ${getNodeLabel(numId)} đã có trong danh sách trạm dừng.`, true);
+        map?.closePopup();
+        return;
+    }
+
+    if (selectedWaypoints.length >= MAX_WAYPOINTS) {
+        showToast(`Đã đạt tối đa ${MAX_WAYPOINTS} điểm trung gian.`, true);
+        map?.closePopup();
+        return;
+    }
+
+    selectedWaypoints.push(numId);
+    renderWaypointStops();
+    showToast(`Đã thêm trạm ${selectedWaypoints.length}: ${getNodeLabel(numId)}.`);
+    map?.closePopup();
+}
+
+function removeWaypointAtIndex(index) {
+    if (index >= 0 && index < selectedWaypoints.length) {
+        const removed = selectedWaypoints.splice(index, 1)[0];
+        renderWaypointStops();
+        showToast(`Đã xóa trạm dừng: ${getNodeLabel(removed)}.`);
+    }
+}
+
+function removeWaypoint(nodeId) {
+    const numId = Number(nodeId);
+    const index = selectedWaypoints.indexOf(numId);
+    if (index !== -1) {
+        removeWaypointAtIndex(index);
+    }
+}
+
+function moveWaypoint(index, direction) {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= selectedWaypoints.length) return;
+    const temp = selectedWaypoints[index];
+    selectedWaypoints[index] = selectedWaypoints[targetIndex];
+    selectedWaypoints[targetIndex] = temp;
+    renderWaypointStops();
+}
+
+function clearAllWaypoints() {
+    selectedWaypoints = [];
+    renderWaypointStops();
+    showToast("Đã xóa tất cả trạm dừng.");
+}
+
+function populateWaypointSelect() {
+    const select = byId("selectWaypoint");
+    if (!select) return;
+    const query = byId("inputSearchWaypoint")?.value?.trim() || "";
+
+    select.replaceChildren();
+
+    const pool = [...hospitalsData, ...poisData];
+    if (!pool.length) {
+        const option = document.createElement("option");
+        option.textContent = "Đang tải danh sách địa điểm…";
+        option.value = "";
+        select.append(option);
+        select.disabled = true;
+        return;
+    }
+
+    const cleanQuery = normalizeSearchText(query);
+    const seenNodeIds = new Set();
+    const filtered = [];
+
+    pool.forEach((item) => {
+        const nodeId = Number(item.node_id ?? item.poi_node_id);
+        if (!Number.isInteger(nodeId) || seenNodeIds.has(nodeId)) return;
+
+        const name = String(item.name || "");
+        const type = String(item.type || item.category || "");
+        const cleanName = normalizeSearchText(name);
+        const cleanType = normalizeSearchText(type);
+
+        if (!cleanQuery || cleanName.includes(cleanQuery) || cleanType.includes(cleanQuery) || String(nodeId).includes(cleanQuery)) {
+            seenNodeIds.add(nodeId);
+            filtered.push({
+                node_id: nodeId,
+                name: name || `Node ${nodeId}`,
+                type: type || (item.is_hospital ? "Cơ sở Y tế" : "Địa điểm"),
+                is_hospital: Boolean(item.is_hospital),
+                is_emergency: Boolean(item.is_emergency),
+            });
+        }
+    });
+
+    filtered.sort((a, b) => a.name.localeCompare(b.name, "vi"));
+
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = filtered.length
+        ? `-- Chọn địa điểm ghé qua (${filtered.length} địa điểm) --`
+        : "-- Không tìm thấy địa điểm phù hợp --";
+    select.append(defaultOption);
+
+    filtered.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = String(item.node_id);
+        const emoji = item.is_emergency ? "🚨" : item.is_hospital ? "🏥" : "📍";
+        option.textContent = `${emoji} ${item.name} (${item.type})`;
+        select.append(option);
+    });
+
+    select.disabled = filtered.length === 0;
+    select.value = "";
+}
+
+function addSelectedWaypointFromDropdown() {
+    const select = byId("selectWaypoint");
+    const val = select?.value;
+    if (!val) {
+        showToast("Vui lòng chọn một địa điểm từ danh sách dropdown để thêm.", true);
+        return;
+    }
+    addWaypoint(Number(val));
+    select.value = "";
+}
+
+function onWaypointSearchInput(event) {
+    populateWaypointSelect();
+}
+
+function onInputWaypointsManualChange() {
+    const syncInput = byId("inputWaypoints");
+    if (!syncInput) return;
+    const parsed = parseNodeIdList(syncInput.value);
+    selectedWaypoints = parsed.slice(0, MAX_WAYPOINTS);
+    renderWaypointStops();
 }
 
 function getPlannerInput() {
@@ -565,9 +857,13 @@ function getPlannerInput() {
         throw new Error("Vui lòng chọn một cơ sở y tế đích hợp lệ.");
     }
 
-    const waypointIds = parseNodeIdList(
-        byId("inputWaypoints")?.value || "",
-    ).filter((nodeId) => nodeId !== startNodeId && nodeId !== goalNodeId);
+    const rawWaypoints = selectedWaypoints.length > 0
+        ? selectedWaypoints
+        : parseNodeIdList(byId("inputWaypoints")?.value || "");
+
+    const waypointIds = rawWaypoints.filter(
+        (nodeId) => nodeId !== startNodeId && nodeId !== goalNodeId,
+    );
     if (waypointIds.length > MAX_WAYPOINTS) {
         throw new Error(
             `Chỉ nên dùng tối đa ${MAX_WAYPOINTS} điểm trung gian để tránh quá tải khi demo.`,
@@ -913,6 +1209,9 @@ async function calculateRoute() {
             input.algorithm,
         );
         if (combinedTrace) {
+            const allSegments = buildCoordinateSegments(aggregate.pathCoords);
+            drawBackgroundRouteLine(allSegments);
+            fitMapToRouteSegments(allSegments);
             await startSearchVisualization(combinedTrace);
             playSearchAnimation();
         } else {
@@ -1328,6 +1627,10 @@ function clearFinalRoute() {
         map.removeLayer(activeRoutePolyline);
         activeRoutePolyline = null;
     }
+    if (backgroundRoutePolyline) {
+        map.removeLayer(backgroundRoutePolyline);
+        backgroundRoutePolyline = null;
+    }
     routeNodeMarkers.forEach((marker) => map.removeLayer(marker));
     routeNodeMarkers = [];
 }
@@ -1349,6 +1652,26 @@ function buildCoordinateSegments(rawCoords = []) {
     return segments;
 }
 
+function drawBackgroundRouteLine(routeSegments) {
+    if (!map) return;
+    if (backgroundRoutePolyline) {
+        map.removeLayer(backgroundRoutePolyline);
+        backgroundRoutePolyline = null;
+    }
+    if (!routeSegments.length) return;
+
+    const latLngs =
+        routeSegments.length === 1 ? routeSegments[0] : routeSegments;
+    backgroundRoutePolyline = L.polyline(latLngs, {
+        pane: "finalRoutePane",
+        color: "#a78bfa",
+        weight: 5,
+        opacity: 0.55,
+        dashArray: "6, 8",
+        lineJoin: "round",
+    }).addTo(map);
+}
+
 function drawRouteLine(routeSegments) {
     if (!map) return;
     if (activeRoutePolyline) {
@@ -1363,7 +1686,7 @@ function drawRouteLine(routeSegments) {
         pane: "finalRoutePane",
         color: SEARCH_COLORS.route,
         weight: 6,
-        opacity: 0.92,
+        opacity: 0.95,
         lineJoin: "round",
     }).addTo(map);
 }
@@ -2321,25 +2644,25 @@ function renderEdgesOnMap() {
 
     if (groups.normal.length) {
         edgePolylines.normal = L.polyline(groups.normal, {
-            color: "#39c6d7",
-            weight: 2,
-            opacity: 0.34,
+            color: "#0284c7",
+            weight: 2.5,
+            opacity: 0.65,
             interactive: false,
         }).addTo(map);
     }
     if (groups.heavy.length) {
         edgePolylines.heavy = L.polyline(groups.heavy, {
-            color: "#f5b942",
-            weight: 3,
-            opacity: 0.82,
+            color: "#f59e0b",
+            weight: 3.5,
+            opacity: 0.85,
             interactive: false,
         }).addTo(map);
     }
     if (groups.severe.length) {
         edgePolylines.severe = L.polyline(groups.severe, {
-            color: "#ef476f",
-            weight: 4,
-            opacity: 0.92,
+            color: "#ef4444",
+            weight: 4.5,
+            opacity: 0.95,
             interactive: false,
         }).addTo(map);
     }
@@ -2440,24 +2763,6 @@ function setDestination(nodeId) {
     showToast(`Đã chọn ${getNodeLabel(Number(nodeId))} làm đích đến.`);
 }
 
-function addWaypoint(nodeId) {
-    const input = byId("inputWaypoints");
-    if (!input) return;
-    const current = parseNodeIdList(input.value);
-    if (!current.includes(Number(nodeId))) {
-        if (current.length >= MAX_WAYPOINTS) {
-            showToast(`Đã đạt tối đa ${MAX_WAYPOINTS} điểm trung gian.`, true);
-            return;
-        }
-        current.push(Number(nodeId));
-        input.value = current.join(", ");
-        showToast(`Đã thêm ${getNodeLabel(Number(nodeId))} vào điểm trung gian (${current.length}/${MAX_WAYPOINTS}).`);
-    } else {
-        showToast(`Điểm ${getNodeLabel(Number(nodeId))} đã có trong danh sách trung gian.`, true);
-    }
-    map?.closePopup();
-}
-
 function onHospitalSelectChange() {
     const nodeId = Number.parseInt(byId("selectHospital")?.value, 10);
     const hospital = hospitalsData.find((item) => item.node_id === nodeId);
@@ -2550,3 +2855,13 @@ function showToast(message, isError = false) {
 }
 
 window.addEventListener("load", initMap);
+
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+    document.addEventListener("click", (e) => {
+        const container = document.querySelector?.(".waypoint-search-container");
+        const dropdown = byId("waypointSuggestionsDropdown");
+        if (dropdown && container && !container.contains(e.target)) {
+            dropdown.style.display = "none";
+        }
+    });
+}
