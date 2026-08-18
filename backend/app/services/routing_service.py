@@ -378,7 +378,7 @@ def run_multi_location_search(
                 if src not in distance_matrix:
                     distance_matrix[src] = {}
                 distance_matrix[src][tgt] = cost
-                
+
             if method == "genetic_algorithm":
                 optimized = solve_genetic_algorithm(
                     locations, distance_matrix, start_id, goal_id

@@ -897,11 +897,24 @@ function getNodeLabel(nodeId) {
     return point?.name || `Node ${numericId}`;
 }
 
+let roadAdjacency = new Map();
+
 function rebuildEdgeIndex() {
     edgeIndex = new Map();
+    roadAdjacency = new Map();
     edgesData.forEach((edge) => {
         edgeIndex.set(normalizeEdgeId(edge.edge_id), edge);
         indexEdgeNodeCoords(fullRoadNodeCoords, edge);
+
+        const [u, v] = String(edge?.edge_id || "").split("_");
+        if (u && v) {
+            const uKey = normalizeNodeCoordinateKey(u);
+            const vKey = normalizeNodeCoordinateKey(v);
+            if (!roadAdjacency.has(uKey)) roadAdjacency.set(uKey, new Set());
+            if (!roadAdjacency.has(vKey)) roadAdjacency.set(vKey, new Set());
+            roadAdjacency.get(uKey).add(vKey);
+            roadAdjacency.get(vKey).add(uKey);
+        }
     });
 }
 
@@ -1823,9 +1836,20 @@ function clearSearchVisualization() {
     searchVisualizationData = null;
     searchStepIndex = 0;
     const panel = byId("searchVisualizationPanel");
-    if (panel) panel.hidden = true;
+    if (panel) {
+        panel.hidden = true;
+        panel.classList.remove("is-collapsed");
+    }
     const playbackDock = byId("searchPlaybackDock");
     if (playbackDock) playbackDock.hidden = true;
+}
+
+function toggleSearchTraceCollapse() {
+    const panel = byId("searchVisualizationPanel");
+    if (!panel) return;
+    const isCollapsed = panel.classList.toggle("is-collapsed");
+    const btn = byId("btnToggleSearchTrace");
+    if (btn) btn.textContent = isCollapsed ? "▸" : "▾";
 }
 
 async function startSearchVisualization(trace) {
@@ -2149,6 +2173,114 @@ function renderSearchStep(stepIndex) {
     searchFrontierLayer?.clearLayers();
     searchCurrentLayer?.clearLayers();
 
+    const prevNodeId = safeIndex > 0 ? steps[safeIndex - 1]?.current_node : null;
+    const nextNodeId = safeIndex < steps.length - 1 ? steps[safeIndex + 1]?.current_node : null;
+
+    const currentCoords = normalizeMapCoords(
+        nodeCoords[normalizeNodeCoordinateKey(mapCurrentNodeId)],
+    );
+
+    // -------------------------------------------------------------
+    // 1. Cạnh đồ thị đã khám phá trong cây tìm kiếm (Explored Search Tree Edges)
+    // -------------------------------------------------------------
+    if (isFullTrace && mapVisitedOrder.length > 0) {
+        const visitedSet = new Set(
+            mapVisitedOrder.map(normalizeNodeCoordinateKey),
+        );
+        if (mapCurrentNodeId) visitedSet.add(normalizeNodeCoordinateKey(mapCurrentNodeId));
+
+        const drawnEdges = new Set();
+        const exploredTreeEdges = [];
+
+        visitedSet.forEach((uKey) => {
+            const neighbors = roadAdjacency.get(uKey);
+            if (!neighbors) return;
+            const coordsU = normalizeMapCoords(nodeCoords[uKey]);
+            if (!coordsU) return;
+
+            neighbors.forEach((vKey) => {
+                if (!visitedSet.has(vKey)) return;
+                const edgeKey = uKey < vKey ? `${uKey}__${vKey}` : `${vKey}__${uKey}`;
+                if (drawnEdges.has(edgeKey)) return;
+                drawnEdges.add(edgeKey);
+
+                const coordsV = normalizeMapCoords(nodeCoords[vKey]);
+                if (!coordsV) return;
+                exploredTreeEdges.push([coordsU, coordsV]);
+            });
+        });
+
+        if (exploredTreeEdges.length > 0) {
+            // Lớp hào quang cho các cạnh cây tìm kiếm đã duyệt
+            L.polyline(exploredTreeEdges, {
+                pane: "searchVisitedPane",
+                color: "#0284c7",
+                weight: 6.5,
+                opacity: 0.45,
+                lineCap: "round",
+                lineJoin: "round",
+                interactive: false,
+            }).addTo(searchVisitedLayer);
+
+            // Lõi cạnh cây tìm kiếm đã duyệt
+            L.polyline(exploredTreeEdges, {
+                pane: "searchVisitedPane",
+                color: "#38bdf8",
+                weight: 3.5,
+                opacity: 0.92,
+                lineCap: "round",
+                lineJoin: "round",
+                interactive: false,
+            }).addTo(searchVisitedLayer);
+        }
+    }
+
+    // -------------------------------------------------------------
+    // 2. Nhánh mở rộng từ Current Node sang các Frontier kề cận
+    // -------------------------------------------------------------
+    if (currentCoords && mapCurrentNodeId) {
+        const currKey = normalizeNodeCoordinateKey(mapCurrentNodeId);
+        const currNeighbors = roadAdjacency.get(currKey) || new Set();
+
+        frontier.forEach((item) => {
+            const fKey = normalizeNodeCoordinateKey(item.node_id);
+            // Chỉ xét nhánh nếu ngã rẽ này là nút láng giềng kề trực tiếp trên đồ thị
+            if (!currNeighbors.has(fKey)) return;
+
+            const fCoords = normalizeMapCoords(nodeCoords[fKey]);
+            if (!fCoords) return;
+
+            const isNext = String(item.node_id) === String(nextNodeId);
+
+            if (isNext) {
+                // Cạnh mở rộng bước tiếp theo được thuật toán lựa chọn (Next Expansion Edge)
+                L.polyline([currentCoords, fCoords], {
+                    pane: "searchFrontierPane",
+                    color: "#10b981",
+                    weight: 4.5,
+                    opacity: 0.95,
+                    lineCap: "round",
+                    lineJoin: "round",
+                    interactive: false,
+                }).addTo(searchFrontierLayer);
+            } else {
+                // Các cạnh nối sang các ứng viên Frontier kề cận khác
+                L.polyline([currentCoords, fCoords], {
+                    pane: "searchFrontierPane",
+                    color: "#06b6d4",
+                    weight: 2.8,
+                    opacity: 0.8,
+                    dashArray: "3, 5",
+                    lineCap: "round",
+                    interactive: false,
+                }).addTo(searchFrontierLayer);
+            }
+        });
+    }
+
+    // -------------------------------------------------------------
+    // 1. Vẽ các nút đã duyệt (Visited Nodes trên mạng đường)
+    // -------------------------------------------------------------
     mapVisitedOrder.slice(-MAX_MAP_TRACE_NODES).forEach((nodeId) => {
         const coords = normalizeMapCoords(
             nodeCoords[normalizeNodeCoordinateKey(nodeId)],
@@ -2156,11 +2288,11 @@ function renderSearchStep(stepIndex) {
         if (!coords) return;
         L.circleMarker(coords, {
             pane: "searchVisitedPane",
-            radius: 5.5,
+            radius: 5,
             color: SEARCH_COLORS.visited,
             fillColor: SEARCH_COLORS.visited,
             fillOpacity: 0.7,
-            opacity: 0.9,
+            opacity: 0.85,
             weight: 1.5,
         })
             .bindTooltip(getNodeLabel(nodeId))
@@ -2168,35 +2300,67 @@ function renderSearchStep(stepIndex) {
         visitedMarkersDrawn += 1;
     });
 
+    // -------------------------------------------------------------
+    // 2. Mở rộng các ngã rẽ Frontier (Frontier Nodes trên mạng đường)
+    // -------------------------------------------------------------
+    let nextCandidateCoords = null;
+
     frontier.slice(0, MAX_MAP_TRACE_NODES).forEach((item) => {
         const coords = normalizeMapCoords(
             nodeCoords[normalizeNodeCoordinateKey(item.node_id)],
         );
         if (!coords) return;
+        const isNextStepTarget = String(item.node_id) === String(nextNodeId);
+
+        if (isNextStepTarget) {
+            nextCandidateCoords = coords;
+        }
+
         L.circleMarker(coords, {
             pane: "searchFrontierPane",
-            radius: 7,
-            color: SEARCH_COLORS.frontier,
-            fillColor: SEARCH_COLORS.frontier,
-            fillOpacity: 0.72,
+            radius: isNextStepTarget ? 8.5 : 6.5,
+            color: isNextStepTarget ? "#22c55e" : SEARCH_COLORS.frontier,
+            fillColor: isNextStepTarget ? "#4ade80" : SEARCH_COLORS.frontier,
+            fillOpacity: isNextStepTarget ? 0.95 : 0.75,
             opacity: 1,
-            weight: 2,
+            weight: isNextStepTarget ? 2.8 : 2,
         })
-            .bindTooltip(formatFrontierItem(item))
+            .bindTooltip(
+                isNextStepTarget
+                    ? `👉 BƯỚC TIẾP THEO SẼ VÀO ĐÂY: ${formatFrontierItem(item)}`
+                    : formatFrontierItem(item),
+            )
             .addTo(searchFrontierLayer);
         frontierMarkersDrawn += 1;
     });
 
-    const currentCoords = normalizeMapCoords(
-        nodeCoords[normalizeNodeCoordinateKey(mapCurrentNodeId)],
-    );
+    // Marker đặc biệt cho Nút được chọn tiếp theo (Next Candidate Node)
+    if (nextCandidateCoords && nextNodeId) {
+        const nextIcon = L.divIcon({
+            className: "next-candidate-marker",
+            html: `<div class="candidate-ring"></div><span class="candidate-label">👉 Tiếp theo: ${escapeHtml(nextNodeId)}</span>`,
+            iconSize: [36, 36],
+            iconAnchor: [18, 18],
+        });
+        L.marker(nextCandidateCoords, {
+            icon: nextIcon,
+            pane: "searchFrontierPane",
+            interactive: false,
+            keyboard: false,
+            zIndexOffset: 4500,
+        }).addTo(searchFrontierLayer);
+    }
+
+    // -------------------------------------------------------------
+    // 3. Highlight Node B đang xét hiện tại (Current Node)
+    // -------------------------------------------------------------
     if (currentCoords) {
         L.circleMarker(currentCoords, {
             pane: "searchCurrentPane",
             radius: 15,
             color: SEARCH_COLORS.current,
             fillColor: SEARCH_COLORS.current,
-            fillOpacity: 0.14,
+            fillOpacity: 0.15,
             opacity: 0.7,
             weight: 2,
         }).addTo(searchCurrentLayer);
@@ -2211,19 +2375,19 @@ function renderSearchStep(stepIndex) {
         })
             .bindTooltip(
                 isFullTrace
-                    ? `Đang mở: ${getNodeLabel(mapCurrentNodeId)}`
+                    ? `📍 Đang xét: ${getNodeLabel(mapCurrentNodeId)}${nextNodeId ? ` ➔ Tiếp theo: ${getNodeLabel(nextNodeId)}` : ""}`
                     : `Tuyến đã hiện: ${getNodeLabel(mapCurrentNodeId)}`,
                 {
                     permanent: true,
-                direction: "top",
+                    direction: "top",
                 },
             )
             .addTo(searchCurrentLayer);
         const currentIcon = L.divIcon({
             className: "search-current-marker",
-            html: `<span class="current-marker-label">Node ${escapeHtml(mapCurrentNodeId)}</span><span class="current-marker-core">●</span>`,
-            iconSize: [34, 34],
-            iconAnchor: [17, 17],
+            html: `<div class="beacon-pulse-ring"></div><span class="current-marker-label">📍 Node ${escapeHtml(mapCurrentNodeId)}</span><span class="current-marker-core">●</span>`,
+            iconSize: [36, 36],
+            iconAnchor: [18, 18],
         });
         L.marker(currentCoords, {
             icon: currentIcon,
@@ -2271,16 +2435,17 @@ function renderSearchStep(stepIndex) {
         "frontier",
     );
 
-    const omittedVisited = Math.max(0, visitedOrder.length - MAX_TRACE_TOKENS);
-    const omittedFrontier = Math.max(0, fullFrontierCount - MAX_TRACE_TOKENS);
     const legText =
         step.legTotal > 1
             ? `Chặng ${step.legIndex}/${step.legTotal} (${step.routeStart} → ${step.routeGoal}). `
             : "";
-    setText(
-        "vizExplanation",
-        `${legText}${isFullTrace ? `Bản đồ hiển thị visited, ${frontierKindLabel(searchVisualizationData.frontier_kind).toLowerCase()} và node đang mở theo search trace.` : "Frontier vẫn hiển thị đầy đủ bằng marker xanh dương; node vàng, marker cam, camera và tuyến tím chỉ tiến dọc theo tuyến cuối."}${omittedVisited || omittedFrontier ? ` Danh sách rút gọn ${omittedVisited} visited và ${omittedFrontier} frontier để giao diện không bị quá tải.` : ""}`,
-    );
+    const transitionText = prevNodeId && mapCurrentNodeId && String(prevNodeId) !== String(mapCurrentNodeId)
+        ? `Đã đi từ [${prevNodeId}] ➔ [${mapCurrentNodeId}]. `
+        : `Bắt đầu từ [${mapCurrentNodeId}]. `;
+    const decisionText = nextNodeId
+        ? `Từ [${mapCurrentNodeId}], mở rộng ${frontier.length} nhánh Frontier và quyết định di chuyển tiếp vào Node [${nextNodeId}].`
+        : "Đã hoàn thành duyệt / tìm thấy đích!";
+    setText("vizExplanation", `${legText}${transitionText}${decisionText}`);
 }
 
 function updateMapTraceStatus(
@@ -2672,6 +2837,14 @@ function toggleTrafficLayer() {
     showTraffic = !showTraffic;
     updateToggleButton("btnToggleTraffic", showTraffic, "Lớp mức độ ùn tắc");
     renderEdgesOnMap();
+}
+
+function toggleMapLegend() {
+    const legend = byId("mapLegend");
+    if (!legend) return;
+    const isCollapsed = legend.classList.toggle("is-collapsed");
+    const btn = byId("btnToggleLegend");
+    if (btn) btn.textContent = isCollapsed ? "▸" : "▾";
 }
 
 function updateToggleButton(id, active, label) {
