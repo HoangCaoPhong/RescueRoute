@@ -313,8 +313,8 @@ async function loadInitialData() {
     setConnectionStatus("loading", "Đang kết nối API");
     try {
         const [nodes, edges, gps, health] = await Promise.all([
-            fetchJson(`${API_BASE}/nodes?poi_type=all&limit=10000`),
-            fetchJson(`${API_BASE}/edges?limit=2000`),
+            fetchJson(`${API_BASE}/nodes?poi_type=all&limit=30000`),
+            fetchJson(`${API_BASE}/edges?limit=100000`),
             fetchJson(`${API_BASE}/ambulance/location`),
             fetchJson(`${API_BASE}/health`),
         ]);
@@ -2226,44 +2226,72 @@ function renderHospitalsOnMap() {
     );
     hospitalMarkers = new Map();
 
-    hospitalsData.forEach((hospital) => {
-        const type = String(hospital.type || "Cơ sở y tế");
-        const isHospital =
-            type.toLowerCase().includes("hospital") ||
-            type.toLowerCase().includes("bệnh viện");
-        const emoji = isHospital ? "🏥" : "✚";
-        const icon = showPOIIcons
-            ? L.divIcon({
-                  className: `custom-div-icon ${isHospital ? "icon-hospital" : "icon-clinic"}`,
-                  html: `<span>${emoji}</span>`,
-                  iconSize: [34, 34],
-                  iconAnchor: [17, 17],
-              })
-            : L.divIcon({
-                  className: `poi-dot-icon ${isHospital ? "dot-hospital" : "dot-clinic"}`,
-                  html: '<span class="poi-dot-inner"></span>',
-                  iconSize: [14, 14],
-                  iconAnchor: [7, 7],
-              });
-        const marker = L.marker([hospital.lat, hospital.lng], {
-            icon,
-            zIndexOffset: showPOIIcons ? 1000 : 800,
-            title: hospital.name || "Cơ sở y tế",
-        }).addTo(map);
-        marker.bindPopup(`
-            <div class="popup-content">
-                <strong>${emoji} ${escapeHtml(hospital.name || "Cơ sở y tế")}</strong>
-                <span>Loại: ${escapeHtml(type)}</span>
-                <span>Road node: ${Number(hospital.node_id)}</span>
-                <div style="display: flex; gap: 5px; margin-top: 6px;">
-                    <button type="button" onclick="setDestination(${Number(hospital.node_id)})">🎯 Chọn làm đích</button>
-                    <button type="button" onclick="addWaypoint(${Number(hospital.node_id)})" style="background: rgba(119, 135, 255, 0.2); border-color: rgba(119, 135, 255, 0.4);">➕ Thêm điểm ghé</button>
+    poisData.forEach((poi) => {
+        const type = String(poi.type || poi.category || "Cơ sở y tế");
+        const isMedical = Boolean(poi.is_hospital);
+        
+        let marker;
+        if (isMedical) {
+            const isHospital =
+                type.toLowerCase().includes("hospital") ||
+                type.toLowerCase().includes("bệnh viện");
+            const emoji = isHospital ? "🏥" : "✚";
+            const icon = showPOIIcons
+                ? L.divIcon({
+                      className: `custom-div-icon ${isHospital ? "icon-hospital" : "icon-clinic"}`,
+                      html: `<span>${emoji}</span>`,
+                      iconSize: [34, 34],
+                      iconAnchor: [17, 17],
+                  })
+                : L.divIcon({
+                      className: `poi-dot-icon ${isHospital ? "dot-hospital" : "dot-clinic"}`,
+                      html: '<span class="poi-dot-inner"></span>',
+                      iconSize: [14, 14],
+                      iconAnchor: [7, 7],
+                  });
+            marker = L.marker([poi.lat, poi.lng], {
+                icon,
+                zIndexOffset: showPOIIcons ? 1000 : 800,
+                title: poi.name || "Cơ sở y tế",
+            });
+            marker.bindPopup(`
+                <div class="popup-content">
+                    <strong>${emoji} ${escapeHtml(poi.name || "Cơ sở y tế")}</strong>
+                    <span>Loại: ${escapeHtml(type)}</span>
+                    <span>Road node: ${Number(poi.node_id)}</span>
+                    <div style="display: flex; gap: 5px; margin-top: 6px;">
+                        <button type="button" onclick="setDestination(${Number(poi.node_id)})">🎯 Chọn làm đích</button>
+                        <button type="button" onclick="addWaypoint(${Number(poi.node_id)})" style="background: rgba(119, 135, 255, 0.2); border-color: rgba(119, 135, 255, 0.4);">➕ Thêm điểm ghé</button>
+                    </div>
                 </div>
-            </div>
-        `);
-        const markers = hospitalMarkers.get(Number(hospital.node_id)) || [];
+            `);
+        } else {
+            // Không hiển thị POI thường nếu POI icon đang tắt (tùy chọn)
+            if (!showPOIIcons) return;
+            marker = L.circleMarker([poi.lat, poi.lng], {
+                radius: 4,
+                color: '#6b7280',
+                fillColor: '#9ca3af',
+                fillOpacity: 0.8,
+                weight: 1,
+            });
+            marker.bindPopup(`
+                <div class="popup-content">
+                    <strong>📍 ${escapeHtml(poi.name || "POI")}</strong>
+                    <span>Loại: ${escapeHtml(type)}</span>
+                    <span>Road node: ${Number(poi.node_id)}</span>
+                    <div style="display: flex; gap: 5px; margin-top: 6px;">
+                        <button type="button" onclick="setDestination(${Number(poi.node_id)})">🎯 Chọn làm đích</button>
+                        <button type="button" onclick="addWaypoint(${Number(poi.node_id)})" style="background: rgba(119, 135, 255, 0.2); border-color: rgba(119, 135, 255, 0.4);">➕ Thêm điểm ghé</button>
+                    </div>
+                </div>
+            `);
+        }
+        marker.addTo(map);
+
+        const markers = hospitalMarkers.get(Number(poi.node_id)) || [];
         markers.push(marker);
-        hospitalMarkers.set(Number(hospital.node_id), markers);
+        hospitalMarkers.set(Number(poi.node_id), markers);
     });
 }
 
