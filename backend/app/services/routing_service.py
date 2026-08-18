@@ -1,4 +1,5 @@
 import math
+import os
 import time
 import heapq
 from collections import deque
@@ -21,6 +22,17 @@ from backend.app.algorithms.graph_search.dfs import (
 )
 from backend.app.algorithms.graph_search.trace_history import SearchFailure, SearchTraceHistory
 from backend.app.services.search_trace import build_search_trace
+
+
+def is_render_environment() -> bool:
+    """Return True if running in a Render cloud deployment or configured production environment."""
+    return (
+        os.getenv("RENDER", "").lower() in {"true", "1"}
+        or os.getenv("IS_RENDER", "").lower() in {"true", "1"}
+        or bool(os.getenv("RENDER_SERVICE_ID"))
+        or bool(os.getenv("RENDER_INSTANCE_ID"))
+        or os.getenv("APP_ENV", "").lower() in {"production", "prod", "render"}
+    )
 
 def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     R = 6371000.0
@@ -198,11 +210,16 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
 
     elif algo in {"dfs", "dls", "bounded_dfs", "dfs_limited"}:
         try:
-            result = solve_depth_limited_dfs(
-                graph_mgr.adj, start_id, goal_id, max_expansions=3000
-            )
+            # If running on Render cloud deployment (or requested bounded dfs), limit to 3000 node expansions
+            # Otherwise in local environment, use standard unconstrained DFS (solve_dfs)
+            is_cloud = is_render_environment() or algo in {"dls", "bounded_dfs", "dfs_limited"}
+            if is_cloud:
+                result = solve_depth_limited_dfs(
+                    graph_mgr.adj, start_id, goal_id, max_expansions=3000
+                )
+            else:
+                result = solve_dfs(graph_mgr.adj, start_id, goal_id)
             exec_time = (time.perf_counter() - t0) * 1000
-
 
             if not result.get("found", True) or not result.get("path"):
                 return {
