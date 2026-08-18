@@ -2181,7 +2181,7 @@ function renderSearchStep(stepIndex) {
     );
 
     // -------------------------------------------------------------
-    // Hiệu ứng nước lan truyền qua các cạnh kề (Water Flowing in Maze)
+    // 1. Cạnh đồ thị đã khám phá trong cây tìm kiếm (Explored Search Tree Edges)
     // -------------------------------------------------------------
     if (isFullTrace && mapVisitedOrder.length > 0) {
         const visitedSet = new Set(
@@ -2190,7 +2190,7 @@ function renderSearchStep(stepIndex) {
         if (mapCurrentNodeId) visitedSet.add(normalizeNodeCoordinateKey(mapCurrentNodeId));
 
         const drawnEdges = new Set();
-        const waterEdges = [];
+        const exploredTreeEdges = [];
 
         visitedSet.forEach((uKey) => {
             const neighbors = roadAdjacency.get(uKey);
@@ -2206,13 +2206,13 @@ function renderSearchStep(stepIndex) {
 
                 const coordsV = normalizeMapCoords(nodeCoords[vKey]);
                 if (!coordsV) return;
-                waterEdges.push([coordsU, coordsV]);
+                exploredTreeEdges.push([coordsU, coordsV]);
             });
         });
 
-        if (waterEdges.length > 0) {
-            // Lớp hào quang nước lan tỏa (Water Aura Stream)
-            L.polyline(waterEdges, {
+        if (exploredTreeEdges.length > 0) {
+            // Lớp hào quang cho các cạnh cây tìm kiếm đã duyệt
+            L.polyline(exploredTreeEdges, {
                 pane: "searchVisitedPane",
                 color: "#0284c7",
                 weight: 6.5,
@@ -2222,8 +2222,8 @@ function renderSearchStep(stepIndex) {
                 interactive: false,
             }).addTo(searchVisitedLayer);
 
-            // Lõi dòng nước đang chảy trong mê cung đường phố (Fluid Water Core)
-            L.polyline(waterEdges, {
+            // Lõi cạnh cây tìm kiếm đã duyệt
+            L.polyline(exploredTreeEdges, {
                 pane: "searchVisitedPane",
                 color: "#38bdf8",
                 weight: 3.5,
@@ -2235,14 +2235,16 @@ function renderSearchStep(stepIndex) {
         }
     }
 
-    // Dòng nước đang tràn từ Node B sang các ngã rẽ kề trong Frontier
+    // -------------------------------------------------------------
+    // 2. Nhánh mở rộng từ Current Node sang các Frontier kề cận
+    // -------------------------------------------------------------
     if (currentCoords && mapCurrentNodeId) {
         const currKey = normalizeNodeCoordinateKey(mapCurrentNodeId);
         const currNeighbors = roadAdjacency.get(currKey) || new Set();
 
         frontier.forEach((item) => {
             const fKey = normalizeNodeCoordinateKey(item.node_id);
-            // Chỉ vẽ dòng nước nếu ngã rẽ này có cạnh nối trực tiếp với node B (kề nhau trên đồ thị)
+            // Chỉ xét nhánh nếu ngã rẽ này là nút láng giềng kề trực tiếp trên đồ thị
             if (!currNeighbors.has(fKey)) return;
 
             const fCoords = normalizeMapCoords(nodeCoords[fKey]);
@@ -2251,7 +2253,7 @@ function renderSearchStep(stepIndex) {
             const isNext = String(item.node_id) === String(nextNodeId);
 
             if (isNext) {
-                // Luồng nước xanh ngọc tràn vào nhánh kế tiếp
+                // Cạnh mở rộng bước tiếp theo được thuật toán lựa chọn (Next Expansion Edge)
                 L.polyline([currentCoords, fCoords], {
                     pane: "searchFrontierPane",
                     color: "#10b981",
@@ -2262,7 +2264,7 @@ function renderSearchStep(stepIndex) {
                     interactive: false,
                 }).addTo(searchFrontierLayer);
             } else {
-                // Luồng nước đang thăm dò các ngã rẽ kề khác
+                // Các cạnh nối sang các ứng viên Frontier kề cận khác
                 L.polyline([currentCoords, fCoords], {
                     pane: "searchFrontierPane",
                     color: "#06b6d4",
