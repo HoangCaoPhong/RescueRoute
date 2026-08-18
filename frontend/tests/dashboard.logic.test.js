@@ -328,3 +328,73 @@ test('renderExplanation populates narrative and all 5 evaluation criteria points
     assert.ok(elements.expComparison.textContent.includes('Dijkstra'));
     assert.ok(elements.expOptimality.textContent.includes('admissible'));
 });
+
+test('normalizeSearchText strips accents and converts to lowercase', () => {
+    const context = loadDashboardContext();
+    const result = vm.runInContext("normalizeSearchText('Bệnh Viện Chợ Rẫy - Đa Khoa')", context);
+    assert.equal(result, 'benh vien cho ray - da khoa');
+});
+
+test('findLocationsByName searches hospitals and POIs by name or type', () => {
+    const context = loadDashboardContext();
+    const results = vm.runInContext(`(() => {
+        hospitalsData = [
+            { node_id: 101, name: 'Bệnh viện Chợ Rẫy', type: 'Hospital', is_hospital: true, is_emergency: true },
+            { node_id: 102, name: 'Bệnh viện Từ Dũ', type: 'Hospital', is_hospital: true, is_emergency: false }
+        ];
+        poisData = [
+            { node_id: 201, name: 'Trường ĐH Sư Phạm', type: 'University', is_hospital: false, is_emergency: false },
+            { node_id: 202, name: 'Công viên 23/9', type: 'Park', is_hospital: false, is_emergency: false }
+        ];
+        return {
+            choRay: findLocationsByName('cho ray'),
+            tuDu: findLocationsByName('Từ Dũ'),
+            suPham: findLocationsByName('su pham'),
+            empty: findLocationsByName('không tồn tại 12345')
+        };
+    })()`, context);
+
+    assert.equal(results.choRay.length, 1);
+    assert.equal(results.choRay[0].node_id, 101);
+    assert.equal(results.choRay[0].is_emergency, true);
+
+    assert.equal(results.tuDu.length, 1);
+    assert.equal(results.tuDu[0].node_id, 102);
+
+    assert.equal(results.suPham.length, 1);
+    assert.equal(results.suPham[0].node_id, 201);
+
+    assert.equal(results.empty.length, 0);
+});
+
+test('waypoint stops can be added, moved and removed in order', () => {
+    const context = loadDashboardContext();
+    const state = vm.runInContext(`(() => {
+        selectedWaypoints = [];
+        byId = () => null;
+        showToast = () => {};
+        getNodeLabel = (id) => 'Node ' + id;
+
+        addWaypoint(101);
+        addWaypoint(202);
+        addWaypoint(303);
+
+        const afterAdd = [...selectedWaypoints];
+        moveWaypoint(0, 1); // Move 101 down
+        const afterMove = [...selectedWaypoints];
+
+        removeWaypoint(101); // Remove 101
+        const afterRemove = [...selectedWaypoints];
+
+        clearAllWaypoints();
+        const afterClear = [...selectedWaypoints];
+
+        return { afterAdd, afterMove, afterRemove, afterClear };
+    })()`, context);
+
+    assert.deepEqual(Array.from(state.afterAdd), [101, 202, 303]);
+    assert.deepEqual(Array.from(state.afterMove), [202, 101, 303]);
+    assert.deepEqual(Array.from(state.afterRemove), [202, 303]);
+    assert.deepEqual(Array.from(state.afterClear), []);
+});
+

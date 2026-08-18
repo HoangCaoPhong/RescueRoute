@@ -6,12 +6,14 @@
 *.key
 *.crt
 
-# Python
+# Python & Jupyter
 __pycache__/
 *.py[cod]
 *$py.class
 .Python
 .python-version
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
 .venv/
 venv/
 env/
@@ -106,6 +108,6 @@ pois_with_labels.csv
 full_processed_train.csv
 streets.csv
 base_segments.csv
-
+report/
 # Other
 Lab 1 - Searching.md

@@ -1,4 +1,5 @@
 import math
+import os
 import time
 import heapq
 from collections import deque
@@ -21,6 +22,17 @@ from backend.app.algorithms.graph_search.dfs import (
 )
 from backend.app.algorithms.graph_search.trace_history import SearchFailure, SearchTraceHistory
 from backend.app.services.search_trace import build_search_trace
+
+
+def is_render_environment() -> bool:
+    """Return True if running in a Render cloud deployment or configured production environment."""
+    return (
+        os.getenv("RENDER", "").lower() in {"true", "1"}
+        or os.getenv("IS_RENDER", "").lower() in {"true", "1"}
+        or bool(os.getenv("RENDER_SERVICE_ID"))
+        or bool(os.getenv("RENDER_INSTANCE_ID"))
+        or os.getenv("APP_ENV", "").lower() in {"production", "prod", "render"}
+    )
 
 def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     R = 6371000.0
@@ -198,11 +210,16 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
 
     elif algo in {"dfs", "dls", "bounded_dfs", "dfs_limited"}:
         try:
-            result = solve_depth_limited_dfs(
-                graph_mgr.adj, start_id, goal_id, max_expansions=3000
-            )
+            # If running on Render cloud deployment (or requested bounded dfs), limit to 3000 node expansions
+            # Otherwise in local environment, use standard unconstrained DFS (solve_dfs)
+            is_cloud = is_render_environment() or algo in {"dls", "bounded_dfs", "dfs_limited"}
+            if is_cloud:
+                result = solve_depth_limited_dfs(
+                    graph_mgr.adj, start_id, goal_id, max_expansions=3000
+                )
+            else:
+                result = solve_dfs(graph_mgr.adj, start_id, goal_id)
             exec_time = (time.perf_counter() - t0) * 1000
-
 
             if not result.get("found", True) or not result.get("path"):
                 return {
@@ -239,7 +256,7 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
             distance = haversine(
                 node["lat"], node["lng"], goal_node["lat"], goal_node["lng"]
             )
-            return distance if algo.startswith("hill") else distance * 0.035
+            return distance if algo.startswith("hill") else distance * 0.00135287
 
         try:
             if algo.startswith("hill"):
@@ -361,7 +378,7 @@ def run_multi_location_search(
                 if src not in distance_matrix:
                     distance_matrix[src] = {}
                 distance_matrix[src][tgt] = cost
-                
+
             if method == "genetic_algorithm":
                 optimized = solve_genetic_algorithm(
                     locations, distance_matrix, start_id, goal_id
@@ -610,7 +627,7 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             curr, p = stack.pop()
             if curr in visited:
                 continue
-            frontier_preview = [node for node, _ in stack[:249]] + [curr]
+            frontier_preview = [node for node, _ in stack[:4999]] + [curr]
             trace_history.record_expansion(
                 curr,
                 frontier_preview,
@@ -621,7 +638,7 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             if curr in goal_node_set:
                 found_goal_id = curr
                 break
-            if nodes_expanded >= 3000:
+            if nodes_expanded >= 5000:
                 break
             for nbr in graph_mgr.adj.get(curr, {}):
                 if nbr not in visited:
@@ -678,7 +695,7 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             if d > best_dist.get(curr, float('inf')):
                 continue
             nodes_expanded += 1
-            if nodes_expanded < 500:
+            if nodes_expanded < 5000:
                 trace_history.record_expansion(
                     curr,
                     build_priority_frontier_snapshot(
@@ -707,7 +724,7 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
         def h_multi(n_id: int) -> float:
             if algo == "ucs":
                 return 0.0
-            return nearest_goal_distance(n_id) * 0.035
+            return nearest_goal_distance(n_id) * 0.00135287
 
         pq = [(h_multi(start_id), 0.0, start_id)]
         g_scores = {start_id: 0.0}
@@ -717,7 +734,7 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             if g > g_scores.get(curr, float('inf')):
                 continue
             nodes_expanded += 1
-            if nodes_expanded < 500:
+            if nodes_expanded < 5000:
                 trace_history.record_expansion(
                     curr,
                     build_priority_frontier_snapshot(

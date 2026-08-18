@@ -71,7 +71,7 @@ def solve_ucs(
             continue
 
         # Build canonical frontier snapshot before expansion
-        if len(legacy_frontier_steps) < 500:
+        if len(legacy_frontier_steps) < 5000:
             remaining_frontier = _active_frontier(
                 open_heap,
                 g_score,

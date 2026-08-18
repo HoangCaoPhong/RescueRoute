@@ -15,7 +15,7 @@ def solve_depth_limited_dfs(
     cost_profile=None,
     *,
     max_depth: int | None = None,
-    max_expansions: int | None = 3000,
+    max_expansions: int | None = 5000,
 ):
     """
     Depth-Limited / Bounded Search (DLS / Bounded DFS).
@@ -45,7 +45,7 @@ def solve_depth_limited_dfs(
         if current_node in visited:
             continue
 
-        frontier_preview = [node for node, _, _ in stack[:249]] + [current_node]
+        frontier_preview = [node for node, _, _ in stack[:4999]] + [current_node]
         trace_history.record_expansion(
             current_node,
             frontier_preview,
@@ -72,12 +72,13 @@ def solve_depth_limited_dfs(
                 "processing_time_ms": processing_time_ms,
                 "is_optimal": False,
                 "explanation_data": {
-                    "algorithm": "DFS (Depth-Limited)",
+                    "algorithm": "DFS" if max_expansions is None and max_depth is None else "DFS (Depth-Limited)",
                     "optimality": "none",
                     "message": (
-                        "DFS explores graph branches to maximum depth with expansion limits. "
-                        "It does not guarantee minimum distance, time, or cost."
-                    )
+                        "DFS explores graph branches to find a path using a LIFO stack. "
+                        if max_expansions is None and max_depth is None
+                        else "DFS explores graph branches to maximum depth with expansion limits. "
+                    ) + "It does not guarantee minimum distance, time, or cost."
                 },
             }
 

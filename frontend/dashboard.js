@@ -1,8 +1,8 @@
 const API_BASE = "/api";
 const MAX_WAYPOINTS = 5;
 const DEFAULT_SPEED_KPH = 30;
-const MAX_MAP_TRACE_NODES = 250;
-const MAX_TRACE_TOKENS = 48;
+const MAX_MAP_TRACE_NODES = 1000;
+const MAX_TRACE_TOKENS = 192;
 const SEARCH_COLORS = {
     visited: "#facc15",
     current: "#f97316",
@@ -77,6 +77,7 @@ const CRITERION_LABELS = {
 let map;
 let hospitalsData = [];
 let poisData = [];
+let selectedWaypoints = [];
 let edgesData = [];
 let edgeIndex = new Map();
 let graphEdgeCount = 0;
@@ -94,6 +95,7 @@ let showPOIIcons = true;
 let showTraffic = true;
 let edgePolylines = {};
 let activeRoutePolyline = null;
+let backgroundRoutePolyline = null;
 let routeNodeMarkers = [];
 let routeRequestCache = new Map();
 let toastTimer = null;
@@ -313,8 +315,8 @@ async function loadInitialData() {
     setConnectionStatus("loading", "Đang kết nối API");
     try {
         const [nodes, edges, gps, health] = await Promise.all([
-            fetchJson(`${API_BASE}/nodes?poi_type=all&limit=10000`),
-            fetchJson(`${API_BASE}/edges?limit=2000`),
+            fetchJson(`${API_BASE}/nodes?poi_type=all&limit=30000`),
+            fetchJson(`${API_BASE}/edges?limit=100000`),
             fetchJson(`${API_BASE}/ambulance/location`),
             fetchJson(`${API_BASE}/health`),
         ]);
@@ -344,9 +346,11 @@ async function loadInitialData() {
         graphEdgeCount = Number(health.edges_count || edgesData.length);
 
         populateHospitalSelect();
+        populateWaypointSelect();
         populateEdgeSelect();
         populateStartControls();
         onStartModeChange();
+        renderWaypointStops();
         renderHospitalsOnMap();
         renderEdgesOnMap();
         updateAmbulanceDisplay(currentAmbulanceData);
@@ -368,7 +372,7 @@ async function loadInitialData() {
 function populateHospitalSelect() {
     const select = byId("selectHospital");
     if (!select) return;
-    const emergencyOnly = byId("chkEmergencyOnly")?.checked || false;
+    const category = byId("selectHospitalCategory")?.value || "emergency";
     const query = byId("inputSearchHospital")?.value?.toLowerCase().trim() || "";
     const currentVal = select.value;
 
@@ -396,9 +400,19 @@ function populateHospitalSelect() {
     const filteredHospitals = hospitalsData
         .slice()
         .filter((hospital) => {
-            if (emergencyOnly && !hospital.is_emergency) return false;
             const name = String(hospital.name || "").toLowerCase();
             const type = String(hospital.type || hospital.category || "").toLowerCase();
+
+            if (category === "emergency" && !hospital.is_emergency) {
+                return false;
+            } else if (category === "clinic") {
+                const isClinic = !hospital.is_emergency && (name.includes("phòng khám") || name.includes("clinic") || type.includes("phòng khám") || type.includes("chuyên khoa"));
+                if (!isClinic) return false;
+            } else if (category === "station") {
+                const isStation = !hospital.is_emergency && (name.includes("trạm y tế") || name.includes("trung tâm y tế") || type.includes("trạm y tế"));
+                if (!isStation) return false;
+            }
+
             return !query || name.includes(query) || type.includes(query);
         })
         .sort((a, b) =>
@@ -444,7 +458,8 @@ async function selectNearestHospital() {
         return;
     }
 
-    const emergencyOnly = byId("chkEmergencyOnly")?.checked || false;
+    const category = byId("selectHospitalCategory")?.value || "emergency";
+    const emergencyOnly = category === "emergency";
     const query = byId("inputSearchHospital")?.value?.toLowerCase().trim() || "";
     const currentGps = currentAmbulanceData || {};
     const baseLat = Number(currentGps.lat);
@@ -539,6 +554,62 @@ function updateCriterionNotice() {
     );
 }
 
+function normalizeSearchText(str) {
+    if (!str) return "";
+    return String(str)
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d")
+        .replace(/Đ/g, "D")
+        .toLowerCase()
+        .trim();
+}
+
+function findLocationsByName(query, limit = 8) {
+    const cleanQuery = normalizeSearchText(query);
+    if (!cleanQuery) return [];
+
+    const allLocations = [];
+    const seenNodeIds = new Set();
+    const pool = [...hospitalsData, ...poisData];
+
+    for (const item of pool) {
+        const nodeId = Number(item.node_id ?? item.poi_node_id);
+        if (!Number.isInteger(nodeId) || seenNodeIds.has(nodeId)) continue;
+
+        const name = String(item.name || "");
+        const cleanName = normalizeSearchText(name);
+        const type = String(item.type || item.category || "");
+        const cleanType = normalizeSearchText(type);
+
+        let score = -1;
+        if (cleanName.startsWith(cleanQuery)) {
+            score = 100 - cleanName.length;
+        } else if (cleanName.includes(cleanQuery)) {
+            score = 50 - cleanName.length;
+        } else if (cleanType.includes(cleanQuery)) {
+            score = 20;
+        } else if (String(nodeId).includes(cleanQuery)) {
+            score = 30;
+        }
+
+        if (score >= 0) {
+            seenNodeIds.add(nodeId);
+            allLocations.push({
+                node_id: nodeId,
+                name: name || `Node ${nodeId}`,
+                type: type || (item.is_hospital ? "Cơ sở Y tế" : "Địa điểm"),
+                is_hospital: Boolean(item.is_hospital),
+                is_emergency: Boolean(item.is_emergency),
+                score,
+            });
+        }
+    }
+
+    allLocations.sort((a, b) => b.score - a.score);
+    return allLocations.slice(0, limit);
+}
+
 function parseNodeIdList(rawValue) {
     if (!rawValue) return [];
     const uniqueIds = new Set();
@@ -548,6 +619,227 @@ function parseNodeIdList(rawValue) {
         .filter(Number.isInteger)
         .forEach((value) => uniqueIds.add(value));
     return Array.from(uniqueIds);
+}
+
+function renderWaypointStops() {
+    const listContainer = byId("waypointStopsList");
+    const countBadge = byId("waypointCountBadge");
+    const clearBtn = byId("btnClearWaypoints");
+    const syncInput = byId("inputWaypoints");
+
+    if (countBadge) {
+        countBadge.textContent = `(${selectedWaypoints.length}/${MAX_WAYPOINTS})`;
+    }
+    if (clearBtn) {
+        clearBtn.style.display = selectedWaypoints.length > 0 ? "inline-flex" : "none";
+    }
+    if (syncInput) {
+        syncInput.value = selectedWaypoints.join(", ");
+    }
+
+    if (!listContainer) return;
+    listContainer.replaceChildren();
+
+    if (selectedWaypoints.length === 0) {
+        const emptyHint = document.createElement("div");
+        emptyHint.className = "waypoint-empty-hint";
+        emptyHint.innerHTML = `<span>Chưa có trạm dừng nào. Gõ tên địa điểm ở trên hoặc bấm <strong>➕ Thêm điểm ghé</strong> trên bản đồ.</span>`;
+        listContainer.append(emptyHint);
+        return;
+    }
+
+    selectedWaypoints.forEach((nodeId, index) => {
+        const label = getNodeLabel(nodeId);
+        const card = document.createElement("div");
+        card.className = "waypoint-stop-card";
+
+        const indexBadge = document.createElement("div");
+        indexBadge.className = "stop-index-badge";
+        indexBadge.textContent = String(index + 1);
+
+        const content = document.createElement("div");
+        content.className = "stop-content";
+
+        const nameEl = document.createElement("div");
+        nameEl.className = "stop-name";
+        nameEl.textContent = label;
+        nameEl.title = `${label} (Node ${nodeId})`;
+
+        const idEl = document.createElement("div");
+        idEl.className = "stop-node-id";
+        idEl.textContent = `Node: ${nodeId}`;
+
+        content.append(nameEl, idEl);
+
+        const actions = document.createElement("div");
+        actions.className = "stop-actions";
+
+        const upBtn = document.createElement("button");
+        upBtn.type = "button";
+        upBtn.className = "btn-stop-action";
+        upBtn.textContent = "▲";
+        upBtn.title = "Di chuyển lên trước";
+        upBtn.disabled = index === 0;
+        upBtn.onclick = () => moveWaypoint(index, -1);
+
+        const downBtn = document.createElement("button");
+        downBtn.type = "button";
+        downBtn.className = "btn-stop-action";
+        downBtn.textContent = "▼";
+        downBtn.title = "Di chuyển xuống sau";
+        downBtn.disabled = index === selectedWaypoints.length - 1;
+        downBtn.onclick = () => moveWaypoint(index, 1);
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "btn-stop-action btn-delete";
+        delBtn.textContent = "✕";
+        delBtn.title = "Xóa trạm dừng này";
+        delBtn.onclick = () => removeWaypointAtIndex(index);
+
+        actions.append(upBtn, downBtn, delBtn);
+        card.append(indexBadge, content, actions);
+        listContainer.append(card);
+    });
+}
+
+function addWaypoint(nodeId) {
+    const numId = Number(nodeId);
+    if (!Number.isInteger(numId)) return;
+
+    if (selectedWaypoints.includes(numId)) {
+        showToast(`Điểm ${getNodeLabel(numId)} đã có trong danh sách trạm dừng.`, true);
+        map?.closePopup();
+        return;
+    }
+
+    if (selectedWaypoints.length >= MAX_WAYPOINTS) {
+        showToast(`Đã đạt tối đa ${MAX_WAYPOINTS} điểm trung gian.`, true);
+        map?.closePopup();
+        return;
+    }
+
+    selectedWaypoints.push(numId);
+    renderWaypointStops();
+    showToast(`Đã thêm trạm ${selectedWaypoints.length}: ${getNodeLabel(numId)}.`);
+    map?.closePopup();
+}
+
+function removeWaypointAtIndex(index) {
+    if (index >= 0 && index < selectedWaypoints.length) {
+        const removed = selectedWaypoints.splice(index, 1)[0];
+        renderWaypointStops();
+        showToast(`Đã xóa trạm dừng: ${getNodeLabel(removed)}.`);
+    }
+}
+
+function removeWaypoint(nodeId) {
+    const numId = Number(nodeId);
+    const index = selectedWaypoints.indexOf(numId);
+    if (index !== -1) {
+        removeWaypointAtIndex(index);
+    }
+}
+
+function moveWaypoint(index, direction) {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= selectedWaypoints.length) return;
+    const temp = selectedWaypoints[index];
+    selectedWaypoints[index] = selectedWaypoints[targetIndex];
+    selectedWaypoints[targetIndex] = temp;
+    renderWaypointStops();
+}
+
+function clearAllWaypoints() {
+    selectedWaypoints = [];
+    renderWaypointStops();
+    showToast("Đã xóa tất cả trạm dừng.");
+}
+
+function populateWaypointSelect() {
+    const select = byId("selectWaypoint");
+    if (!select) return;
+    const query = byId("inputSearchWaypoint")?.value?.trim() || "";
+
+    select.replaceChildren();
+
+    const pool = [...hospitalsData, ...poisData];
+    if (!pool.length) {
+        const option = document.createElement("option");
+        option.textContent = "Đang tải danh sách địa điểm…";
+        option.value = "";
+        select.append(option);
+        select.disabled = true;
+        return;
+    }
+
+    const cleanQuery = normalizeSearchText(query);
+    const seenNodeIds = new Set();
+    const filtered = [];
+
+    pool.forEach((item) => {
+        const nodeId = Number(item.node_id ?? item.poi_node_id);
+        if (!Number.isInteger(nodeId) || seenNodeIds.has(nodeId)) return;
+
+        const name = String(item.name || "");
+        const type = String(item.type || item.category || "");
+        const cleanName = normalizeSearchText(name);
+        const cleanType = normalizeSearchText(type);
+
+        if (!cleanQuery || cleanName.includes(cleanQuery) || cleanType.includes(cleanQuery) || String(nodeId).includes(cleanQuery)) {
+            seenNodeIds.add(nodeId);
+            filtered.push({
+                node_id: nodeId,
+                name: name || `Node ${nodeId}`,
+                type: type || (item.is_hospital ? "Cơ sở Y tế" : "Địa điểm"),
+                is_hospital: Boolean(item.is_hospital),
+                is_emergency: Boolean(item.is_emergency),
+            });
+        }
+    });
+
+    filtered.sort((a, b) => a.name.localeCompare(b.name, "vi"));
+
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = filtered.length
+        ? `-- Chọn địa điểm ghé qua (${filtered.length} địa điểm) --`
+        : "-- Không tìm thấy địa điểm phù hợp --";
+    select.append(defaultOption);
+
+    filtered.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = String(item.node_id);
+        const emoji = item.is_emergency ? "🚨" : item.is_hospital ? "🏥" : "📍";
+        option.textContent = `${emoji} ${item.name} (${item.type})`;
+        select.append(option);
+    });
+
+    select.disabled = filtered.length === 0;
+    select.value = "";
+}
+
+function addSelectedWaypointFromDropdown() {
+    const select = byId("selectWaypoint");
+    const val = select?.value;
+    if (!val) {
+        showToast("Vui lòng chọn một địa điểm từ danh sách dropdown để thêm.", true);
+        return;
+    }
+    addWaypoint(Number(val));
+    select.value = "";
+}
+
+function onWaypointSearchInput(event) {
+    populateWaypointSelect();
+}
+
+function onInputWaypointsManualChange() {
+    const syncInput = byId("inputWaypoints");
+    if (!syncInput) return;
+    const parsed = parseNodeIdList(syncInput.value);
+    selectedWaypoints = parsed.slice(0, MAX_WAYPOINTS);
+    renderWaypointStops();
 }
 
 function getPlannerInput() {
@@ -565,9 +857,13 @@ function getPlannerInput() {
         throw new Error("Vui lòng chọn một cơ sở y tế đích hợp lệ.");
     }
 
-    const waypointIds = parseNodeIdList(
-        byId("inputWaypoints")?.value || "",
-    ).filter((nodeId) => nodeId !== startNodeId && nodeId !== goalNodeId);
+    const rawWaypoints = selectedWaypoints.length > 0
+        ? selectedWaypoints
+        : parseNodeIdList(byId("inputWaypoints")?.value || "");
+
+    const waypointIds = rawWaypoints.filter(
+        (nodeId) => nodeId !== startNodeId && nodeId !== goalNodeId,
+    );
     if (waypointIds.length > MAX_WAYPOINTS) {
         throw new Error(
             `Chỉ nên dùng tối đa ${MAX_WAYPOINTS} điểm trung gian để tránh quá tải khi demo.`,
@@ -601,11 +897,24 @@ function getNodeLabel(nodeId) {
     return point?.name || `Node ${numericId}`;
 }
 
+let roadAdjacency = new Map();
+
 function rebuildEdgeIndex() {
     edgeIndex = new Map();
+    roadAdjacency = new Map();
     edgesData.forEach((edge) => {
         edgeIndex.set(normalizeEdgeId(edge.edge_id), edge);
         indexEdgeNodeCoords(fullRoadNodeCoords, edge);
+
+        const [u, v] = String(edge?.edge_id || "").split("_");
+        if (u && v) {
+            const uKey = normalizeNodeCoordinateKey(u);
+            const vKey = normalizeNodeCoordinateKey(v);
+            if (!roadAdjacency.has(uKey)) roadAdjacency.set(uKey, new Set());
+            if (!roadAdjacency.has(vKey)) roadAdjacency.set(vKey, new Set());
+            roadAdjacency.get(uKey).add(vKey);
+            roadAdjacency.get(vKey).add(uKey);
+        }
     });
 }
 
@@ -913,6 +1222,9 @@ async function calculateRoute() {
             input.algorithm,
         );
         if (combinedTrace) {
+            const allSegments = buildCoordinateSegments(aggregate.pathCoords);
+            drawBackgroundRouteLine(allSegments);
+            fitMapToRouteSegments(allSegments);
             await startSearchVisualization(combinedTrace);
             playSearchAnimation();
         } else {
@@ -1328,6 +1640,10 @@ function clearFinalRoute() {
         map.removeLayer(activeRoutePolyline);
         activeRoutePolyline = null;
     }
+    if (backgroundRoutePolyline) {
+        map.removeLayer(backgroundRoutePolyline);
+        backgroundRoutePolyline = null;
+    }
     routeNodeMarkers.forEach((marker) => map.removeLayer(marker));
     routeNodeMarkers = [];
 }
@@ -1349,6 +1665,26 @@ function buildCoordinateSegments(rawCoords = []) {
     return segments;
 }
 
+function drawBackgroundRouteLine(routeSegments) {
+    if (!map) return;
+    if (backgroundRoutePolyline) {
+        map.removeLayer(backgroundRoutePolyline);
+        backgroundRoutePolyline = null;
+    }
+    if (!routeSegments.length) return;
+
+    const latLngs =
+        routeSegments.length === 1 ? routeSegments[0] : routeSegments;
+    backgroundRoutePolyline = L.polyline(latLngs, {
+        pane: "finalRoutePane",
+        color: "#a78bfa",
+        weight: 5,
+        opacity: 0.55,
+        dashArray: "6, 8",
+        lineJoin: "round",
+    }).addTo(map);
+}
+
 function drawRouteLine(routeSegments) {
     if (!map) return;
     if (activeRoutePolyline) {
@@ -1363,7 +1699,7 @@ function drawRouteLine(routeSegments) {
         pane: "finalRoutePane",
         color: SEARCH_COLORS.route,
         weight: 6,
-        opacity: 0.92,
+        opacity: 0.95,
         lineJoin: "round",
     }).addTo(map);
 }
@@ -1500,9 +1836,20 @@ function clearSearchVisualization() {
     searchVisualizationData = null;
     searchStepIndex = 0;
     const panel = byId("searchVisualizationPanel");
-    if (panel) panel.hidden = true;
+    if (panel) {
+        panel.hidden = true;
+        panel.classList.remove("is-collapsed");
+    }
     const playbackDock = byId("searchPlaybackDock");
     if (playbackDock) playbackDock.hidden = true;
+}
+
+function toggleSearchTraceCollapse() {
+    const panel = byId("searchVisualizationPanel");
+    if (!panel) return;
+    const isCollapsed = panel.classList.toggle("is-collapsed");
+    const btn = byId("btnToggleSearchTrace");
+    if (btn) btn.textContent = isCollapsed ? "▸" : "▾";
 }
 
 async function startSearchVisualization(trace) {
@@ -1826,6 +2173,114 @@ function renderSearchStep(stepIndex) {
     searchFrontierLayer?.clearLayers();
     searchCurrentLayer?.clearLayers();
 
+    const prevNodeId = safeIndex > 0 ? steps[safeIndex - 1]?.current_node : null;
+    const nextNodeId = safeIndex < steps.length - 1 ? steps[safeIndex + 1]?.current_node : null;
+
+    const currentCoords = normalizeMapCoords(
+        nodeCoords[normalizeNodeCoordinateKey(mapCurrentNodeId)],
+    );
+
+    // -------------------------------------------------------------
+    // 1. Cạnh đồ thị đã khám phá trong cây tìm kiếm (Explored Search Tree Edges)
+    // -------------------------------------------------------------
+    if (isFullTrace && mapVisitedOrder.length > 0) {
+        const visitedSet = new Set(
+            mapVisitedOrder.map(normalizeNodeCoordinateKey),
+        );
+        if (mapCurrentNodeId) visitedSet.add(normalizeNodeCoordinateKey(mapCurrentNodeId));
+
+        const drawnEdges = new Set();
+        const exploredTreeEdges = [];
+
+        visitedSet.forEach((uKey) => {
+            const neighbors = roadAdjacency.get(uKey);
+            if (!neighbors) return;
+            const coordsU = normalizeMapCoords(nodeCoords[uKey]);
+            if (!coordsU) return;
+
+            neighbors.forEach((vKey) => {
+                if (!visitedSet.has(vKey)) return;
+                const edgeKey = uKey < vKey ? `${uKey}__${vKey}` : `${vKey}__${uKey}`;
+                if (drawnEdges.has(edgeKey)) return;
+                drawnEdges.add(edgeKey);
+
+                const coordsV = normalizeMapCoords(nodeCoords[vKey]);
+                if (!coordsV) return;
+                exploredTreeEdges.push([coordsU, coordsV]);
+            });
+        });
+
+        if (exploredTreeEdges.length > 0) {
+            // Lớp hào quang cho các cạnh cây tìm kiếm đã duyệt
+            L.polyline(exploredTreeEdges, {
+                pane: "searchVisitedPane",
+                color: "#0284c7",
+                weight: 6.5,
+                opacity: 0.45,
+                lineCap: "round",
+                lineJoin: "round",
+                interactive: false,
+            }).addTo(searchVisitedLayer);
+
+            // Lõi cạnh cây tìm kiếm đã duyệt
+            L.polyline(exploredTreeEdges, {
+                pane: "searchVisitedPane",
+                color: "#38bdf8",
+                weight: 3.5,
+                opacity: 0.92,
+                lineCap: "round",
+                lineJoin: "round",
+                interactive: false,
+            }).addTo(searchVisitedLayer);
+        }
+    }
+
+    // -------------------------------------------------------------
+    // 2. Nhánh mở rộng từ Current Node sang các Frontier kề cận
+    // -------------------------------------------------------------
+    if (currentCoords && mapCurrentNodeId) {
+        const currKey = normalizeNodeCoordinateKey(mapCurrentNodeId);
+        const currNeighbors = roadAdjacency.get(currKey) || new Set();
+
+        frontier.forEach((item) => {
+            const fKey = normalizeNodeCoordinateKey(item.node_id);
+            // Chỉ xét nhánh nếu ngã rẽ này là nút láng giềng kề trực tiếp trên đồ thị
+            if (!currNeighbors.has(fKey)) return;
+
+            const fCoords = normalizeMapCoords(nodeCoords[fKey]);
+            if (!fCoords) return;
+
+            const isNext = String(item.node_id) === String(nextNodeId);
+
+            if (isNext) {
+                // Cạnh mở rộng bước tiếp theo được thuật toán lựa chọn (Next Expansion Edge)
+                L.polyline([currentCoords, fCoords], {
+                    pane: "searchFrontierPane",
+                    color: "#10b981",
+                    weight: 4.5,
+                    opacity: 0.95,
+                    lineCap: "round",
+                    lineJoin: "round",
+                    interactive: false,
+                }).addTo(searchFrontierLayer);
+            } else {
+                // Các cạnh nối sang các ứng viên Frontier kề cận khác
+                L.polyline([currentCoords, fCoords], {
+                    pane: "searchFrontierPane",
+                    color: "#06b6d4",
+                    weight: 2.8,
+                    opacity: 0.8,
+                    dashArray: "3, 5",
+                    lineCap: "round",
+                    interactive: false,
+                }).addTo(searchFrontierLayer);
+            }
+        });
+    }
+
+    // -------------------------------------------------------------
+    // 1. Vẽ các nút đã duyệt (Visited Nodes trên mạng đường)
+    // -------------------------------------------------------------
     mapVisitedOrder.slice(-MAX_MAP_TRACE_NODES).forEach((nodeId) => {
         const coords = normalizeMapCoords(
             nodeCoords[normalizeNodeCoordinateKey(nodeId)],
@@ -1833,11 +2288,11 @@ function renderSearchStep(stepIndex) {
         if (!coords) return;
         L.circleMarker(coords, {
             pane: "searchVisitedPane",
-            radius: 5.5,
+            radius: 5,
             color: SEARCH_COLORS.visited,
             fillColor: SEARCH_COLORS.visited,
             fillOpacity: 0.7,
-            opacity: 0.9,
+            opacity: 0.85,
             weight: 1.5,
         })
             .bindTooltip(getNodeLabel(nodeId))
@@ -1845,35 +2300,67 @@ function renderSearchStep(stepIndex) {
         visitedMarkersDrawn += 1;
     });
 
+    // -------------------------------------------------------------
+    // 2. Mở rộng các ngã rẽ Frontier (Frontier Nodes trên mạng đường)
+    // -------------------------------------------------------------
+    let nextCandidateCoords = null;
+
     frontier.slice(0, MAX_MAP_TRACE_NODES).forEach((item) => {
         const coords = normalizeMapCoords(
             nodeCoords[normalizeNodeCoordinateKey(item.node_id)],
         );
         if (!coords) return;
+        const isNextStepTarget = String(item.node_id) === String(nextNodeId);
+
+        if (isNextStepTarget) {
+            nextCandidateCoords = coords;
+        }
+
         L.circleMarker(coords, {
             pane: "searchFrontierPane",
-            radius: 7,
-            color: SEARCH_COLORS.frontier,
-            fillColor: SEARCH_COLORS.frontier,
-            fillOpacity: 0.72,
+            radius: isNextStepTarget ? 8.5 : 6.5,
+            color: isNextStepTarget ? "#22c55e" : SEARCH_COLORS.frontier,
+            fillColor: isNextStepTarget ? "#4ade80" : SEARCH_COLORS.frontier,
+            fillOpacity: isNextStepTarget ? 0.95 : 0.75,
             opacity: 1,
-            weight: 2,
+            weight: isNextStepTarget ? 2.8 : 2,
         })
-            .bindTooltip(formatFrontierItem(item))
+            .bindTooltip(
+                isNextStepTarget
+                    ? `👉 BƯỚC TIẾP THEO SẼ VÀO ĐÂY: ${formatFrontierItem(item)}`
+                    : formatFrontierItem(item),
+            )
             .addTo(searchFrontierLayer);
         frontierMarkersDrawn += 1;
     });
 
-    const currentCoords = normalizeMapCoords(
-        nodeCoords[normalizeNodeCoordinateKey(mapCurrentNodeId)],
-    );
+    // Marker đặc biệt cho Nút được chọn tiếp theo (Next Candidate Node)
+    if (nextCandidateCoords && nextNodeId) {
+        const nextIcon = L.divIcon({
+            className: "next-candidate-marker",
+            html: `<div class="candidate-ring"></div><span class="candidate-label">👉 Tiếp theo: ${escapeHtml(nextNodeId)}</span>`,
+            iconSize: [36, 36],
+            iconAnchor: [18, 18],
+        });
+        L.marker(nextCandidateCoords, {
+            icon: nextIcon,
+            pane: "searchFrontierPane",
+            interactive: false,
+            keyboard: false,
+            zIndexOffset: 4500,
+        }).addTo(searchFrontierLayer);
+    }
+
+    // -------------------------------------------------------------
+    // 3. Highlight Node B đang xét hiện tại (Current Node)
+    // -------------------------------------------------------------
     if (currentCoords) {
         L.circleMarker(currentCoords, {
             pane: "searchCurrentPane",
             radius: 15,
             color: SEARCH_COLORS.current,
             fillColor: SEARCH_COLORS.current,
-            fillOpacity: 0.14,
+            fillOpacity: 0.15,
             opacity: 0.7,
             weight: 2,
         }).addTo(searchCurrentLayer);
@@ -1888,19 +2375,19 @@ function renderSearchStep(stepIndex) {
         })
             .bindTooltip(
                 isFullTrace
-                    ? `Đang mở: ${getNodeLabel(mapCurrentNodeId)}`
+                    ? `📍 Đang xét: ${getNodeLabel(mapCurrentNodeId)}${nextNodeId ? ` ➔ Tiếp theo: ${getNodeLabel(nextNodeId)}` : ""}`
                     : `Tuyến đã hiện: ${getNodeLabel(mapCurrentNodeId)}`,
                 {
                     permanent: true,
-                direction: "top",
+                    direction: "top",
                 },
             )
             .addTo(searchCurrentLayer);
         const currentIcon = L.divIcon({
             className: "search-current-marker",
-            html: `<span class="current-marker-label">Node ${escapeHtml(mapCurrentNodeId)}</span><span class="current-marker-core">●</span>`,
-            iconSize: [34, 34],
-            iconAnchor: [17, 17],
+            html: `<div class="beacon-pulse-ring"></div><span class="current-marker-label">📍 Node ${escapeHtml(mapCurrentNodeId)}</span><span class="current-marker-core">●</span>`,
+            iconSize: [36, 36],
+            iconAnchor: [18, 18],
         });
         L.marker(currentCoords, {
             icon: currentIcon,
@@ -1948,16 +2435,17 @@ function renderSearchStep(stepIndex) {
         "frontier",
     );
 
-    const omittedVisited = Math.max(0, visitedOrder.length - MAX_TRACE_TOKENS);
-    const omittedFrontier = Math.max(0, fullFrontierCount - MAX_TRACE_TOKENS);
     const legText =
         step.legTotal > 1
             ? `Chặng ${step.legIndex}/${step.legTotal} (${step.routeStart} → ${step.routeGoal}). `
             : "";
-    setText(
-        "vizExplanation",
-        `${legText}${isFullTrace ? `Bản đồ hiển thị visited, ${frontierKindLabel(searchVisualizationData.frontier_kind).toLowerCase()} và node đang mở theo search trace.` : "Frontier vẫn hiển thị đầy đủ bằng marker xanh dương; node vàng, marker cam, camera và tuyến tím chỉ tiến dọc theo tuyến cuối."}${omittedVisited || omittedFrontier ? ` Danh sách rút gọn ${omittedVisited} visited và ${omittedFrontier} frontier để giao diện không bị quá tải.` : ""}`,
-    );
+    const transitionText = prevNodeId && mapCurrentNodeId && String(prevNodeId) !== String(mapCurrentNodeId)
+        ? `Đã đi từ [${prevNodeId}] ➔ [${mapCurrentNodeId}]. `
+        : `Bắt đầu từ [${mapCurrentNodeId}]. `;
+    const decisionText = nextNodeId
+        ? `Từ [${mapCurrentNodeId}], mở rộng ${frontier.length} nhánh Frontier và quyết định di chuyển tiếp vào Node [${nextNodeId}].`
+        : "Đã hoàn thành duyệt / tìm thấy đích!";
+    setText("vizExplanation", `${legText}${transitionText}${decisionText}`);
 }
 
 function updateMapTraceStatus(
@@ -2226,44 +2714,72 @@ function renderHospitalsOnMap() {
     );
     hospitalMarkers = new Map();
 
-    hospitalsData.forEach((hospital) => {
-        const type = String(hospital.type || "Cơ sở y tế");
-        const isHospital =
-            type.toLowerCase().includes("hospital") ||
-            type.toLowerCase().includes("bệnh viện");
-        const emoji = isHospital ? "🏥" : "✚";
-        const icon = showPOIIcons
-            ? L.divIcon({
-                  className: `custom-div-icon ${isHospital ? "icon-hospital" : "icon-clinic"}`,
-                  html: `<span>${emoji}</span>`,
-                  iconSize: [34, 34],
-                  iconAnchor: [17, 17],
-              })
-            : L.divIcon({
-                  className: `poi-dot-icon ${isHospital ? "dot-hospital" : "dot-clinic"}`,
-                  html: '<span class="poi-dot-inner"></span>',
-                  iconSize: [14, 14],
-                  iconAnchor: [7, 7],
-              });
-        const marker = L.marker([hospital.lat, hospital.lng], {
-            icon,
-            zIndexOffset: showPOIIcons ? 1000 : 800,
-            title: hospital.name || "Cơ sở y tế",
-        }).addTo(map);
-        marker.bindPopup(`
-            <div class="popup-content">
-                <strong>${emoji} ${escapeHtml(hospital.name || "Cơ sở y tế")}</strong>
-                <span>Loại: ${escapeHtml(type)}</span>
-                <span>Road node: ${Number(hospital.node_id)}</span>
-                <div style="display: flex; gap: 5px; margin-top: 6px;">
-                    <button type="button" onclick="setDestination(${Number(hospital.node_id)})">🎯 Chọn làm đích</button>
-                    <button type="button" onclick="addWaypoint(${Number(hospital.node_id)})" style="background: rgba(119, 135, 255, 0.2); border-color: rgba(119, 135, 255, 0.4);">➕ Thêm điểm ghé</button>
+    poisData.forEach((poi) => {
+        const type = String(poi.type || poi.category || "Cơ sở y tế");
+        const isMedical = Boolean(poi.is_hospital);
+        
+        let marker;
+        if (isMedical) {
+            const isHospital =
+                type.toLowerCase().includes("hospital") ||
+                type.toLowerCase().includes("bệnh viện");
+            const emoji = isHospital ? "🏥" : "✚";
+            const icon = showPOIIcons
+                ? L.divIcon({
+                      className: `custom-div-icon ${isHospital ? "icon-hospital" : "icon-clinic"}`,
+                      html: `<span>${emoji}</span>`,
+                      iconSize: [34, 34],
+                      iconAnchor: [17, 17],
+                  })
+                : L.divIcon({
+                      className: `poi-dot-icon ${isHospital ? "dot-hospital" : "dot-clinic"}`,
+                      html: '<span class="poi-dot-inner"></span>',
+                      iconSize: [14, 14],
+                      iconAnchor: [7, 7],
+                  });
+            marker = L.marker([poi.lat, poi.lng], {
+                icon,
+                zIndexOffset: showPOIIcons ? 1000 : 800,
+                title: poi.name || "Cơ sở y tế",
+            });
+            marker.bindPopup(`
+                <div class="popup-content">
+                    <strong>${emoji} ${escapeHtml(poi.name || "Cơ sở y tế")}</strong>
+                    <span>Loại: ${escapeHtml(type)}</span>
+                    <span>Road node: ${Number(poi.node_id)}</span>
+                    <div style="display: flex; gap: 5px; margin-top: 6px;">
+                        <button type="button" onclick="setDestination(${Number(poi.node_id)})">🎯 Chọn làm đích</button>
+                        <button type="button" onclick="addWaypoint(${Number(poi.node_id)})" style="background: rgba(119, 135, 255, 0.2); border-color: rgba(119, 135, 255, 0.4);">➕ Thêm điểm ghé</button>
+                    </div>
                 </div>
-            </div>
-        `);
-        const markers = hospitalMarkers.get(Number(hospital.node_id)) || [];
+            `);
+        } else {
+            // Không hiển thị POI thường nếu POI icon đang tắt (tùy chọn)
+            if (!showPOIIcons) return;
+            marker = L.circleMarker([poi.lat, poi.lng], {
+                radius: 4,
+                color: '#6b7280',
+                fillColor: '#9ca3af',
+                fillOpacity: 0.8,
+                weight: 1,
+            });
+            marker.bindPopup(`
+                <div class="popup-content">
+                    <strong>📍 ${escapeHtml(poi.name || "POI")}</strong>
+                    <span>Loại: ${escapeHtml(type)}</span>
+                    <span>Road node: ${Number(poi.node_id)}</span>
+                    <div style="display: flex; gap: 5px; margin-top: 6px;">
+                        <button type="button" onclick="setDestination(${Number(poi.node_id)})">🎯 Chọn làm đích</button>
+                        <button type="button" onclick="addWaypoint(${Number(poi.node_id)})" style="background: rgba(119, 135, 255, 0.2); border-color: rgba(119, 135, 255, 0.4);">➕ Thêm điểm ghé</button>
+                    </div>
+                </div>
+            `);
+        }
+        marker.addTo(map);
+
+        const markers = hospitalMarkers.get(Number(poi.node_id)) || [];
         markers.push(marker);
-        hospitalMarkers.set(Number(hospital.node_id), markers);
+        hospitalMarkers.set(Number(poi.node_id), markers);
     });
 }
 
@@ -2293,25 +2809,25 @@ function renderEdgesOnMap() {
 
     if (groups.normal.length) {
         edgePolylines.normal = L.polyline(groups.normal, {
-            color: "#39c6d7",
-            weight: 2,
-            opacity: 0.34,
+            color: "#0284c7",
+            weight: 2.5,
+            opacity: 0.65,
             interactive: false,
         }).addTo(map);
     }
     if (groups.heavy.length) {
         edgePolylines.heavy = L.polyline(groups.heavy, {
-            color: "#f5b942",
-            weight: 3,
-            opacity: 0.82,
+            color: "#f59e0b",
+            weight: 3.5,
+            opacity: 0.85,
             interactive: false,
         }).addTo(map);
     }
     if (groups.severe.length) {
         edgePolylines.severe = L.polyline(groups.severe, {
-            color: "#ef476f",
-            weight: 4,
-            opacity: 0.92,
+            color: "#ef4444",
+            weight: 4.5,
+            opacity: 0.95,
             interactive: false,
         }).addTo(map);
     }
@@ -2321,6 +2837,14 @@ function toggleTrafficLayer() {
     showTraffic = !showTraffic;
     updateToggleButton("btnToggleTraffic", showTraffic, "Lớp mức độ ùn tắc");
     renderEdgesOnMap();
+}
+
+function toggleMapLegend() {
+    const legend = byId("mapLegend");
+    if (!legend) return;
+    const isCollapsed = legend.classList.toggle("is-collapsed");
+    const btn = byId("btnToggleLegend");
+    if (btn) btn.textContent = isCollapsed ? "▸" : "▾";
 }
 
 function updateToggleButton(id, active, label) {
@@ -2410,24 +2934,6 @@ function setDestination(nodeId) {
     onHospitalSelectChange();
     map?.closePopup();
     showToast(`Đã chọn ${getNodeLabel(Number(nodeId))} làm đích đến.`);
-}
-
-function addWaypoint(nodeId) {
-    const input = byId("inputWaypoints");
-    if (!input) return;
-    const current = parseNodeIdList(input.value);
-    if (!current.includes(Number(nodeId))) {
-        if (current.length >= MAX_WAYPOINTS) {
-            showToast(`Đã đạt tối đa ${MAX_WAYPOINTS} điểm trung gian.`, true);
-            return;
-        }
-        current.push(Number(nodeId));
-        input.value = current.join(", ");
-        showToast(`Đã thêm ${getNodeLabel(Number(nodeId))} vào điểm trung gian (${current.length}/${MAX_WAYPOINTS}).`);
-    } else {
-        showToast(`Điểm ${getNodeLabel(Number(nodeId))} đã có trong danh sách trung gian.`, true);
-    }
-    map?.closePopup();
 }
 
 function onHospitalSelectChange() {
@@ -2522,3 +3028,13 @@ function showToast(message, isError = false) {
 }
 
 window.addEventListener("load", initMap);
+
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+    document.addEventListener("click", (e) => {
+        const container = document.querySelector?.(".waypoint-search-container");
+        const dropdown = byId("waypointSuggestionsDropdown");
+        if (dropdown && container && !container.contains(e.target)) {
+            dropdown.style.display = "none";
+        }
+    });
+}

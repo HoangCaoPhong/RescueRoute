@@ -13,7 +13,6 @@ Mỗi thuật toán có một folder riêng để thành viên có thể code, t
 | Graph search | `graph_search/ucs/` | Uniform Cost Search | Nhân | `feature/ucs-search` |
 | Optimization | `optimization/hill_climbing/` | Hill Climbing | Phong | `feature/hill-climbing` |
 | Optimization | `optimization/simulated_annealing/` | Simulated Annealing | Nhân | `feature/simulated-annealing` |
-| Optimization | `optimization/genetic_algorithm/` | Genetic Algorithm | Hòa | `feature/genetic-algorithm` |
 | Optimization | `optimization/nearest_neighbor/` | Nearest Neighbor | Shared | `temp/trace-history-merge-dev` |
 | Optimization | `optimization/held_karp/` | Held-Karp Dynamic Programming | Shared | `temp/trace-history-merge-dev` |
 
@@ -29,7 +28,7 @@ Khi bắt đầu implementation, thành viên thêm file theo nhu cầu:
 └── helpers.py         # Chỉ tạo nếu logic phụ đủ lớn để tách
 ```
 
-Không bắt buộc tạo `helpers.py`. A* có thể dùng `heuristic.py`; Genetic Algorithm có thể dùng `operators.py` và `population.py`. Tránh tạo nhiều file rỗng chỉ để giống cây mẫu.
+Không bắt buộc tạo `helpers.py`. A* có thể dùng `heuristic.py`; Simulated Annealing có thể dùng `temperature.py`. Tránh tạo nhiều file rỗng chỉ để giống cây mẫu.
 
 ## Contract chung
 

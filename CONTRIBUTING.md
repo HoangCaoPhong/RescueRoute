@@ -61,7 +61,7 @@ Mỗi commit phải có ý nghĩa độc lập. Không dùng thông điệp như
 
 - `feature/astar-search` và `feature/hill-climbing`
 - `feature/ucs-search` và `feature/simulated-annealing`
-- `feature/dijkstra-search` và `feature/genetic-algorithm`
+- `feature/dijkstra-search` và `feature/held-karp`
 - `feature/dfs-search` và `feature/fastapi-foundation`
 - `feature/bfs-search` và `feature/react-map-foundation`
 - `feature/graph-dataset-schema` cho contract dữ liệu dùng chung

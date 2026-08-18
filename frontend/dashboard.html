@@ -150,10 +150,15 @@
                                     placeholder="🔍 Gõ tìm BV (VD: Chợ Rẫy, 115...)"
                                     oninput="populateHospitalSelect()" />
                                 <div class="hospital-filter-row">
-                                    <label class="hospital-filter-label" for="chkEmergencyOnly">
-                                        <input type="checkbox" id="chkEmergencyOnly" checked onchange="populateHospitalSelect()" />
-                                        <span>🚨 Lọc BV Cấp Cứu / Đa Khoa</span>
+                                    <label class="hospital-filter-label" for="selectHospitalCategory">
+                                        <span>Phân loại:</span>
                                     </label>
+                                    <select id="selectHospitalCategory" class="select-hospital-category" onchange="populateHospitalSelect()">
+                                        <option value="emergency">🚨 Bệnh viện Cấp Cứu / Đa Khoa</option>
+                                        <option value="all">🌐 Tất cả cơ sở y tế</option>
+                                        <option value="clinic">🩺 Phòng khám / Chuyên khoa</option>
+                                        <option value="station">🏥 Trạm Y tế / Khác</option>
+                                    </select>
                                     <span id="hospitalCountBadge" class="hospital-count-badge">(Đang tải...)</span>
                                 </div>
                                 <select id="selectHospital"
@@ -163,30 +168,55 @@
                                 </select>
                             </div>
 
-                            <div class="control-block full-width">
-                                <label for="inputWaypoints">Điểm trung gian
-                                    <span class="optional-label">tùy chọn, tối
-                                        đa 5</span></label>
-                                <textarea id="inputWaypoints" rows="2"
-                                    placeholder="Nhập mã nút, ngăn cách bằng dấu phẩy. Ví dụ: 123, 456"></textarea>
-                                <small>Có thể giữ thứ tự nhập hoặc tối ưu thứ tự
-                                    bằng Nearest Neighbor ở frontend.</small>
+                            <div class="control-block full-width waypoint-manager-block">
+                                <div class="waypoint-header">
+                                    <label for="selectWaypoint">
+                                        📍 Trạm dừng trung gian
+                                        <span class="waypoint-count-badge" id="waypointCountBadge">(0/5)</span>
+                                    </label>
+                                    <button type="button" class="btn-clear-waypoints" id="btnClearWaypoints" onclick="clearAllWaypoints()" title="Xóa tất cả trạm dừng" style="display: none;">
+                                        🗑️ Xóa hết
+                                    </button>
+                                </div>
+
+                                <!-- Thanh tìm kiếm lọc địa điểm trong dropdown -->
+                                <input type="text" id="inputSearchWaypoint"
+                                    class="input-search-waypoint"
+                                    placeholder="🔍 Gõ tìm kiếm địa điểm / BV (VD: Từ Dũ, Sư Phạm...)"
+                                    autocomplete="off"
+                                    oninput="populateWaypointSelect()" />
+
+                                <!-- Thanh Dropdown chọn địa điểm + Nút Thêm -->
+                                <div class="waypoint-select-row">
+                                    <select id="selectWaypoint" class="select-waypoint-dropdown" disabled>
+                                        <option>Đang tải danh sách địa điểm…</option>
+                                    </select>
+                                    <button type="button" class="btn-add-stop" onclick="addSelectedWaypointFromDropdown()" title="Thêm trạm dừng này">
+                                        ➕ Thêm
+                                    </button>
+                                </div>
+
+                                <!-- Danh sách các trạm dừng đã chọn (Google Maps route staging) -->
+                                <div id="waypointStopsList" class="waypoint-stops-list">
+                                    <div class="waypoint-empty-hint">
+                                        <span>Chưa có trạm dừng nào. Chọn địa điểm ở dropdown trên hoặc bấm <strong>➕ Thêm điểm ghé</strong> trên bản đồ.</span>
+                                    </div>
+                                </div>
+
+                                <!-- Textarea đồng bộ ngầm cho mã nút (bảo đảm tương thích 100%) -->
+                                <textarea id="inputWaypoints" rows="1" class="input-waypoints-sync"
+                                    placeholder="Mã nút trung gian..."
+                                    onchange="onInputWaypointsManualChange()" style="display: none;"></textarea>
                             </div>
 
                             <div class="control-block">
-                                <label for="selectVisitOrder">Xử lý nhiều địa
-                                    điểm</label>
+                                <label for="selectVisitOrder">Tối ưu thứ tự điểm ghé</label>
                                 <select id="selectVisitOrder">
-                                    <option value="input">Giữ thứ tự đã
-                                        nhập</option>
-                                    <option value="nearest_neighbor">Nearest Neighbor
-                                        (xấp xỉ)</option>
-                                    <option value="held_karp">Held–Karp
-                                        (tối ưu, tối đa 10 điểm)</option>
-                                    <option value="genetic_algorithm">Genetic Algorithm
-                                        (xấp xỉ)</option>
-                                    <option value="simulated_annealing">Simulated Annealing
-                                        (xấp xỉ)</option>
+                                    <option value="input">Giữ thứ tự đã nhập</option>
+                                    <option value="nearest_neighbor">Nearest Neighbor (Tham lam / Xấp xỉ nhanh)</option>
+                                    <option value="held_karp">Held–Karp (Tối ưu toàn cục, ≤ 10 điểm)</option>
+                                    <option value="genetic_algorithm">Genetic Algorithm (Giải thuật Di truyền)</option>
+                                    <option value="simulated_annealing">Simulated Annealing (Xấp xỉ Metaheuristic)</option>
                                 </select>
                             </div>
 
@@ -344,99 +374,98 @@
                             </div>
 
                             <div id="searchVisualizationPanel"
-
                                 class="search-visualization" hidden>
-                                <div class="search-viz-header">
+                                <div class="search-viz-header" onclick="toggleSearchTraceCollapse()" title="Nhấp để ẩn hoặc hiện mô phỏng Search Trace">
                                     <div>
-                                        <span class="eyebrow">Mô phỏng từng
-                                            bước</span>
+                                        <span class="eyebrow">Mô phỏng từng bước</span>
                                         <h4><span id="vizAlgorithm">—</span> ·
-                                            <span id="vizStep">Bước 0 /
-                                                0</span></h4>
+                                            <span id="vizStep">Bước 0 / 0</span></h4>
                                     </div>
-                                    <div class="viz-legend"
-                                        aria-label="Chú thích mô phỏng">
-                                        <span id="vizVisitedLegend"
-                                            class="legend-chip visited">🟡 Tuyến
-                                            đã hiện</span>
-                                        <span id="vizCurrentLegend"
-                                            class="legend-chip current">🟠
-                                            Trên tuyến cuối</span>
-                                        <span class="legend-chip frontier">🔵
-                                            Frontier</span>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <div class="viz-legend"
+                                            aria-label="Chú thích mô phỏng">
+                                            <span id="vizVisitedLegend"
+                                                class="legend-chip visited">🟡 Tuyến đã hiện</span>
+                                            <span id="vizCurrentLegend"
+                                                class="legend-chip current">🟠 Trên tuyến cuối</span>
+                                            <span class="legend-chip frontier">🔵 Frontier</span>
+                                        </div>
+                                        <button id="btnToggleSearchTrace" class="btn-trace-collapse" type="button" aria-label="Ẩn hoặc hiện khối mô phỏng" onclick="event.stopPropagation(); toggleSearchTraceCollapse();">▾</button>
                                     </div>
                                 </div>
-                                <div class="search-viz-stats">
-                                    <div><span>Nút đang mở</span><code
-                                            id="vizCurrentNode">—</code></div>
-                                    <div><span>Đã duyệt</span><strong
-                                            id="vizVisitedCount">0</strong></div>
-                                    <div><span
-                                            id="vizFrontierLabel">Frontier</span><strong
-                                            id="vizFrontierCount">0</strong></div>
-                                </div>
-                                <p id="vizMapStatus" class="viz-map-status"
-                                    role="status"></p>
-                                <details class="search-viz-details">
-                                    <summary>Chi tiết trace &amp; frontier</summary>
-                                    <div class="search-viz-detail-content">
-                                        <div class="search-viz-queue-panel">
-                                            <span class="list-label">Thứ tự đã duyệt gần
-                                                nhất</span>
-                                            <div class="search-viz-list"
-                                                id="vizVisitedList">—</div>
+                                <div id="searchVizBody" class="search-viz-body">
+                                    <div class="search-viz-stats">
+                                        <div><span>Nút đang mở</span><code
+                                                id="vizCurrentNode">—</code></div>
+                                        <div><span>Đã duyệt</span><strong
+                                                id="vizVisitedCount">0</strong></div>
+                                        <div><span
+                                                id="vizFrontierLabel">Frontier</span><strong
+                                                id="vizFrontierCount">0</strong></div>
+                                    </div>
+                                    <p id="vizMapStatus" class="viz-map-status"
+                                        role="status"></p>
+                                    <details class="search-viz-details">
+                                        <summary>Chi tiết trace &amp; frontier</summary>
+                                        <div class="search-viz-detail-content">
+                                            <div class="search-viz-queue-panel">
+                                                <span class="list-label">Thứ tự đã duyệt gần
+                                                    nhất</span>
+                                                <div class="search-viz-list"
+                                                    id="vizVisitedList">—</div>
+                                            </div>
+                                            <div class="search-viz-queue-panel">
+                                                <span class="list-label">Frontier / open
+                                                    list</span>
+                                                <div class="search-viz-list"
+                                                    id="vizFrontierList">—</div>
+                                            </div>
+                                            <label class="follow-search-control"
+                                                for="followSearchNode">
+                                                <input id="followSearchNode" type="checkbox"
+                                                    checked>
+                                                <span id="followSearchLabel">Tự động đưa node thuộc tuyến cuối vào
+                                                    giữa bản đồ</span>
+                                            </label>
+                                            <p id="vizExplanation"
+                                                class="search-viz-explanation"></p>
                                         </div>
-                                        <div class="search-viz-queue-panel">
-                                            <span class="list-label">Frontier / open
-                                                list</span>
-                                            <div class="search-viz-list"
-                                                id="vizFrontierList">—</div>
+                                    </details>
+                                    <div class="search-viz-toolbar">
+                                        <div class="search-viz-playback"
+                                            aria-label="Điều khiển mô phỏng">
+                                            <button type="button"
+                                                onclick="previousSearchStep()"
+                                                aria-label="Bước trước">←</button>
+                                            <button type="button" id="btnPlaySearch"
+                                                onclick="toggleSearchAnimation()">▶
+                                                Phát</button>
+                                            <button type="button"
+                                                onclick="nextSearchStep()"
+                                                aria-label="Bước tiếp theo">→</button>
                                         </div>
-                                        <label class="follow-search-control"
-                                            for="followSearchNode">
-                                            <input id="followSearchNode" type="checkbox"
-                                                checked>
-                                            <span id="followSearchLabel">Tự động đưa node thuộc tuyến cuối vào
-                                                giữa bản đồ</span>
+                                        <label class="viz-select-control"
+                                            for="searchSpeed">
+                                            <span>Tốc độ</span>
+                                            <select id="searchSpeed">
+                                                <option value="700">Chậm</option>
+                                                <option value="350"
+                                                    selected>Vừa</option>
+                                                <option value="120">Nhanh</option>
+                                            </select>
                                         </label>
-                                        <p id="vizExplanation"
-                                            class="search-viz-explanation"></p>
+                                        <label class="viz-select-control mode"
+                                            for="mapTraceMode">
+                                            <span>Hiển thị map</span>
+                                            <select id="mapTraceMode"
+                                                onchange="onMapTraceModeChange()">
+                                                <option value="route_frontier" selected>Tuyến
+                                                    cuối + frontier</option>
+                                                <option value="full_trace">Toàn bộ search
+                                                    trace</option>
+                                            </select>
+                                        </label>
                                     </div>
-                                </details>
-                                <div class="search-viz-toolbar">
-                                    <div class="search-viz-playback"
-                                        aria-label="Điều khiển mô phỏng">
-                                        <button type="button"
-                                            onclick="previousSearchStep()"
-                                            aria-label="Bước trước">←</button>
-                                        <button type="button" id="btnPlaySearch"
-                                            onclick="toggleSearchAnimation()">▶
-                                            Phát</button>
-                                        <button type="button"
-                                            onclick="nextSearchStep()"
-                                            aria-label="Bước tiếp theo">→</button>
-                                    </div>
-                                    <label class="viz-select-control"
-                                        for="searchSpeed">
-                                        <span>Tốc độ</span>
-                                        <select id="searchSpeed">
-                                            <option value="700">Chậm</option>
-                                            <option value="350"
-                                                selected>Vừa</option>
-                                            <option value="120">Nhanh</option>
-                                        </select>
-                                    </label>
-                                    <label class="viz-select-control mode"
-                                        for="mapTraceMode">
-                                        <span>Hiển thị map</span>
-                                        <select id="mapTraceMode"
-                                            onchange="onMapTraceModeChange()">
-                                            <option value="route_frontier" selected>Tuyến
-                                                cuối + frontier</option>
-                                            <option value="full_trace">Toàn bộ search
-                                                trace</option>
-                                        </select>
-                                    </label>
                                 </div>
                             </div>
 
@@ -511,13 +540,37 @@
                     <div id="searchPlaybackDock" class="search-playback-dock"
                         aria-label="Điều khiển mô phỏng" hidden></div>
                 </div>
-                <div class="map-instruction"><span aria-hidden="true">⌖</span>
-                    Nhấp bản đồ để đặt vị trí xe</div>
-                <div class="map-legend">
-                    <strong>Chú thích</strong>
-                    <span><i class="map-line route"></i>Tuyến cuối cùng</span>
-                    <span><i class="map-line road"></i>Mạng đường</span>
-                    <span><i class="map-marker hospital"></i>Cơ sở y tế</span>
+                <div class="map-legend" id="mapLegend">
+                    <div class="legend-header" onclick="toggleMapLegend()" title="Nhấp để ẩn hoặc hiện bảng chú thích">
+                        <strong>🗺️ Chú thích bản đồ</strong>
+                        <button id="btnToggleLegend" class="btn-legend-toggle" type="button" aria-label="Ẩn hoặc hiện chú thích">▾</button>
+                    </div>
+                    <div class="legend-content" id="mapLegendContent">
+                        <div class="legend-group">
+                            <span class="legend-title">Lộ trình & Điểm mốc</span>
+                            <span><i class="map-line route"></i> Tuyến cứu hộ tối ưu</span>
+                            <span><span class="legend-icon">🚑</span> Xe cấp cứu (Điểm xuất phát)</span>
+                            <span><span class="legend-icon">🎯</span> Bệnh viện đích (Điểm đến)</span>
+                            <span><span class="legend-icon">📍</span> Trạm dừng trung gian</span>
+                        </div>
+                        <div class="legend-group">
+                            <span class="legend-title">Mạng đường & Mức độ giao thông</span>
+                            <span><i class="map-line road-normal"></i> Thông thoáng (Mức 1-2)</span>
+                            <span><i class="map-line road-heavy"></i> Đông xe (Mức 3)</span>
+                            <span><i class="map-line road-severe"></i> Ùn tắc nghiêm trọng (Mức 4-5)</span>
+                            <span><i class="map-marker hospital"></i> Bệnh viện / Cấp cứu (Chấm đỏ)</span>
+                            <span><i class="map-marker clinic"></i> Phòng khám / Trạm y tế (Chấm xanh)</span>
+                        </div>
+                        <div class="legend-group">
+                            <span class="legend-title">Mô phỏng thuật toán</span>
+                            <span><i class="map-dot current"></i> Nút đang xét (Current Node)</span>
+                            <span><i class="map-dot next-target"></i> Nút mở rộng tiếp theo (Next Node)</span>
+                            <span><i class="map-dot frontier"></i> Nút biên chờ duyệt (Frontier)</span>
+                            <span><i class="map-dot visited"></i> Nút đã duyệt (Visited)</span>
+                            <span><i class="map-line trace-explored"></i> Cạnh cây tìm kiếm đã khám phá</span>
+                            <span><i class="map-line trace-next"></i> Cạnh mở rộng bước tiếp theo</span>
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>
