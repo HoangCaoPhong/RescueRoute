@@ -1907,8 +1907,25 @@ tr.best-row td {
 }
 
 .map-dot.current {
-    background: #f97316;
-    box-shadow: 0 0 6px rgba(249, 115, 22, 0.7);
+    background: #06b6d4;
+    border: 1.5px solid #a5f3fc;
+    box-shadow: 0 0 8px rgba(6, 182, 212, 0.9);
+}
+
+.map-dot.next-target {
+    background: #10b981;
+    border: 1.5px solid #a7f3d0;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.9);
+}
+
+.map-line.trace-water {
+    background: #38bdf8;
+    box-shadow: 0 0 6px rgba(56, 189, 248, 0.8);
+}
+
+.map-line.trace-next {
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.8);
 }
 
 .map-marker {
