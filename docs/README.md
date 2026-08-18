@@ -32,10 +32,10 @@ vào đúng thư mục dưới đây để Git review được thay đổi.
 - [x] BFS, DFS, UCS và A* chạy đúng và được so sánh.
 - [x] Có ít nhất hai thuật toán bổ sung (Dijkstra, Hill Climbing).
 - [ ] Cost không chỉ dựa vào khoảng cách; có giải thích trọng số.
-- [ ] Heuristic được phân tích admissible/consistent hoặc practical-only.
+- [x] Heuristic được phân tích admissible/consistent hoặc practical-only.
 - [x] GUI cho chọn điểm, thuật toán, tiêu chí tối ưu và điểm trung gian.
 - [x] GUI mô phỏng visited nodes, frontier và final route từng bước.
 - [x] Kết quả có path, visiting order, explored nodes, distance, time, cost và processing time.
 - [ ] Có giải thích route, tuyến thay thế, ùn tắc và bảo đảm tối ưu.
-- [ ] Benchmark các thuật toán trên cùng điều kiện.
+- [x] Benchmark các thuật toán trên cùng điều kiện.
 - [ ] Technical report, slide, demo video và dataset đúng định dạng nộp bài.

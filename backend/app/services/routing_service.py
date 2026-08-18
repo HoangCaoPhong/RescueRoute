@@ -256,7 +256,7 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
             distance = haversine(
                 node["lat"], node["lng"], goal_node["lat"], goal_node["lng"]
             )
-            return distance if algo.startswith("hill") else distance * 0.035
+            return distance if algo.startswith("hill") else distance * 0.00135287
 
         try:
             if algo.startswith("hill"):
@@ -627,7 +627,7 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             curr, p = stack.pop()
             if curr in visited:
                 continue
-            frontier_preview = [node for node, _ in stack[:249]] + [curr]
+            frontier_preview = [node for node, _ in stack[:4999]] + [curr]
             trace_history.record_expansion(
                 curr,
                 frontier_preview,
@@ -638,7 +638,7 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             if curr in goal_node_set:
                 found_goal_id = curr
                 break
-            if nodes_expanded >= 3000:
+            if nodes_expanded >= 5000:
                 break
             for nbr in graph_mgr.adj.get(curr, {}):
                 if nbr not in visited:
@@ -695,7 +695,7 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             if d > best_dist.get(curr, float('inf')):
                 continue
             nodes_expanded += 1
-            if nodes_expanded < 500:
+            if nodes_expanded < 5000:
                 trace_history.record_expansion(
                     curr,
                     build_priority_frontier_snapshot(
@@ -724,7 +724,7 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
         def h_multi(n_id: int) -> float:
             if algo == "ucs":
                 return 0.0
-            return nearest_goal_distance(n_id) * 0.035
+            return nearest_goal_distance(n_id) * 0.00135287
 
         pq = [(h_multi(start_id), 0.0, start_id)]
         g_scores = {start_id: 0.0}
@@ -734,7 +734,7 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             if g > g_scores.get(curr, float('inf')):
                 continue
             nodes_expanded += 1
-            if nodes_expanded < 500:
+            if nodes_expanded < 5000:
                 trace_history.record_expansion(
                     curr,
                     build_priority_frontier_snapshot(
