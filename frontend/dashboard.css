@@ -1999,47 +1999,61 @@ tr.best-row td {
     pointer-events: none;
 }
 
-.search-current-marker .snake-sonar-ring {
-    animation: snake-sonar-pulse 1.3s infinite cubic-bezier(0.2, 0.8, 0.4, 1);
-    border: 2.5px solid #f59e0b;
+.search-current-marker .octopus-ink-ring {
+    animation: octopus-ink-pulse 1.6s infinite cubic-bezier(0.2, 0.8, 0.4, 1);
+    background: radial-gradient(circle, rgba(236, 72, 153, 0.35) 0%, rgba(168, 85, 247, 0.2) 60%, transparent 80%);
+    border: 1.5px solid rgba(236, 72, 153, 0.7);
     border-radius: 50%;
-    height: 48px;
+    height: 60px;
     left: 50%;
     pointer-events: none;
     position: absolute;
     top: 50%;
     transform: translate(-50%, -50%);
-    width: 48px;
+    width: 60px;
+}
+
+.search-current-marker .octopus-sonar-ring {
+    animation: octopus-tentacle-pulse 1.3s infinite cubic-bezier(0.1, 0.9, 0.3, 1);
+    border: 2px dashed #38bdf8;
+    border-radius: 50%;
+    height: 44px;
+    left: 50%;
+    pointer-events: none;
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 44px;
 }
 
 .search-current-marker .current-marker-core {
     align-items: center;
-    animation: snake-head-wiggle 1.4s infinite ease-in-out;
-    background: radial-gradient(circle at 35% 35%, #ffd166 0%, #f97316 75%, #ea580c 100%);
-    border: 2.5px solid #fff5ea;
+    animation: octopus-head-float 1.6s infinite ease-in-out;
+    background: radial-gradient(circle at 35% 35%, #f472b6 0%, #c026d3 50%, #7e22ce 100%);
+    border: 2.5px solid #fdf4ff;
     border-radius: 50%;
-    box-shadow: 0 0 16px rgba(249, 115, 22, 0.9), 0 0 30px rgba(245, 158, 11, 0.5), 0 5px 15px rgba(0, 0, 0, 0.5);
-    color: #2b1104;
+    box-shadow: 0 0 18px rgba(217, 70, 239, 0.95), 0 0 32px rgba(168, 85, 247, 0.6), 0 6px 16px rgba(0, 0, 0, 0.55);
+    color: #ffffff;
     display: flex;
     font-family: "JetBrains Mono", monospace;
-    font-size: 0.64rem;
+    font-size: 0.82rem;
     font-weight: 900;
-    height: 28px;
+    height: 30px;
     justify-content: center;
     left: 50%;
     position: absolute;
     top: 50%;
     transform: translate(-50%, -50%);
-    width: 28px;
+    width: 30px;
 }
 
 .search-current-marker .current-marker-label {
-    background: rgba(28, 12, 4, 0.96);
-    border: 1px solid rgba(249, 115, 22, 0.8);
+    background: rgba(24, 9, 32, 0.96);
+    border: 1px solid rgba(217, 70, 239, 0.8);
     border-radius: 6px;
-    bottom: 27px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-    color: #ffe0b2;
+    bottom: 28px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+    color: #f5d0fe;
     font-family: "JetBrains Mono", monospace;
     font-size: 0.63rem;
     font-weight: 700;
@@ -2050,24 +2064,35 @@ tr.best-row td {
     white-space: nowrap;
 }
 
-@keyframes snake-sonar-pulse {
+@keyframes octopus-ink-pulse {
     0% {
-        opacity: 0.95;
-        transform: translate(-50%, -50%) scale(0.35);
+        opacity: 0.9;
+        transform: translate(-50%, -50%) scale(0.3);
     }
     100% {
         opacity: 0;
-        transform: translate(-50%, -50%) scale(1.55);
+        transform: translate(-50%, -50%) scale(1.65);
     }
 }
 
-@keyframes snake-head-wiggle {
+@keyframes octopus-tentacle-pulse {
+    0% {
+        opacity: 0.95;
+        transform: translate(-50%, -50%) scale(0.4) rotate(0deg);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.4) rotate(45deg);
+    }
+}
+
+@keyframes octopus-head-float {
     0%, 100% {
         transform: translate(-50%, -50%) scale(1);
     }
     50% {
-        transform: translate(-50%, -50%) scale(1.15);
-        box-shadow: 0 0 22px rgba(249, 115, 22, 1), 0 0 40px rgba(245, 158, 11, 0.7);
+        transform: translate(-50%, -50%) scale(1.14);
+        box-shadow: 0 0 24px rgba(236, 72, 153, 1), 0 0 44px rgba(168, 85, 247, 0.8);
     }
 }
 
