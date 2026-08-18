@@ -284,7 +284,7 @@ class MultiLocationRouteRequest(BaseModel):
     route_algorithm: Literal[
         "bfs", "dfs", "ucs", "astar", "dijkstra", "hill_climbing"
     ] = "astar"
-    optimization_method: Literal["nearest_neighbor", "held_karp", "simulated_annealing"] = (
+    optimization_method: Literal["nearest_neighbor", "held_karp", "genetic_algorithm", "simulated_annealing"] = (
         "nearest_neighbor"
     )
     criterion: Literal["cost", "distance", "hops", "time"] = "cost"

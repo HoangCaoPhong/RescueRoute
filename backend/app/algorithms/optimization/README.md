@@ -4,6 +4,7 @@ Nhóm này dành cho tối ưu nhiều điểm hoặc tìm lời giải xấp x�
 
 ```text
 optimization/
+├── genetic_algorithm/
 ├── held_karp/
 ├── hill_climbing/
 ├── nearest_neighbor/
@@ -16,3 +17,5 @@ Mỗi thuật toán phải ghi rõ cách biểu diễn candidate route, objectiv
   deterministic nhưng chỉ là nghiệm xấp xỉ.
 - Held–Karp dùng dynamic programming để tìm thứ tự waypoint tối ưu
   trên pairwise cost matrix, giới hạn 10 waypoint để kiểm soát bộ nhớ.
+- Genetic Algorithm dùng giải thuật di truyền (selection, crossover, mutation)
+  để tìm thứ tự waypoint xấp xỉ trong không gian lớn.

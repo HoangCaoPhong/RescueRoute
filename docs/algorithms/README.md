@@ -9,6 +9,7 @@ docs/algorithms/
 ├── dfs/
 ├── dijkstra/
 ├── ucs/
+├── genetic_algorithm/
 ├── held_karp/
 ├── hill_climbing/
 ├── nearest_neighbor/

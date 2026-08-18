@@ -9,7 +9,7 @@ RescueRoute là ứng dụng web mô phỏng tìm đường tối ưu cho xe c�
 ## Mục tiêu chính
 
 - Tìm tuyến giữa hai địa điểm bằng BFS, DFS, UCS, Dijkstra, A* và Hill Climbing.
-- Tối ưu thứ tự ghé nhiều địa điểm bằng Held-Karp, Nearest Neighbor và Simulated Annealing.
+- Tối ưu thứ tự ghé nhiều địa điểm bằng Held-Karp, Nearest Neighbor, Genetic Algorithm và Simulated Annealing.
 - Trực quan hóa từng bước: node đã duyệt, frontier/open list và tuyến cuối cùng.
 - Báo cáo quãng đường, thời gian dự kiến, tổng chi phí, số node đã mở rộng và thời gian xử lý.
 - Giải thích tuyến đường, ảnh hưởng của ùn tắc/rủi ro và tính tối ưu hoặc xấp xỉ của thuật toán.

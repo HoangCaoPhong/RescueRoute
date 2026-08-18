@@ -2430,6 +2430,7 @@ function visitOrderLabel(method) {
         input: "Theo thứ tự nhập",
         nearest_neighbor: "Nearest Neighbor (xấp xỉ)",
         held_karp: "Held–Karp (tối ưu)",
+        genetic_algorithm: "Genetic Algorithm (xấp xỉ)",
         simulated_annealing: "Simulated Annealing (xấp xỉ)",
     };
     return labels[method] || method;
