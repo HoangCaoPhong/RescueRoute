@@ -82,7 +82,6 @@ RescueRoute/
 │   │   │   │   ├── dijkstra/
 │   │   │   │   └── ucs/
 │   │   │   └── optimization/
-│   │   │       ├── genetic_algorithm/
 │   │   │       ├── held_karp/
 │   │   │       ├── hill_climbing/
 │   │   │       ├── nearest_neighbor/

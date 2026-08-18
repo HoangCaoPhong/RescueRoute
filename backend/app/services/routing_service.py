@@ -14,7 +14,6 @@ from backend.app.algorithms.graph_search.utils import get_edge_data
 from backend.app.algorithms.optimization.hill_climbing import solve_hill_climbing
 from backend.app.algorithms.optimization.held_karp import optimize_held_karp
 from backend.app.algorithms.optimization.nearest_neighbor import optimize_nearest_neighbor
-from backend.app.algorithms.optimization.genetic_algorithm import solve_genetic_algorithm
 from backend.app.algorithms.optimization.simulated_annealing import solve_simulated_annealing
 from backend.app.algorithms.graph_search.dfs import (
     solve_depth_limited_dfs,
@@ -371,22 +370,17 @@ def run_multi_location_search(
                 goal_id,
                 pair_costs,
             )
-        elif method in ("genetic_algorithm", "simulated_annealing"):
+        elif method == "simulated_annealing":
             locations = [start_id, *waypoints, goal_id]
             distance_matrix = {loc: {} for loc in locations}
             for (src, tgt), cost in pair_costs.items():
                 if src not in distance_matrix:
                     distance_matrix[src] = {}
                 distance_matrix[src][tgt] = cost
-                
-            if method == "genetic_algorithm":
-                optimized = solve_genetic_algorithm(
-                    locations, distance_matrix, start_id, goal_id
-                )
-            else:
-                optimized = solve_simulated_annealing(
-                    locations, distance_matrix, start_id, goal_id
-                )
+
+            optimized = solve_simulated_annealing(
+                locations, distance_matrix, start_id, goal_id
+            )
         else:
             return {
                 "found": False,

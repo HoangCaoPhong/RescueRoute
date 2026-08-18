@@ -4,7 +4,6 @@ Nhóm này dành cho tối ưu nhiều điểm hoặc tìm lời giải xấp x�
 
 ```text
 optimization/
-├── genetic_algorithm/
 ├── held_karp/
 ├── hill_climbing/
 ├── nearest_neighbor/

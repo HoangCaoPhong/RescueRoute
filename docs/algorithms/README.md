@@ -12,8 +12,7 @@ docs/algorithms/
 ├── held_karp/
 ├── hill_climbing/
 ├── nearest_neighbor/
-├── simulated_annealing/
-└── genetic_algorithm/
+└── simulated_annealing/
 ```
 
 Nội dung đề xuất trong mỗi folder:
