@@ -108,6 +108,6 @@ pois_with_labels.csv
 full_processed_train.csv
 streets.csv
 base_segments.csv
-
+report/
 # Other
 Lab 1 - Searching.md
