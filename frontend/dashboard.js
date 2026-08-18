@@ -897,11 +897,24 @@ function getNodeLabel(nodeId) {
     return point?.name || `Node ${numericId}`;
 }
 
+let roadAdjacency = new Map();
+
 function rebuildEdgeIndex() {
     edgeIndex = new Map();
+    roadAdjacency = new Map();
     edgesData.forEach((edge) => {
         edgeIndex.set(normalizeEdgeId(edge.edge_id), edge);
         indexEdgeNodeCoords(fullRoadNodeCoords, edge);
+
+        const [u, v] = String(edge?.edge_id || "").split("_");
+        if (u && v) {
+            const uKey = normalizeNodeCoordinateKey(u);
+            const vKey = normalizeNodeCoordinateKey(v);
+            if (!roadAdjacency.has(uKey)) roadAdjacency.set(uKey, new Set());
+            if (!roadAdjacency.has(vKey)) roadAdjacency.set(vKey, new Set());
+            roadAdjacency.get(uKey).add(vKey);
+            roadAdjacency.get(vKey).add(uKey);
+        }
     });
 }
 
@@ -2157,7 +2170,6 @@ function renderSearchStep(stepIndex) {
     let frontierMarkersDrawn = 0;
 
     searchVisitedLayer?.clearLayers();
-    searchVisitedLayer?.clearLayers();
     searchFrontierLayer?.clearLayers();
     searchCurrentLayer?.clearLayers();
 
@@ -2167,6 +2179,102 @@ function renderSearchStep(stepIndex) {
     const currentCoords = normalizeMapCoords(
         nodeCoords[normalizeNodeCoordinateKey(mapCurrentNodeId)],
     );
+
+    // -------------------------------------------------------------
+    // Hiệu ứng nước lan truyền qua các cạnh kề (Water Flowing in Maze)
+    // -------------------------------------------------------------
+    if (isFullTrace && mapVisitedOrder.length > 0) {
+        const visitedSet = new Set(
+            mapVisitedOrder.map(normalizeNodeCoordinateKey),
+        );
+        if (mapCurrentNodeId) visitedSet.add(normalizeNodeCoordinateKey(mapCurrentNodeId));
+
+        const drawnEdges = new Set();
+        const waterEdges = [];
+
+        visitedSet.forEach((uKey) => {
+            const neighbors = roadAdjacency.get(uKey);
+            if (!neighbors) return;
+            const coordsU = normalizeMapCoords(nodeCoords[uKey]);
+            if (!coordsU) return;
+
+            neighbors.forEach((vKey) => {
+                if (!visitedSet.has(vKey)) return;
+                const edgeKey = uKey < vKey ? `${uKey}__${vKey}` : `${vKey}__${uKey}`;
+                if (drawnEdges.has(edgeKey)) return;
+                drawnEdges.add(edgeKey);
+
+                const coordsV = normalizeMapCoords(nodeCoords[vKey]);
+                if (!coordsV) return;
+                waterEdges.push([coordsU, coordsV]);
+            });
+        });
+
+        if (waterEdges.length > 0) {
+            // Lớp hào quang nước lan tỏa (Water Aura Stream)
+            L.polyline(waterEdges, {
+                pane: "searchVisitedPane",
+                color: "#0284c7",
+                weight: 6.5,
+                opacity: 0.45,
+                lineCap: "round",
+                lineJoin: "round",
+                interactive: false,
+            }).addTo(searchVisitedLayer);
+
+            // Lõi dòng nước đang chảy trong mê cung đường phố (Fluid Water Core)
+            L.polyline(waterEdges, {
+                pane: "searchVisitedPane",
+                color: "#38bdf8",
+                weight: 3.5,
+                opacity: 0.92,
+                lineCap: "round",
+                lineJoin: "round",
+                interactive: false,
+            }).addTo(searchVisitedLayer);
+        }
+    }
+
+    // Dòng nước đang tràn từ Node B sang các ngã rẽ kề trong Frontier
+    if (currentCoords && mapCurrentNodeId) {
+        const currKey = normalizeNodeCoordinateKey(mapCurrentNodeId);
+        const currNeighbors = roadAdjacency.get(currKey) || new Set();
+
+        frontier.forEach((item) => {
+            const fKey = normalizeNodeCoordinateKey(item.node_id);
+            // Chỉ vẽ dòng nước nếu ngã rẽ này có cạnh nối trực tiếp với node B (kề nhau trên đồ thị)
+            if (!currNeighbors.has(fKey)) return;
+
+            const fCoords = normalizeMapCoords(nodeCoords[fKey]);
+            if (!fCoords) return;
+
+            const isNext = String(item.node_id) === String(nextNodeId);
+
+            if (isNext) {
+                // Luồng nước xanh ngọc tràn vào nhánh kế tiếp
+                L.polyline([currentCoords, fCoords], {
+                    pane: "searchFrontierPane",
+                    color: "#10b981",
+                    weight: 4.5,
+                    opacity: 0.95,
+                    lineCap: "round",
+                    lineJoin: "round",
+                    interactive: false,
+                }).addTo(searchFrontierLayer);
+            } else {
+                // Luồng nước đang thăm dò các ngã rẽ kề khác
+                L.polyline([currentCoords, fCoords], {
+                    pane: "searchFrontierPane",
+                    color: "#06b6d4",
+                    weight: 2.8,
+                    opacity: 0.8,
+                    dashArray: "3, 5",
+                    lineCap: "round",
+                    interactive: false,
+                }).addTo(searchFrontierLayer);
+            }
+        });
+    }
 
     // -------------------------------------------------------------
     // 1. Vẽ các nút đã duyệt (Visited Nodes trên mạng đường)
