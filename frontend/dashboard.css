@@ -1714,45 +1714,124 @@ tr.best-row td {
 }
 
 .map-legend {
+    backdrop-filter: blur(14px);
+    background: var(--bg-header);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
     bottom: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    color: var(--text-secondary);
     display: flex;
     flex-direction: column;
     font-size: 0.63rem;
-    gap: 7px;
+    gap: 8px;
     left: 14px;
+    max-height: calc(100vh - 200px);
+    max-width: 250px;
+    overflow-y: auto;
     padding: 10px 12px;
+    position: absolute;
+    z-index: 600;
 }
 
-.map-legend strong {
+.legend-header {
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2px;
+    padding-bottom: 4px;
+}
+
+.legend-header strong {
     color: var(--text-primary);
-    font-size: 0.66rem;
+    font-size: 0.70rem;
+    font-weight: 700;
+}
+
+.legend-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.legend-title {
+    color: var(--text-muted);
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    margin-top: 2px;
+    text-transform: uppercase;
 }
 
 .map-legend span {
     align-items: center;
+    color: var(--text-secondary);
     display: flex;
+    font-size: 0.64rem;
     gap: 7px;
+    line-height: 1.25;
+}
+
+.legend-icon {
+    display: inline-flex;
+    font-size: 0.82rem;
+    justify-content: center;
+    width: 18px;
 }
 
 .map-line {
     border-radius: 999px;
     display: inline-block;
-    height: 3px;
-    width: 22px;
+    flex-shrink: 0;
+    height: 3.5px;
+    width: 20px;
 }
 
 .map-line.route {
     background: #9e77ff;
+    box-shadow: 0 0 8px rgba(158, 119, 255, 0.6);
 }
 
-.map-line.road {
-    background: #39c6d7;
-    opacity: 0.65;
+.map-line.road-normal {
+    background: #0284c7;
+    opacity: 0.8;
+}
+
+.map-line.road-heavy {
+    background: #f59e0b;
+    opacity: 0.9;
+}
+
+.map-line.road-severe {
+    background: #ef4444;
+    opacity: 1;
+}
+
+.map-dot {
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    height: 9px;
+    width: 9px;
+}
+
+.map-dot.visited {
+    background: #facc15;
+    box-shadow: 0 0 6px rgba(250, 204, 21, 0.6);
+}
+
+.map-dot.frontier {
+    background: #38bdf8;
+    box-shadow: 0 0 6px rgba(56, 189, 248, 0.6);
+}
+
+.map-dot.current {
+    background: #f97316;
+    box-shadow: 0 0 6px rgba(249, 115, 22, 0.7);
 }
 
 .map-marker {
     border-radius: 50%;
     display: inline-block;
+    flex-shrink: 0;
     height: 9px;
     width: 9px;
 }

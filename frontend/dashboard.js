@@ -95,6 +95,7 @@ let showPOIIcons = true;
 let showTraffic = true;
 let edgePolylines = {};
 let activeRoutePolyline = null;
+let backgroundRoutePolyline = null;
 let routeNodeMarkers = [];
 let routeRequestCache = new Map();
 let toastTimer = null;
@@ -1208,6 +1209,9 @@ async function calculateRoute() {
             input.algorithm,
         );
         if (combinedTrace) {
+            const allSegments = buildCoordinateSegments(aggregate.pathCoords);
+            drawBackgroundRouteLine(allSegments);
+            fitMapToRouteSegments(allSegments);
             await startSearchVisualization(combinedTrace);
             playSearchAnimation();
         } else {
@@ -1623,6 +1627,10 @@ function clearFinalRoute() {
         map.removeLayer(activeRoutePolyline);
         activeRoutePolyline = null;
     }
+    if (backgroundRoutePolyline) {
+        map.removeLayer(backgroundRoutePolyline);
+        backgroundRoutePolyline = null;
+    }
     routeNodeMarkers.forEach((marker) => map.removeLayer(marker));
     routeNodeMarkers = [];
 }
@@ -1644,6 +1652,26 @@ function buildCoordinateSegments(rawCoords = []) {
     return segments;
 }
 
+function drawBackgroundRouteLine(routeSegments) {
+    if (!map) return;
+    if (backgroundRoutePolyline) {
+        map.removeLayer(backgroundRoutePolyline);
+        backgroundRoutePolyline = null;
+    }
+    if (!routeSegments.length) return;
+
+    const latLngs =
+        routeSegments.length === 1 ? routeSegments[0] : routeSegments;
+    backgroundRoutePolyline = L.polyline(latLngs, {
+        pane: "finalRoutePane",
+        color: "#a78bfa",
+        weight: 5,
+        opacity: 0.55,
+        dashArray: "6, 8",
+        lineJoin: "round",
+    }).addTo(map);
+}
+
 function drawRouteLine(routeSegments) {
     if (!map) return;
     if (activeRoutePolyline) {
@@ -1658,7 +1686,7 @@ function drawRouteLine(routeSegments) {
         pane: "finalRoutePane",
         color: SEARCH_COLORS.route,
         weight: 6,
-        opacity: 0.92,
+        opacity: 0.95,
         lineJoin: "round",
     }).addTo(map);
 }
@@ -2588,25 +2616,25 @@ function renderEdgesOnMap() {
 
     if (groups.normal.length) {
         edgePolylines.normal = L.polyline(groups.normal, {
-            color: "#39c6d7",
-            weight: 2,
-            opacity: 0.34,
+            color: "#0284c7",
+            weight: 2.5,
+            opacity: 0.65,
             interactive: false,
         }).addTo(map);
     }
     if (groups.heavy.length) {
         edgePolylines.heavy = L.polyline(groups.heavy, {
-            color: "#f5b942",
-            weight: 3,
-            opacity: 0.82,
+            color: "#f59e0b",
+            weight: 3.5,
+            opacity: 0.85,
             interactive: false,
         }).addTo(map);
     }
     if (groups.severe.length) {
         edgePolylines.severe = L.polyline(groups.severe, {
-            color: "#ef476f",
-            weight: 4,
-            opacity: 0.92,
+            color: "#ef4444",
+            weight: 4.5,
+            opacity: 0.95,
             interactive: false,
         }).addTo(map);
     }
