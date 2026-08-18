@@ -1918,7 +1918,7 @@ tr.best-row td {
     box-shadow: 0 0 8px rgba(16, 185, 129, 0.9);
 }
 
-.map-line.trace-water {
+.map-line.trace-explored {
     background: #38bdf8;
     box-shadow: 0 0 6px rgba(56, 189, 248, 0.8);
 }
