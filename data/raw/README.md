@@ -3,7 +3,7 @@
 This directory contains the original, unprocessed data for the RescueRoute project.
 
 > [!NOTE]
-> These datasets are pulled directly from the Kaggle dataset "Traffic Flow data in Ho Chi Minh City, Viet Nam", authored by "Thanh Nguyen". This version is raw and has not been cleaned, processed, or modified in any way.
+> These datasets are pulled directly from the Kaggle dataset ["Traffic Flow data in Ho Chi Minh City, Viet Nam"](https://www.kaggle.com/datasets/thanhnguyen2612/traffic-flow-data-in-ho-chi-minh-city-viet-nam), authored by "Thanh Nguyen". This version is raw and has not been cleaned, processed, or modified in any way.
 
 ## Files
 
