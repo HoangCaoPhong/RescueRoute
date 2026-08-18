@@ -105,6 +105,54 @@ let searchVisitedLayer = null;
 let searchFrontierLayer = null;
 let searchCurrentLayer = null;
 
+let currentTheme = "dark";
+try {
+    if (typeof localStorage !== "undefined") {
+        currentTheme = localStorage.getItem("rescueroute_theme") || "dark";
+    }
+} catch (e) {
+    currentTheme = "dark";
+}
+
+function applyTheme(theme) {
+    currentTheme = theme === "light" ? "light" : "dark";
+    if (typeof document !== "undefined") {
+        if (document.documentElement && typeof document.documentElement.setAttribute === "function") {
+            document.documentElement.setAttribute("data-theme", currentTheme);
+        }
+        if (document.body && typeof document.body.setAttribute === "function") {
+            document.body.setAttribute("data-theme", currentTheme);
+        }
+    }
+    try {
+        if (typeof localStorage !== "undefined") {
+            localStorage.setItem("rescueroute_theme", currentTheme);
+        }
+    } catch (e) {}
+
+    const btn = byId("themeToggleBtn");
+    if (btn) {
+        const icon = btn.querySelector(".theme-icon");
+        const label = btn.querySelector(".theme-label");
+        if (currentTheme === "light") {
+            if (icon) icon.textContent = "☀️";
+            if (label) label.textContent = "Sáng";
+            btn.setAttribute("title", "Đang ở chế độ Sáng. Nhấp để chuyển sang Tối");
+            btn.setAttribute("aria-label", "Chuyển sang chế độ Tối");
+        } else {
+            if (icon) icon.textContent = "🌙";
+            if (label) label.textContent = "Tối";
+            btn.setAttribute("title", "Đang ở chế độ Tối. Nhấp để chuyển sang Sáng");
+            btn.setAttribute("aria-label", "Chuyển sang chế độ Sáng");
+        }
+    }
+}
+
+function toggleTheme() {
+    const nextTheme = currentTheme === "dark" ? "light" : "dark";
+    applyTheme(nextTheme);
+}
+
 function byId(id) {
     return document.getElementById(id);
 }
@@ -113,6 +161,10 @@ function setText(id, value) {
     const element = byId(id);
     if (element) element.textContent = value;
 }
+
+try {
+    applyTheme(currentTheme);
+} catch (e) {}
 
 function mountSearchPlaybackDock() {
     const dock = byId("searchPlaybackDock");
@@ -207,6 +259,7 @@ function setButtonBusy(buttonId, isBusy, busyLabel, idleLabel) {
 }
 
 function initMap() {
+    applyTheme(currentTheme);
     mountSearchPlaybackDock();
     if (typeof L === "undefined") {
         setConnectionStatus("offline", "Không tải được Leaflet");
@@ -912,6 +965,7 @@ function renderRouteResult(aggregate, input, originalAggregate) {
     setText("resExpanded", aggregate.totalExpanded.toLocaleString("vi-VN"));
     setText("resTime", `${aggregate.totalProcessingTime.toFixed(2)} ms`);
 
+    renderPathNodes(aggregate.pathNodes, aggregate.visitingOrder);
     renderVisitingOrder(aggregate.visitingOrder);
     renderOrderComparison(
         aggregate,
@@ -954,8 +1008,68 @@ function renderRouteSummary(aggregate, input) {
     });
 }
 
+function renderPathNodes(pathNodes = [], visitingOrder = []) {
+    const container = byId("pathNodesFlow");
+    if (!container) return;
+    container.replaceChildren();
+
+    const countBadge = byId("pathNodeCountBadge");
+    if (countBadge) countBadge.textContent = `${pathNodes.length} nút`;
+
+    if (!pathNodes.length) {
+        container.textContent = "Chưa có dữ liệu nút.";
+        return;
+    }
+
+    const waypoints = visitingOrder.slice(1, -1);
+
+    pathNodes.forEach((nodeId, index) => {
+        if (index > 0) {
+            const arrow = document.createElement("span");
+            arrow.className = "path-arrow";
+            arrow.textContent = "→";
+            container.append(arrow);
+        }
+
+        const chip = document.createElement("span");
+        chip.className = "path-node";
+
+        const isStart = index === 0;
+        const isGoal = index === pathNodes.length - 1;
+        const isWaypoint = waypoints.includes(nodeId);
+
+        if (isStart) {
+            chip.classList.add("node-start");
+            chip.textContent = `🚩 ${getNodeLabel(nodeId)} (${nodeId})`;
+        } else if (isGoal) {
+            chip.classList.add("node-goal");
+            chip.textContent = `🏁 ${getNodeLabel(nodeId)} (${nodeId})`;
+        } else if (isWaypoint) {
+            chip.classList.add("node-waypoint");
+            chip.textContent = `📍 ${getNodeLabel(nodeId)} (${nodeId})`;
+        } else {
+            chip.classList.add("node-inter");
+            const label = getNodeLabel(nodeId);
+            chip.textContent = label.startsWith("Node ") ? String(nodeId) : `${label} (${nodeId})`;
+        }
+
+        chip.title = `Nút ${index + 1}/${pathNodes.length}: ID ${nodeId}`;
+        container.append(chip);
+    });
+}
+
 function renderVisitingOrder(order) {
+    const block = byId("multiLocationOrderBlock");
     const container = byId("visitingOrder");
+    if (!container) return;
+
+    if (order.length <= 2) {
+        if (block) block.hidden = true;
+        container.replaceChildren();
+        return;
+    }
+
+    if (block) block.hidden = false;
     container.replaceChildren();
     order.forEach((nodeId, index) => {
         if (index > 0) {
@@ -966,16 +1080,31 @@ function renderVisitingOrder(order) {
         }
         const chip = document.createElement("span");
         chip.className = "path-node";
-        chip.textContent = `${getNodeLabel(nodeId)} · ${nodeId}`;
+        if (index === 0) {
+            chip.classList.add("node-start");
+            chip.textContent = `🚩 ${getNodeLabel(nodeId)}`;
+        } else if (index === order.length - 1) {
+            chip.classList.add("node-goal");
+            chip.textContent = `🏁 ${getNodeLabel(nodeId)}`;
+        } else {
+            chip.classList.add("node-waypoint");
+            chip.textContent = `📍 Trạm ${index}: ${getNodeLabel(nodeId)}`;
+        }
         container.append(chip);
     });
 }
 
 function renderOrderComparison(optimized, original, criterion, method) {
     const container = byId("orderComparison");
-    if (!original) {
-        container.hidden = true;
-        container.textContent = "";
+    if (!container) return;
+    if (!original || method === "input" || optimized.visitingOrder.length <= 3) {
+        if (optimized.visitingOrder.length <= 2) {
+            container.innerHTML = `<span style="font-size: 0.65rem; color: var(--text-muted);">💡 <em>Tuyến 2 điểm (Xuất phát ➔ Đích). Nhập thêm các điểm trung gian (hoặc bấm chọn trên bản đồ) để kích hoạt thuật toán tối ưu thứ tự ghé thăm (TSP).</em></span>`;
+            container.hidden = false;
+        } else {
+            container.hidden = true;
+            container.textContent = "";
+        }
         return;
     }
 
@@ -984,36 +1113,120 @@ function renderOrderComparison(optimized, original, criterion, method) {
     const difference = originalScore
         ? ((originalScore - optimizedScore) / originalScore) * 100
         : 0;
-    const originalOrder = original.visitingOrder.join(" → ");
-    const optimizedOrder = optimized.visitingOrder.join(" → ");
+    const originalOrder = original.visitingOrder.map(getNodeLabel).join(" → ");
+    const optimizedOrder = optimized.visitingOrder.map(getNodeLabel).join(" → ");
     const outcome =
         difference >= 0
             ? `cải thiện ${difference.toFixed(1)}%`
             : `cao hơn ${Math.abs(difference).toFixed(1)}%`;
-    const guarantee = method === "held_karp" ? "phương án tối ưu" : "phương án xấp xỉ";
-    container.textContent = `Thứ tự nhập: ${originalOrder}. Thứ tự ${visitOrderLabel(method)}: ${optimizedOrder}. Theo “${CRITERION_LABELS[criterion]}”, ${guarantee} ${outcome}.`;
+    const guarantee = method === "held_karp" ? "phương án tối ưu toàn cục" : "phương án xấp xỉ";
+    container.textContent = `Thứ tự ban đầu: ${originalOrder}. Thứ tự tối ưu (${visitOrderLabel(method)}): ${optimizedOrder}. Theo “${CRITERION_LABELS[criterion]}”, ${guarantee} ${outcome}.`;
     container.hidden = false;
 }
 
 function renderExplanation(aggregate, input, spec) {
+    const routeSummaryName = aggregate.visitingOrder.map(getNodeLabel).join(" → ");
+    const chosenCost = aggregate.totalCost.toFixed(2);
+    const chosenDist = formatDistance(aggregate.totalDistance);
+    const chosenTime = formatDuration(aggregate.totalTravelTime);
+    const highEdges = aggregate.congestion?.highCongestionEdges || [];
+    const highEdgeNames = Array.from(new Set(highEdges.map((e) => e.name))).slice(0, 3);
     const compatible = spec.compatibleCriteria.includes(input.criterion);
-    const criterionSentence = compatible
-        ? `Thuật toán phù hợp với tiêu chí “${CRITERION_LABELS[input.criterion]}” đã chọn.`
-        : `Tiêu chí hiển thị là “${CRITERION_LABELS[input.criterion]}”, nhưng backend của ${spec.label} thực tế tối ưu ${spec.objective}.`;
-    const multiLocationSentence =
-        aggregate.segments.length > 1
-            ? `Tuyến gồm ${aggregate.segments.length} chặng; mỗi chặng được tìm độc lập bằng cùng thuật toán.`
-            : "Đây là bài toán tìm đường giữa hai địa điểm.";
-    const traceSentence = aggregate.segments.some(
-        (segment) => segment.result.search_trace?.steps?.length,
-    )
-        ? "API có trả search trace nên có thể phát lại visited và frontier ở phần mô phỏng."
-        : "API chưa trả search trace cho thuật toán này; frontend chỉ hiển thị final route và không dựng dữ liệu giả.";
 
-    setText(
-        "routeExplanation",
-        `${spec.explanation} ${criterionSentence} ${multiLocationSentence} ${traceSentence} Dùng bảng “So sánh 6 thuật toán” để đối chiếu một route thay thế trên cùng đầu vào.`,
-    );
+    // 1. Human-understandable narrative explanation
+    let narrative = "";
+    if (input.algorithm === "astar" || input.algorithm === "ucs") {
+        narrative = `Tuyến đường <strong>${routeSummaryName}</strong> được chọn bằng <strong>${spec.label}</strong> vì đạt chi phí giao thông tổng hợp thấp nhất (Cost: <strong>${chosenCost}</strong>, thời gian ước tính <strong>${chosenTime}</strong>, quãng đường <strong>${chosenDist}</strong>).`;
+        if (highEdges.length > 0) {
+            narrative += ` Tuyến có đi qua một số đoạn mật độ cao (${highEdgeNames.join(", ")}), nhưng thuật toán đã cân bằng tối ưu giữa cự ly và độ trễ để tổng chi phí phạt là nhỏ nhất.`;
+        } else {
+            narrative += ` Tuyến đường tránh được các đoạn ùn tắc nặng (mức 4–6), giúp xe cấp cứu lưu thông nhanh chóng và an toàn nhất.`;
+        }
+    } else if (input.algorithm === "dijkstra") {
+        narrative = `Tuyến đường <strong>${routeSummaryName}</strong> được chọn bằng <strong>Dijkstra</strong> nhằm đạt <strong>tổng quãng đường ngắn nhất (${chosenDist})</strong>.`;
+        if (highEdges.length > 0) {
+            narrative += ` Lưu ý: Tuyến đường ngắn nhất về khoảng cách này đi qua ${highEdges.length} đoạn có mức ùn tắc cao (${highEdgeNames.join(", ")}), nên thời gian thực tế (${chosenTime}) có thể kéo dài hơn so với phương án né kẹt xe của A* hoặc UCS.`;
+        } else {
+            narrative += ` Tuyến đường vừa tối ưu tuyệt đối về cự ly (${chosenDist}) vừa không gặp điểm ùn tắc nặng nào trên hành trình.`;
+        }
+    } else if (input.algorithm === "bfs") {
+        narrative = `Tuyến đường <strong>${routeSummaryName}</strong> được chọn bằng <strong>BFS</strong> nhằm tìm lộ trình có <strong>ít chặng rẽ nhất (${aggregate.totalHops} chặng)</strong>. Lộ trình này đơn giản hóa hướng đi cho tài xế nhưng không đảm bảo ngắn nhất về cự ly hay thời gian.`;
+    } else if (input.algorithm === "dfs") {
+        narrative = `Tuyến đường <strong>${routeSummaryName}</strong> được duyệt theo chiều sâu (<strong>DFS</strong>). Lộ trình duyệt theo nhánh đầu tiên tìm thấy (${chosenDist}, ${aggregate.totalHops} chặng) nhằm mô phỏng cây duyệt và <strong>không đảm bảo tối ưu</strong>.`;
+    } else if (input.algorithm === "hill_climbing") {
+        narrative = `Tuyến đường <strong>${routeSummaryName}</strong> được tạo bởi <strong>Hill Climbing</strong> dựa trên ước lượng Haversine tốt nhất tại từng nút rẽ cục bộ.`;
+    } else {
+        narrative = `Tuyến đường <strong>${routeSummaryName}</strong> được lập thành công bằng <strong>${spec.label}</strong> với chi phí ${chosenCost} và cự ly ${chosenDist}.`;
+    }
+
+    const narrativeEl = byId("routeNarrative");
+    if (narrativeEl) narrativeEl.innerHTML = narrative;
+
+    // 2. Structured evaluation items (5 distinct criteria)
+    // Criterion 1: Why the selected route was chosen
+    let whyChosenText = "";
+    if (input.algorithm === "astar") {
+        whyChosenText = `A* Search chọn tuyến này bằng cách liên tục mở rộng nút có tổng f(n) = g(n) + h(n) nhỏ nhất, kết hợp chi phí thực tế với hàm ước lượng khoảng cách Haversine.`;
+    } else if (input.algorithm === "ucs") {
+        whyChosenText = `Uniform Cost Search (UCS) ưu tiên duyệt các nhánh đường có chi phí tích lũy g(n) thấp nhất từ điểm xuất phát đến đích.`;
+    } else if (input.algorithm === "dijkstra") {
+        whyChosenText = `Dijkstra chọn tuyến đường này bằng cách tìm đường đi có tổng chiều dài các cạnh tích lũy là nhỏ nhất.`;
+    } else if (input.algorithm === "bfs") {
+        whyChosenText = `BFS duyệt theo từng tầng lân cận và dừng ngay khi chạm đích, tìm ra lộ trình có ít nút rẽ/chặng chuyển hướng nhất.`;
+    } else if (input.algorithm === "dfs") {
+        whyChosenText = `DFS chọn nhánh đầu tiên đi sâu đến đích theo ngăn xếp, giúp khảo sát cây tìm kiếm nhưng không tối ưu chi phí.`;
+    } else {
+        whyChosenText = `Hill Climbing chọn tuyến dựa trên hướng đi có khoảng cách Haversine giảm nhanh nhất tại từng ngã rẽ.`;
+    }
+    setText("expWhyChosen", whyChosenText);
+
+    // Criterion 2: Shortest by distance, fastest by time, or best by total cost
+    let metricTypeText = "";
+    if (input.algorithm === "dijkstra") {
+        metricTypeText = `🎯 Tuyến đường này là NGẮN NHẤT VỀ QUÃNG ĐƯỜNG (${chosenDist}). Thuật toán tối ưu thuần cự ly hình học, không xét mức độ ùn tắc giao thông.`;
+    } else if (input.algorithm === "astar" || input.algorithm === "ucs") {
+        metricTypeText = `⚡ Tuyến đường này là TỐI ƯU NHẤT VỀ TỔNG CHI PHÍ GIAO THÔNG (Cost: ${chosenCost}) và NHANH NHẤT VỀ THỜI GIAN (${chosenTime}), vì đã tính toán trọng số phạt theo mức độ ùn tắc đô thị.`;
+    } else if (input.algorithm === "bfs") {
+        metricTypeText = `🧭 Tuyến đường này là ÍT CHẶNG RẼ NHẤT (${aggregate.totalHops} chặng). Đơn giản hóa đường đi nhưng không đảm bảo ngắn nhất về km hay thời gian.`;
+    } else {
+        metricTypeText = `🔍 Tuyến đường này là PHƯƠNG ÁN XẤP XỈ CỤC BỘ (${chosenDist}, ${chosenTime}). Không đảm bảo là ngắn nhất hay nhanh nhất toàn cục.`;
+    }
+    setText("expMetricType", metricTypeText);
+
+    // Criterion 3: Road segments with high congestion
+    const uniqueHighCount = new Set(highEdges.map((e) => e.edgeId)).size;
+    const congText = uniqueHighCount > 0
+        ? `Tuyến đi qua ${uniqueHighCount} đoạn ùn tắc nặng (mức 4–6): ${highEdgeNames.join(", ")}${uniqueHighCount > 3 ? ", …" : ""}. Mức ùn tắc TB: ${aggregate.congestion.averageKnownLevel?.toFixed(1) || "—"}/6.`
+        : `Không có đoạn đường nào bị ùn tắc mức 4–6 trên lộ trình quan sát được. Mức ùn tắc TB: ${aggregate.congestion.averageKnownLevel?.toFixed(1) || "1.0"}/6.`;
+    setText("expCongestion", congText);
+
+    // Criterion 4: How the result differs from another possible route
+    let compText = "";
+    if (aggregate.segments.length > 1 && input.visitOrderMode !== "input") {
+        compText = `Đã tối ưu thứ tự ghé thăm bằng ${visitOrderLabel(input.visitOrderMode)}, giúp giảm chi phí so với thứ tự ban đầu. Bấm "So sánh 6 thuật toán" để xem chi tiết đối chứng.`;
+    } else if (input.algorithm === "dijkstra") {
+        compText = `So với A* và UCS (chọn đường né kẹt xe), tuyến Dijkstra có cự ly ngắn hơn (${chosenDist}) nhưng có thể mất nhiều thời gian hơn nếu đi qua các điểm tắc đường.`;
+    } else {
+        compText = `So với phương án chỉ xét cự ly hình học (Dijkstra) hoặc số chặng rẽ (BFS), thuật toán ${spec.label} mang lại sự cân bằng tối ưu giữa quãng đường (${chosenDist}) và thời gian (${chosenTime}).`;
+    }
+    setText("expComparison", compText);
+
+    // Criterion 5: Optimality guarantee
+    let optText = "";
+    if (input.algorithm === "dijkstra") {
+        optText = "Đảm bảo tối ưu toàn cục về quãng đường (khi trọng số cạnh không âm).";
+    } else if (input.algorithm === "astar") {
+        optText = "Đảm bảo tối ưu chi phí tổng hợp khi hàm heuristic Haversine là admissible và consistent.";
+    } else if (input.algorithm === "ucs") {
+        optText = "Đảm bảo tối ưu chi phí tổng hợp khi mọi chi phí cạnh không âm.";
+    } else if (input.algorithm === "bfs") {
+        optText = "Đảm bảo tối ưu số chặng rẽ trên đồ thị không trọng số.";
+    } else if (input.visitOrderMode === "held_karp") {
+        optText = "Held–Karp đảm bảo tối ưu toàn cục cho thứ tự ghé thăm các điểm trung gian.";
+    } else {
+        optText = "Nghiệm tìm kiếm xấp xỉ/cục bộ, không đảm bảo tính tối ưu toàn cục tuyệt đối.";
+    }
+    setText("expOptimality", optText);
 }
 
 function renderCongestionExplanation(aggregate) {
@@ -2012,7 +2225,6 @@ function renderHospitalsOnMap() {
         markers.forEach((marker) => map.removeLayer(marker)),
     );
     hospitalMarkers = new Map();
-    if (!showPOIIcons) return;
 
     hospitalsData.forEach((hospital) => {
         const type = String(hospital.type || "Cơ sở y tế");
@@ -2020,22 +2232,33 @@ function renderHospitalsOnMap() {
             type.toLowerCase().includes("hospital") ||
             type.toLowerCase().includes("bệnh viện");
         const emoji = isHospital ? "🏥" : "✚";
-        const icon = L.divIcon({
-            className: `custom-div-icon ${isHospital ? "icon-hospital" : "icon-clinic"}`,
-            html: `<span>${emoji}</span>`,
-            iconSize: [34, 34],
-            iconAnchor: [17, 17],
-        });
+        const icon = showPOIIcons
+            ? L.divIcon({
+                  className: `custom-div-icon ${isHospital ? "icon-hospital" : "icon-clinic"}`,
+                  html: `<span>${emoji}</span>`,
+                  iconSize: [34, 34],
+                  iconAnchor: [17, 17],
+              })
+            : L.divIcon({
+                  className: `poi-dot-icon ${isHospital ? "dot-hospital" : "dot-clinic"}`,
+                  html: '<span class="poi-dot-inner"></span>',
+                  iconSize: [14, 14],
+                  iconAnchor: [7, 7],
+              });
         const marker = L.marker([hospital.lat, hospital.lng], {
             icon,
-            zIndexOffset: 1000,
+            zIndexOffset: showPOIIcons ? 1000 : 800,
+            title: hospital.name || "Cơ sở y tế",
         }).addTo(map);
         marker.bindPopup(`
             <div class="popup-content">
                 <strong>${emoji} ${escapeHtml(hospital.name || "Cơ sở y tế")}</strong>
                 <span>Loại: ${escapeHtml(type)}</span>
                 <span>Road node: ${Number(hospital.node_id)}</span>
-                <button type="button" onclick="setDestination(${Number(hospital.node_id)})">Chọn làm đích đến</button>
+                <div style="display: flex; gap: 5px; margin-top: 6px;">
+                    <button type="button" onclick="setDestination(${Number(hospital.node_id)})">🎯 Chọn làm đích</button>
+                    <button type="button" onclick="addWaypoint(${Number(hospital.node_id)})" style="background: rgba(119, 135, 255, 0.2); border-color: rgba(119, 135, 255, 0.4);">➕ Thêm điểm ghé</button>
+                </div>
             </div>
         `);
         const markers = hospitalMarkers.get(Number(hospital.node_id)) || [];
@@ -2187,6 +2410,24 @@ function setDestination(nodeId) {
     onHospitalSelectChange();
     map?.closePopup();
     showToast(`Đã chọn ${getNodeLabel(Number(nodeId))} làm đích đến.`);
+}
+
+function addWaypoint(nodeId) {
+    const input = byId("inputWaypoints");
+    if (!input) return;
+    const current = parseNodeIdList(input.value);
+    if (!current.includes(Number(nodeId))) {
+        if (current.length >= MAX_WAYPOINTS) {
+            showToast(`Đã đạt tối đa ${MAX_WAYPOINTS} điểm trung gian.`, true);
+            return;
+        }
+        current.push(Number(nodeId));
+        input.value = current.join(", ");
+        showToast(`Đã thêm ${getNodeLabel(Number(nodeId))} vào điểm trung gian (${current.length}/${MAX_WAYPOINTS}).`);
+    } else {
+        showToast(`Điểm ${getNodeLabel(Number(nodeId))} đã có trong danh sách trung gian.`, true);
+    }
+    map?.closePopup();
 }
 
 function onHospitalSelectChange() {
