@@ -31,7 +31,6 @@ graph TD
     C --> C1[Held-Karp - Exact Dynamic Programming]
     C --> C2[Nearest Neighbor - Greedy Heuristic]
     C --> C3[Simulated Annealing - Meta-heuristic]
-    C --> C4[Genetic Algorithm - Evolutionary Search]
 ```
 
 > [!IMPORTANT]
@@ -51,7 +50,7 @@ graph TD
 3. **Phân lập đo lường bộ nhớ bằng `tracemalloc`**:
    - `tracemalloc` làm chậm tốc độ thực thi của Python VM do phải theo dõi từng bytecode cấp phát. Vì vậy, số liệu bộ nhớ được đo riêng biệt trong lượt đo bộ nhớ (`MEMORY_REPEATS = 7`) sau khi đã hoàn thành lượt đo thời gian.
 4. **Cố định hạt giống ngẫu nhiên (Fixed Random Seed)**:
-   - Các giải thuật ngẫu nhiên (Simulated Annealing, Genetic Algorithm) nhận seed cố định (`RANDOM_SEED = 20260817`) để đảm bảo kết quả có tính tất định và có thể kiểm chứng lại.
+   - Giải thuật ngẫu nhiên (Simulated Annealing) nhận seed cố định (`RANDOM_SEED = 20260817`) để đảm bảo kết quả có tính tất định và có thể kiểm chứng lại.
 
 ### Bảng tiêu chí đo lường
 
@@ -131,7 +130,6 @@ Thực nghiệm sử dụng tập dữ liệu mạng lưới đường bộ th�
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
 | **Nearest Neighbor** | **0.02** | **0.05** | **0.002** | 0.002 | 1751.93 | +9.78% | True | Tham lam cục bộ ($O(n^2)$) |
 | **Held-Karp** | **0.46** | **0.58** | **0.036** | 0.036 | **1595.91** | **0.00% (Oracle)** | True | **Quy hoạch động Bitmask ($O(n^2 2^n)$)** |
-| **Genetic Algorithm** | 4.86 | 7.75 | 0.016 | 0.157 | 1780.63 | +11.57% | True | Di truyền ($Pop=20, Gen=30$) |
 | **Simulated Annealing** | 21.32 | 25.48 | 0.009 | 0.150 | **1595.91** | **0.00%** | True | Tôi luyện kim loại ($T_0=1000, \alpha=0.95$) |
 
 ---
@@ -187,7 +185,6 @@ DFS           ██████████████████████
 Thời gian thực thi (ms) - [Thấp hơn là tốt hơn]:
 Nearest Neighbor   ▏ 0.02 ms (Nhanh nhất, lệch +9.78%)
 Held-Karp          █ 0.46 ms (Tối ưu tuyệt đối, n <= 10)
-Genetic Algorithm  ██████████ 4.86 ms (Nghiệm xấp xỉ)
 Simulated Anneal.  ████████████████████████████████████████ 21.32 ms (Tìm ra nghiệm tối ưu)
 ```
 
@@ -205,10 +202,6 @@ Simulated Anneal.  ████████████████████�
 - **Hiệu quả tìm kiếm**: Với thông số $T_0=1000$, $\alpha=0.95$, $T_{\min}=0.01$ và cơ chế hoán vị ngẫu nhiên 2 điểm dừng (2-opt perturbation), thuật toán đã **tìm được chính xác nghiệm tối ưu toàn cục** ($1595.914\text{ s}$, gap $0.00\%$).
 - **Thời gian**: Mất $21.32\text{ ms}$ do phải trải qua quá trình hạ nhiệt tuần tự với hàng trăm vòng lặp để thoát khỏi các cực tiểu địa phương.
 
-#### 4. Thuật toán Genetic Algorithm (Giải thuật Di truyền)
-- **Thông số**: Kích thước quần thể $N_{pop}=20$, số thế hệ $G=30$, sử dụng phép lai chéo thứ tự (Order Crossover - OX) và đột biến đảo đoạn (Inversion Mutation).
-- **Kết quả**: Hoàn thành trong $4.86\text{ ms}$, đạt chi phí $1780.63\text{ s}$ (độ lệch $+11.57\%$). Phù hợp khi mở rộng cho các bài toán có ràng buộc phức tạp (như khung giờ tiếp nhận cứu trợ Time Windows hoặc tải trọng xe chở hàng).
-
 ---
 
 ## 6. Ma trận so sánh đặc tính & Độ phức tạp lý thuyết
@@ -224,7 +217,6 @@ Simulated Anneal.  ████████████████████�
 | **Held-Karp** | $O(n^2 2^n)$ | $O(n 2^n)$ | Thấp ở $n \le 10$ ($0.04\text{ MiB}$) | **Tối ưu toàn cục tuyệt đối** | **Hoàn chỉnh** (với $n \le 10$) | **Lựa chọn số 1 cho tối ưu $\le 10$ điểm dừng** |
 | **Nearest Neighbor** | $O(n^2)$ | $O(n)$ | Cực thấp ($0.002\text{ MiB}$) | Xấp xỉ (tham lam, gap $\approx 10\%$) | Không trên ma trận thưa | Phản hồi giao diện tức thời / Tạo seed cho SA |
 | **Simulated Annealing** | $O(k \cdot n)$ | $O(n)$ | Thấp ($0.01\text{ MiB}$) | Tiệm cận tối ưu toàn cục | Có trên ma trận đầy đủ | Tối ưu hóa chất lượng cao khi $n > 10$ |
-| **Genetic Algorithm** | $O(G \cdot P \cdot n)$ | $O(P \cdot n)$ | Thấp ($0.02\text{ MiB}$) | Xấp xỉ | Có trên ma trận đầy đủ | Mở rộng bài toán đa mục tiêu / Ràng buộc phụ |
 
 ---
 
@@ -236,7 +228,7 @@ Toàn bộ các biểu đồ trực quan hóa được xuất tự động ở �
 Biểu đồ tổng hợp cung cấp cái nhìn toàn diện về cả hai nhóm bài toán:
 - **Panel 1 (Top-Left)**: Phân bố thời gian thực thi (Median & $p95$) của 6 thuật toán tìm đường 2 điểm.
 - **Panel 2 (Top-Right)**: Bộ nhớ đỉnh Python Heap của 6 thuật toán tìm đường.
-- **Panel 3 (Bottom-Left)**: Thời gian thực thi của 4 thuật toán tối ưu thứ tự điểm dừng.
+- **Panel 3 (Bottom-Left)**: Thời gian thực thi của 3 thuật toán tối ưu thứ tự điểm dừng.
 - **Panel 4 (Bottom-Right)**: Độ lệch chi phí phần trăm so với Oracle Held-Karp.
 
 ### 2. Biểu đồ chi tiết Tìm đường 2 điểm (`benchmark_graph_search.png`)
@@ -318,5 +310,4 @@ Các tệp kết quả sẽ được ghi đè/sinh mới trong `artifacts/benchm
 2. **Dijkstra, E. W. (1959)**. *A note on two problems in connexion with graphs*. Numerische Mathematik, 1(1), 269-271.
 3. **Held, M., & Karp, R. M. (1962)**. *A Dynamic Programming Approach to Sequencing Problems*. Journal of the Society for Industrial and Applied Mathematics, 10(1), 196-210.
 4. **Kirkpatrick, S., Gelatt, C. D., & Vecchi, M. P. (1983)**. *Optimization by Simulated Annealing*. Science, 220(4598), 671-680.
-5. **Goldberg, D. E. (1989)**. *Genetic Algorithms in Search, Optimization, and Machine Learning*. Addison-Wesley.
-6. **RescueRoute Technical Specifications (2026)**. *Coding Rules & Architectural Decisions*, `docs/architecture/` & `CODING_RULES.md`.
+5. **RescueRoute Technical Specifications (2026)**. *Coding Rules & Architectural Decisions*, `docs/architecture/` & `CODING_RULES.md`.

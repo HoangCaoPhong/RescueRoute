@@ -28,7 +28,7 @@ Khi bắt đầu implementation, thành viên thêm file theo nhu cầu:
 └── helpers.py         # Chỉ tạo nếu logic phụ đủ lớn để tách
 ```
 
-Không bắt buộc tạo `helpers.py`. A* có thể dùng `heuristic.py`; Genetic Algorithm có thể dùng `operators.py` và `population.py`. Tránh tạo nhiều file rỗng chỉ để giống cây mẫu.
+Không bắt buộc tạo `helpers.py`. A* có thể dùng `heuristic.py`; Simulated Annealing có thể dùng `temperature.py`. Tránh tạo nhiều file rỗng chỉ để giống cây mẫu.
 
 ## Contract chung
 
