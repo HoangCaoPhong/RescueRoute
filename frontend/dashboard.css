@@ -1305,13 +1305,50 @@ textarea:focus {
 }
 
 .search-viz-header {
-    align-items: flex-start;
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    user-select: none;
 }
 
 .search-viz-header h4 {
     color: var(--text-primary);
     font-size: 0.8rem;
     margin-top: 3px;
+}
+
+.btn-trace-collapse {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1;
+    min-height: auto;
+    padding: 3px 6px;
+    transition: color 150ms ease, transform 150ms ease;
+    width: auto;
+}
+
+.search-viz-header:hover .btn-trace-collapse {
+    color: var(--text-primary);
+}
+
+.search-visualization.is-collapsed {
+    gap: 0;
+    padding: 10px 13px;
+}
+
+.search-visualization.is-collapsed .search-viz-body {
+    display: none;
+}
+
+.search-viz-body {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
 }
 
 .viz-legend {

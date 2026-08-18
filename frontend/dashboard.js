@@ -1823,9 +1823,20 @@ function clearSearchVisualization() {
     searchVisualizationData = null;
     searchStepIndex = 0;
     const panel = byId("searchVisualizationPanel");
-    if (panel) panel.hidden = true;
+    if (panel) {
+        panel.hidden = true;
+        panel.classList.remove("is-collapsed");
+    }
     const playbackDock = byId("searchPlaybackDock");
     if (playbackDock) playbackDock.hidden = true;
+}
+
+function toggleSearchTraceCollapse() {
+    const panel = byId("searchVisualizationPanel");
+    if (!panel) return;
+    const isCollapsed = panel.classList.toggle("is-collapsed");
+    const btn = byId("btnToggleSearchTrace");
+    if (btn) btn.textContent = isCollapsed ? "▸" : "▾";
 }
 
 async function startSearchVisualization(trace) {
