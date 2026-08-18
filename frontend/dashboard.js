@@ -2673,6 +2673,14 @@ function toggleTrafficLayer() {
     renderEdgesOnMap();
 }
 
+function toggleMapLegend() {
+    const legend = byId("mapLegend");
+    if (!legend) return;
+    const isCollapsed = legend.classList.toggle("is-collapsed");
+    const btn = byId("btnToggleLegend");
+    if (btn) btn.textContent = isCollapsed ? "▸" : "▾";
+}
+
 function updateToggleButton(id, active, label) {
     const button = byId(id);
     if (!button) return;

@@ -1735,15 +1735,61 @@ tr.best-row td {
 }
 
 .legend-header {
+    align-items: center;
     border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
     margin-bottom: 2px;
     padding-bottom: 4px;
+    user-select: none;
 }
 
 .legend-header strong {
     color: var(--text-primary);
     font-size: 0.70rem;
     font-weight: 700;
+}
+
+.btn-legend-toggle {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1;
+    min-height: auto;
+    padding: 2px 4px;
+    transition: color 150ms ease, transform 150ms ease;
+    width: auto;
+}
+
+.legend-header:hover .btn-legend-toggle {
+    color: var(--text-primary);
+}
+
+.map-legend.is-collapsed {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    max-height: 40px;
+    overflow: hidden;
+    padding: 8px 12px;
+}
+
+.map-legend.is-collapsed .legend-header {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.map-legend.is-collapsed .legend-content {
+    display: none;
+}
+
+.legend-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .legend-group {
@@ -1837,7 +1883,15 @@ tr.best-row td {
 }
 
 .map-marker.hospital {
-    background: var(--rose);
+    background: #e84d6d;
+    border: 1px solid #ffd0da;
+    box-shadow: 0 0 5px rgba(232, 77, 109, 0.6);
+}
+
+.map-marker.clinic {
+    background: #1eae79;
+    border: 1px solid #b7f5d7;
+    box-shadow: 0 0 5px rgba(30, 174, 121, 0.6);
 }
 
 .custom-div-icon {
