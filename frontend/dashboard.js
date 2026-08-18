@@ -1,8 +1,8 @@
 const API_BASE = "/api";
 const MAX_WAYPOINTS = 5;
 const DEFAULT_SPEED_KPH = 30;
-const MAX_MAP_TRACE_NODES = 500;
-const MAX_TRACE_TOKENS = 96;
+const MAX_MAP_TRACE_NODES = 1000;
+const MAX_TRACE_TOKENS = 192;
 const SEARCH_COLORS = {
     visited: "#facc15",
     current: "#f97316",

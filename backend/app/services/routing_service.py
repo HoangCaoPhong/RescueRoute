@@ -199,7 +199,7 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
     elif algo in {"dfs", "dls", "bounded_dfs", "dfs_limited"}:
         try:
             result = solve_depth_limited_dfs(
-                graph_mgr.adj, start_id, goal_id, max_expansions=3000
+                graph_mgr.adj, start_id, goal_id, max_expansions=5000
             )
             exec_time = (time.perf_counter() - t0) * 1000
 
@@ -610,7 +610,7 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             curr, p = stack.pop()
             if curr in visited:
                 continue
-            frontier_preview = [node for node, _ in stack[:249]] + [curr]
+            frontier_preview = [node for node, _ in stack[:4999]] + [curr]
             trace_history.record_expansion(
                 curr,
                 frontier_preview,
@@ -621,7 +621,7 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             if curr in goal_node_set:
                 found_goal_id = curr
                 break
-            if nodes_expanded >= 3000:
+            if nodes_expanded >= 5000:
                 break
             for nbr in graph_mgr.adj.get(curr, {}):
                 if nbr not in visited:
@@ -678,7 +678,7 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             if d > best_dist.get(curr, float('inf')):
                 continue
             nodes_expanded += 1
-            if nodes_expanded < 500:
+            if nodes_expanded < 5000:
                 trace_history.record_expansion(
                     curr,
                     build_priority_frontier_snapshot(
@@ -717,7 +717,7 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             if g > g_scores.get(curr, float('inf')):
                 continue
             nodes_expanded += 1
-            if nodes_expanded < 500:
+            if nodes_expanded < 5000:
                 trace_history.record_expansion(
                     curr,
                     build_priority_frontier_snapshot(

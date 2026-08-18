@@ -122,7 +122,7 @@ def build_search_trace(
     # BUILD SEARCH STEPS
     # ======================================
 
-    MAX_TRACE_STEPS = 500
+    MAX_TRACE_STEPS = 5000
 
     if history_events:
         event_source = history_events

@@ -15,7 +15,7 @@ def solve_depth_limited_dfs(
     cost_profile=None,
     *,
     max_depth: int | None = None,
-    max_expansions: int | None = 3000,
+    max_expansions: int | None = 5000,
 ):
     """
     Depth-Limited / Bounded Search (DLS / Bounded DFS).
@@ -45,7 +45,7 @@ def solve_depth_limited_dfs(
         if current_node in visited:
             continue
 
-        frontier_preview = [node for node, _, _ in stack[:249]] + [current_node]
+        frontier_preview = [node for node, _, _ in stack[:4999]] + [current_node]
         trace_history.record_expansion(
             current_node,
             frontier_preview,

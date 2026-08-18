@@ -73,7 +73,7 @@ def solve_astar(
         if current_cost >= expanded_at_cost.get(current, float("inf")):
             continue
 
-        if len(legacy_frontier_steps) < 500:
+        if len(legacy_frontier_steps) < 5000:
             remaining_frontier = _active_frontier(
                 open_heap,
                 g_score,
