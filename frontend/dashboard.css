@@ -642,6 +642,7 @@ textarea:focus {
     align-items: center;
     display: flex;
     font-size: 0.72rem;
+    gap: 8px;
     justify-content: space-between;
     margin-bottom: 6px;
 }
@@ -649,23 +650,35 @@ textarea:focus {
 .hospital-filter-label {
     align-items: center;
     color: var(--text-secondary);
-    cursor: pointer;
     display: inline-flex;
-    gap: 6px;
+    font-weight: 600;
     margin-bottom: 0;
+    white-space: nowrap;
 }
 
-.hospital-filter-label input[type="checkbox"] {
-    accent-color: var(--rose);
-    cursor: pointer;
-    min-height: auto;
-    width: auto;
+.select-hospital-category {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-sizing: border-box;
+    color: var(--text-primary);
+    flex: 1;
+    font-size: 0.71rem;
+    min-height: 28px;
+    padding: 3px 6px;
+    transition: border-color 150ms ease;
+}
+
+.select-hospital-category:focus {
+    border-color: var(--rose);
+    outline: none;
 }
 
 .hospital-count-badge {
     color: var(--text-muted);
     font-size: 0.68rem;
     font-weight: 600;
+    white-space: nowrap;
 }
 
 .criterion-notice {
@@ -676,6 +689,334 @@ textarea:focus {
     font-size: 0.68rem;
     line-height: 1.55;
     padding: 9px 10px;
+}
+
+/* ==========================================================================
+   Waypoint Stops Manager (Google Maps Style)
+   ========================================================================== */
+.waypoint-manager-block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.waypoint-header {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.waypoint-header label {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+    margin-bottom: 0;
+}
+
+.waypoint-count-badge {
+    background: rgba(119, 135, 255, 0.15);
+    border: 1px solid rgba(119, 135, 255, 0.35);
+    border-radius: 999px;
+    color: #99aaff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+}
+
+.btn-clear-waypoints {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    transition: all 150ms ease;
+}
+
+.btn-clear-waypoints:hover {
+    background: rgba(255, 102, 132, 0.15);
+    border-color: var(--rose);
+    color: var(--rose);
+}
+
+.waypoint-search-container {
+    position: relative;
+    width: 100%;
+}
+
+.waypoint-input-wrapper {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+    width: 100%;
+}
+
+.waypoint-search-icon {
+    font-size: 0.85rem;
+    opacity: 0.7;
+    position: absolute;
+    left: 10px;
+    pointer-events: none;
+}
+
+.input-search-waypoint {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-sizing: border-box;
+    color: var(--text-primary);
+    font-size: 0.73rem;
+    min-height: 36px;
+    padding: 7px 10px;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+    width: 100%;
+}
+
+.input-search-waypoint:focus {
+    border-color: #7787ff;
+    box-shadow: 0 0 0 2px rgba(119, 135, 255, 0.2);
+    outline: none;
+}
+
+.waypoint-select-row {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+
+.select-waypoint-dropdown {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-sizing: border-box;
+    color: var(--text-primary);
+    flex: 1;
+    font-size: 0.73rem;
+    min-height: 36px;
+    padding: 7px 10px;
+    transition: border-color 150ms ease;
+}
+
+.select-waypoint-dropdown:focus {
+    border-color: #7787ff;
+    outline: none;
+}
+
+.btn-add-stop {
+    background: linear-gradient(135deg, rgba(119, 135, 255, 0.25), rgba(119, 135, 255, 0.1));
+    border: 1px solid rgba(119, 135, 255, 0.4);
+    border-radius: var(--radius-sm);
+    color: #b0beff;
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 700;
+    min-height: 36px;
+    padding: 0 12px;
+    transition: all 150ms ease;
+    white-space: nowrap;
+}
+
+.btn-add-stop:hover {
+    background: rgba(119, 135, 255, 0.35);
+    border-color: #99aaff;
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+/* Autocomplete Dropdown */
+.waypoint-suggestions-dropdown {
+    background: var(--bg-card, #121824);
+    border: 1px solid rgba(119, 135, 255, 0.4);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    left: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 1050;
+    backdrop-filter: blur(10px);
+}
+
+.waypoint-suggestion-item {
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    display: flex;
+    gap: 10px;
+    padding: 8px 12px;
+    transition: background 120ms ease;
+}
+
+.waypoint-suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.waypoint-suggestion-item:hover,
+.waypoint-suggestion-item.active {
+    background: rgba(119, 135, 255, 0.2);
+}
+
+.suggestion-icon {
+    font-size: 1.1rem;
+}
+
+.suggestion-info {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+}
+
+.suggestion-name {
+    color: var(--text-primary);
+    font-size: 0.74rem;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.suggestion-meta {
+    align-items: center;
+    color: var(--text-muted);
+    display: flex;
+    font-size: 0.67rem;
+    gap: 6px;
+}
+
+.suggestion-type-badge {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    padding: 1px 5px;
+}
+
+.suggestion-type-badge.emergency {
+    background: rgba(255, 102, 132, 0.2);
+    color: #ff99aa;
+}
+
+/* Stops List Container */
+.waypoint-stops-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.waypoint-empty-hint {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    padding: 8px 10px;
+    text-align: center;
+}
+
+.waypoint-stop-card {
+    align-items: center;
+    background: var(--bg-card, rgba(20, 27, 40, 0.8));
+    border: 1px solid rgba(119, 135, 255, 0.25);
+    border-radius: var(--radius-sm);
+    display: flex;
+    gap: 8px;
+    padding: 6px 8px;
+    transition: all 140ms ease;
+}
+
+.waypoint-stop-card:hover {
+    border-color: rgba(119, 135, 255, 0.5);
+    transform: translateX(2px);
+}
+
+.stop-index-badge {
+    align-items: center;
+    background: rgba(119, 135, 255, 0.2);
+    border: 1px solid rgba(119, 135, 255, 0.4);
+    border-radius: 50%;
+    color: #b0beff;
+    display: flex;
+    font-size: 0.68rem;
+    font-weight: 800;
+    height: 22px;
+    justify-content: center;
+    min-width: 22px;
+    width: 22px;
+}
+
+.stop-content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 1px;
+    overflow: hidden;
+}
+
+.stop-name {
+    color: var(--text-primary);
+    font-size: 0.74rem;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stop-node-id {
+    color: var(--text-muted);
+    font-size: 0.65rem;
+}
+
+.stop-actions {
+    align-items: center;
+    display: flex;
+    gap: 3px;
+}
+
+.btn-stop-action {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    font-size: 0.72rem;
+    height: 22px;
+    justify-content: center;
+    padding: 0;
+    transition: all 120ms ease;
+    width: 22px;
+}
+
+.btn-stop-action:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--border);
+    color: var(--text-primary);
+}
+
+.btn-stop-action.btn-delete:hover {
+    background: rgba(255, 102, 132, 0.2);
+    border-color: var(--rose);
+    color: var(--rose);
+}
+
+.btn-stop-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.25;
+}
+
+.waypoint-hint-text {
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    line-height: 1.4;
 }
 
 .planner-actions {
