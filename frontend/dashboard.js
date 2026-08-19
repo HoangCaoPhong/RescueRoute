@@ -1016,8 +1016,8 @@ function finiteMetric(value) {
         : Number.POSITIVE_INFINITY;
 }
 
-async function runRouteSegment(startId, goalId, algorithm) {
-    const cacheKey = `${algorithm}:${startId}:${goalId}`;
+async function runRouteSegment(startId, goalId, algorithm, criterion = "cost") {
+    const cacheKey = `${algorithm}:${criterion}:${startId}:${goalId}`;
     if (routeRequestCache.has(cacheKey)) return routeRequestCache.get(cacheKey);
 
     const request = fetchJson(`${API_BASE}/route`, {
@@ -1027,6 +1027,7 @@ async function runRouteSegment(startId, goalId, algorithm) {
             start_node_id: startId,
             goal_node_id: goalId,
             algorithm,
+            criterion
         }),
     })
         .then((data) => {
@@ -1191,6 +1192,7 @@ async function calculateRoute() {
                         `Đang tính thứ tự ban đầu: chặng ${current}/${total}…`,
                     );
                 },
+                input.criterion
             );
             originalAggregate = aggregateSegments(originalSegments, originalOrder);
 
@@ -1211,6 +1213,7 @@ async function calculateRoute() {
                 (current, total) => {
                     setOperationStatus(`Đang tìm chặng ${current}/${total}…`);
                 },
+                input.criterion
             );
         }
 
@@ -2608,7 +2611,7 @@ async function compareAlgorithms() {
                 `Đang chạy ${ALGORITHM_SPECS[algorithm].label} (${index + 1}/${algorithms.length})…`,
             );
             try {
-                const segments = await runOrderedRoute(nodeOrder, algorithm);
+                const segments = await runOrderedRoute(nodeOrder, algorithm, () => {}, input.criterion);
                 results.push({
                     algorithm,
                     aggregate: aggregateSegments(segments, nodeOrder),
