@@ -1052,13 +1052,14 @@ async function runOrderedRoute(
     nodeOrder,
     algorithm,
     progressCallback = () => { },
+    criterion = "cost"
 ) {
     const segments = [];
     for (let index = 0; index < nodeOrder.length - 1; index += 1) {
         progressCallback(index + 1, nodeOrder.length - 1);
         const start = nodeOrder[index];
         const goal = nodeOrder[index + 1];
-        const result = await runRouteSegment(start, goal, algorithm);
+        const result = await runRouteSegment(start, goal, algorithm, criterion);
         segments.push({ start, goal, result });
     }
     return segments;
