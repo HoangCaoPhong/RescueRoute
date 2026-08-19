@@ -14,6 +14,7 @@ from scipy.spatial import cKDTree
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 # ==========================================
@@ -24,9 +25,9 @@ PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-DASHBOARD_HTML = os.path.join(BASE_DIR, "../frontend/dashboard.html")
-DASHBOARD_JS = os.path.join(BASE_DIR, "../frontend/dashboard.js")
-DASHBOARD_CSS = os.path.join(BASE_DIR, "../frontend/dashboard.css")
+FRONTEND_DIST_DIR = os.path.abspath(os.path.join(BASE_DIR, "../frontend/dist"))
+FRONTEND_INDEX = os.path.join(FRONTEND_DIST_DIR, "index.html")
+FRONTEND_ASSETS_DIR = os.path.join(FRONTEND_DIST_DIR, "assets")
 DATA_DIR = os.path.abspath(os.path.join(BASE_DIR, "../data/processed"))
 
 # ==========================================
@@ -256,6 +257,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Vite tạo tên asset có hash; FastAPI chỉ phục vụ thư mục này sau bước build.
+if os.path.isdir(FRONTEND_ASSETS_DIR):
+    app.mount(
+        "/assets",
+        StaticFiles(directory=FRONTEND_ASSETS_DIR),
+        name="frontend-assets",
+    )
+
 # ==========================================
 # 4. Request Schemas
 # ==========================================
@@ -330,33 +339,16 @@ from backend.app.services.routing_service import (
 @app.get("/")
 @app.get("/dashboard", response_class=FileResponse)
 async def serve_dashboard():
-    """Mở trực tiếp giao diện Dashboard bản đồ"""
-    if os.path.exists(DASHBOARD_HTML):
+    """Serve the production React dashboard built by Vite."""
+    if os.path.exists(FRONTEND_INDEX):
         return FileResponse(
-            DASHBOARD_HTML,
+            FRONTEND_INDEX,
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
         )
-    return {"message": "dashboard.html không tìm thấy"}
-
-@app.get("/dashboard.js", response_class=FileResponse)
-async def serve_dashboard_js():
-    """Serve the dashboard javascript file"""
-    if os.path.exists(DASHBOARD_JS):
-        return FileResponse(
-            DASHBOARD_JS,
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
-        )
-    return {"message": "dashboard.js không tìm thấy"}
-
-@app.get("/dashboard.css", response_class=FileResponse)
-async def serve_dashboard_css():
-    """Serve the dashboard css file"""
-    if os.path.exists(DASHBOARD_CSS):
-        return FileResponse(
-            DASHBOARD_CSS,
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
-        )
-    return {"message": "dashboard.css không tìm thấy"}
+    raise HTTPException(
+        status_code=503,
+        detail="Frontend chưa được build. Chạy `npm ci && npm run build` trong thư mục frontend.",
+    )
 
 @app.get("/api/health")
 @app.get("/api/v1/health")

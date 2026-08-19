@@ -43,12 +43,12 @@ Current capabilities include:
 - route metrics such as distance, cost, expanded-node count, and execution time;
 - nearest-hospital lookup, ambulance-location updates, and congestion
   simulation;
-- a FastAPI backend and an HTML/CSS/JavaScript Leaflet dashboard.
+- a FastAPI backend and a React, TypeScript, Tailwind CSS, and Leaflet dashboard.
 
 ### Architecture
 
 ```text
-Leaflet dashboard
+React + Leaflet dashboard
       |
       | HTTP/JSON
       v
@@ -63,15 +63,20 @@ RescueRoute/
 ├── backend/     # FastAPI, services, algorithms, and tests
 ├── data/        # Raw, processed, and sample datasets
 ├── docs/        # Architecture, API, and algorithm documentation
-├── frontend/    # Leaflet dashboard prototype
+├── frontend/    # React, TypeScript, Tailwind CSS, and Leaflet dashboard
 └── scripts/     # Data processing and benchmark-plot utilities
 ```
 
 ### Quick start
 
-Python 3.10 or later is required. Run from the repository root:
+Python 3.10 or later and Node.js 20 or later are required. Build the frontend,
+then run FastAPI from the repository root:
 
 ```bash
+cd frontend
+npm ci
+npm run build
+cd ..
 python -m pip install -r backend/requirements.txt
 python -m uvicorn backend.main:app --reload
 ```
@@ -101,7 +106,7 @@ These endpoints also have `/api/v1` variants.
 
 ```bash
 python -m pytest backend/tests -q
-node --test frontend/tests/dashboard.logic.test.js
+cd frontend && npm test && npm run build
 ```
 
 Algorithm tests are deterministic and do not call external services. See the
@@ -170,12 +175,13 @@ Các khả năng hiện có:
 - hiển thị node đã mở rộng, frontier và tuyến cuối cùng;
 - báo cáo khoảng cách, cost, số node mở rộng và thời gian thực thi;
 - tìm bệnh viện gần nhất, cập nhật vị trí xe cấp cứu và mô phỏng ùn tắc;
-- cung cấp FastAPI backend và dashboard Leaflet bằng HTML/CSS/JavaScript.
+- cung cấp FastAPI backend và dashboard React, TypeScript, Tailwind CSS,
+  Leaflet.
 
 ### Kiến trúc
 
 ```text
-Leaflet dashboard
+Dashboard React + Leaflet
       |
       | HTTP/JSON
       v
@@ -190,15 +196,20 @@ RescueRoute/
 ├── backend/     # FastAPI, services, thuật toán và test
 ├── data/        # Dữ liệu raw, processed và fixture mẫu
 ├── docs/        # Kiến trúc, API và tài liệu thuật toán
-├── frontend/    # Dashboard Leaflet prototype
+├── frontend/    # Dashboard React, TypeScript, Tailwind CSS và Leaflet
 └── scripts/     # Xử lý dữ liệu và tạo biểu đồ benchmark
 ```
 
 ### Chạy nhanh
 
-Yêu cầu Python 3.10 trở lên. Chạy từ thư mục gốc repository:
+Yêu cầu Python 3.10 trở lên và Node.js 20 trở lên. Build frontend trước, sau đó
+chạy FastAPI từ thư mục gốc repository:
 
 ```bash
+cd frontend
+npm ci
+npm run build
+cd ..
 python -m pip install -r backend/requirements.txt
 python -m uvicorn backend.main:app --reload
 ```
@@ -228,7 +239,7 @@ Các endpoint trên cũng có biến thể dưới `/api/v1`.
 
 ```bash
 python -m pytest backend/tests -q
-node --test frontend/tests/dashboard.logic.test.js
+cd frontend && npm test && npm run build
 ```
 
 Test thuật toán có tính xác định và không gọi dịch vụ bên ngoài. Xem

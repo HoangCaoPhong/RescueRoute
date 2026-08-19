@@ -2,92 +2,140 @@
 
 ## English
 
-The current frontend is a Leaflet dashboard prototype written in plain HTML,
-CSS, and JavaScript. The folders under `src/` are placeholders for a future
-React/TypeScript application and are not yet an independently buildable app.
+RescueRoute's frontend is a React and TypeScript single-page dashboard styled
+with Tailwind CSS and rendered on Leaflet. The interface is intentionally
+typography-led: the map remains the primary workspace, controls use plain text,
+and symbols are reserved for map data or essential navigation.
 
-### Run the dashboard
+### Technology
 
-The recommended approach is to let FastAPI serve both the UI and API:
+- React 18 and TypeScript in strict mode;
+- Vite for development and production builds;
+- Tailwind CSS for the restrained light/dark design system;
+- React-Leaflet for road, hospital, ambulance, route, and search-trace layers.
+
+### Development
+
+Run the API and Vite in separate terminals from the repository root:
 
 ```bash
-python -m pip install -r backend/requirements.txt
 python -m uvicorn backend.main:app --reload
 ```
 
-Open `http://127.0.0.1:8000/`. For static-only development, run
-`python -m http.server 5500` inside `frontend/`; this requires a compatible
-backend URL and CORS configuration.
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`. Vite proxies `/api`, `/docs`, and
+`/openapi.json` to FastAPI on port 8000.
+
+### Production build
+
+```bash
+cd frontend
+npm ci
+npm run build
+cd ..
+python -m uvicorn backend.main:app
+```
+
+FastAPI serves `frontend/dist/index.html` and its hashed assets at
+`http://127.0.0.1:8000/`. The generated `dist/` directory is intentionally
+ignored by Git and must be rebuilt for deployment.
+
+### Structure
 
 ```text
 frontend/
-├── dashboard.html       # Page structure
-├── dashboard.css        # Styling and display states
-├── dashboard.js         # Leaflet, API calls, and trace playback
-├── tests/               # JavaScript logic tests
-├── public/              # Future static assets
-└── src/                 # Future React/TypeScript structure
+├── src/components/             # Shared interface primitives
+├── src/features/map/           # Leaflet map and data layers
+├── src/features/route-planner/ # Route controls, results, and utilities
+├── src/features/search-visualizer/ # Search-trace playback
+├── src/lib/api/                # HTTP boundary and API field mapping
+├── src/pages/                  # Page composition
+├── src/styles/                 # Tailwind entry point and Leaflet refinements
+└── src/types/                  # Backend contract types
 ```
 
-The dashboard receives a route and its `search_trace` in one response, then
-replays that trace locally. Run tests with:
+### Verification
 
 ```bash
-node --test frontend/tests/dashboard.logic.test.js
+npm test
+npm run build
+npm audit --audit-level=moderate
 ```
 
-Keep frontend fields and endpoints synchronized with the backend contract, and
-never place secrets or access tokens in client-side code.
+No credential, map token, or user GPS history is stored in frontend code.
 
 ---
 
 ## Tiếng Việt
 
-Frontend hiện là dashboard prototype dùng HTML, CSS, JavaScript thuần và
-Leaflet. Các thư mục trong `src/` mới là khung dành cho React/TypeScript trong
-giai đoạn sau, chưa phải ứng dụng có thể build độc lập.
+Frontend của RescueRoute là dashboard một trang dùng React và TypeScript, tạo
+style bằng Tailwind CSS và hiển thị bản đồ qua Leaflet. Giao diện ưu tiên hệ
+thống chữ: bản đồ là không gian làm việc chính, các điều khiển dùng nhãn chữ rõ
+ràng, còn ký hiệu chỉ dành cho dữ liệu bản đồ hoặc điều hướng bắt buộc.
 
-## Chạy dashboard
+### Công nghệ
 
-Cách đơn giản nhất là để FastAPI phục vụ cả giao diện và API:
+- React 18 và TypeScript strict mode;
+- Vite cho môi trường phát triển và production build;
+- Tailwind CSS cho hệ thống giao diện sáng/tối tối giản;
+- React-Leaflet cho lớp mạng đường, bệnh viện, xe cấp cứu, tuyến và search trace.
+
+### Phát triển local
+
+Chạy API và Vite trong hai terminal riêng từ thư mục gốc repository:
 
 ```bash
-python -m pip install -r backend/requirements.txt
 python -m uvicorn backend.main:app --reload
 ```
 
-Sau đó mở `http://127.0.0.1:8000/`.
+```bash
+cd frontend
+npm ci
+npm run dev
+```
 
-Nếu chỉ cần xem static frontend, có thể chạy server riêng:
+Mở `http://127.0.0.1:5173`. Vite chuyển tiếp `/api`, `/docs` và
+`/openapi.json` sang FastAPI ở cổng 8000.
+
+### Build production
 
 ```bash
 cd frontend
-python -m http.server 5500
+npm ci
+npm run build
+cd ..
+python -m uvicorn backend.main:app
 ```
 
-Cách này cần cấu hình backend URL/CORS phù hợp vì dashboard gọi các endpoint
-`/api/...`.
+FastAPI phục vụ `frontend/dist/index.html` cùng các asset có hash tại
+`http://127.0.0.1:8000/`. Thư mục sinh `dist/` được Git bỏ qua và phải được
+build lại khi triển khai.
 
-## Cấu trúc
+### Cấu trúc
 
 ```text
 frontend/
-├── dashboard.html       # Bố cục giao diện
-├── dashboard.css        # Style và trạng thái hiển thị
-├── dashboard.js         # Leaflet, gọi API và phát search trace
-├── tests/               # Test logic JavaScript
-├── public/              # Static assets tương lai
-└── src/                 # Khung React/TypeScript tương lai
+├── src/components/             # Component giao diện dùng chung
+├── src/features/map/           # Bản đồ Leaflet và các lớp dữ liệu
+├── src/features/route-planner/ # Điều khiển, kết quả và tiện ích định tuyến
+├── src/features/search-visualizer/ # Phát lại search trace
+├── src/lib/api/                # Biên HTTP và ánh xạ field API
+├── src/pages/                  # Ghép bố cục trang
+├── src/styles/                 # Tailwind entry point và tinh chỉnh Leaflet
+└── src/types/                  # Kiểu dữ liệu theo contract backend
 ```
 
-Dashboard nhận route và `search_trace` trong cùng response, sau đó phát lại
-trace ở phía client. Thuật toán không ghi file JSON trong lúc xử lý request.
-
-## Kiểm tra
+### Kiểm tra
 
 ```bash
-node --test frontend/tests/dashboard.logic.test.js
+npm test
+npm run build
+npm audit --audit-level=moderate
 ```
 
-Khi đổi API field hoặc endpoint, cập nhật đồng thời backend, frontend và tài
-liệu contract. Không đặt token hoặc secret trong mã frontend.
+Không lưu credential, map token hoặc lịch sử GPS người dùng trong frontend.
