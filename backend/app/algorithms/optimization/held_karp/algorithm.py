@@ -34,7 +34,7 @@ def optimize_held_karp(
             "method": "held_karp",
         }
 
-    # (visited_mask, last_index) -> (cost, predecessor_index)
+    # Mỗi trạng thái lưu cost tốt nhất và waypoint đứng trước.
     dp: dict[tuple[int, int], tuple[float, int | None]] = {}
     for index, waypoint in enumerate(waypoints):
         initial_cost = get_pairwise_cost(pair_costs, start_node_id, waypoint)
@@ -93,4 +93,3 @@ def optimize_held_karp(
         "is_optimal": True,
         "method": "held_karp",
     }
-

@@ -1,101 +1,93 @@
-# Frontend - RescueRoute
+# Frontend
 
-Frontend hiện tại gồm 2 phần:
+## English
 
-- Dashboard prototype chạy bằng HTML/CSS/JS thuần (`dashboard.html`, `dashboard.css`, `dashboard.js`).
-- Khung thư mục React/TypeScript trong `src/` (chưa scaffold project, đang giữ cấu trúc bằng `.gitkeep`).
+The current frontend is a Leaflet dashboard prototype written in plain HTML,
+CSS, and JavaScript. The folders under `src/` are placeholders for a future
+React/TypeScript application and are not yet an independently buildable app.
 
-## Mục tiêu
+### Run the dashboard
 
-- Hiển thị bản đồ giao thông và vị trí xe cấp cứu.
-- Gọi API backend để chạy A*, Dijkstra, UCS, BFS, DFS và Hill
-  Climbing trên cùng input.
-- Trực quan hóa kết quả route và từng bước tìm kiếm.
-
-## Yêu cầu trước khi chạy
-
-#### 1. Cài dependency backend bằng pip từ thư mục gốc dự án (`RescueRoute/`):
+The recommended approach is to let FastAPI serve both the UI and API:
 
 ```bash
-python -m pip install --upgrade pip
 python -m pip install -r backend/requirements.txt
-```
-
-Nếu máy dùng launcher `py` trên Windows, có thể dùng:
-
-```bash
-py -m pip install --upgrade pip
-py -m pip install -r backend/requirements.txt
-```
-
-#### 2. Chạy backend từ thư mục gốc dự án:
-
-```bash
 python -m uvicorn backend.main:app --reload
 ```
 
-Đảm bảo backend mở tại `http://127.0.0.1:8000` (hoặc địa chỉ tương đương).
-
-Dashboard đang gọi trực tiếp các endpoint như:
-
-- `/api/health`
-- `/api/nodes`
-- `/api/edges`
-- `/api/ambulance/location`
-- `/api/route`
-- `/api/route/multi-location`
-
-`POST /api/route` returns the completed route and its `search_trace` in one JSON
-response. The dashboard uses that saved trace to animate the search locally; it
-does not ask the backend to calculate each visualization step.
-
-Hill Climbing uses the same trace contract with heuristic values for each
-candidate. Multi-location order is optimized in the backend with Nearest
-Neighbor or Held-Karp; algorithms do not write JSON files during a request.
-
-## Chạy Dashboard Prototype
-
-Do dashboard dùng `fetch('/api/...')`, bạn nên mở dashboard qua HTTP server (không nên mở file trực tiếp bằng `file://`).
-
-Từ thư mục `frontend/`, chạy:
-
-```bash
-python -m http.server 5500
-```
-
-Sau đó truy cập:
-
-- `http://127.0.0.1:5500/dashboard.html`
-
-> Nếu backend đang ở domain/port khác frontend, cần thêm proxy hoặc cấu hình CORS phù hợp ở backend.
-
-## Cấu trúc thư mục frontend
+Open `http://127.0.0.1:8000/`. For static-only development, run
+`python -m http.server 5500` inside `frontend/`; this requires a compatible
+backend URL and CORS configuration.
 
 ```text
 frontend/
-├── dashboard.html            # Giao diện dashboard prototype
-├── dashboard.css             # Style cho dashboard
-├── dashboard.js              # Logic map, gọi API, hiển thị route
-├── public/                   # Static assets cho app frontend tương lai
-├── src/
-│   ├── assets/
-│   ├── components/
-│   ├── features/
-│   │   ├── map/
-│   │   ├── route-planner/
-│   │   └── search-visualizer/
-│   ├── hooks/
-│   ├── lib/api/
-│   ├── pages/
-│   ├── services/
-│   ├── store/
-│   ├── styles/
-│   └── types/
-└── tests/
+├── dashboard.html       # Page structure
+├── dashboard.css        # Styling and display states
+├── dashboard.js         # Leaflet, API calls, and trace playback
+├── tests/               # JavaScript logic tests
+├── public/              # Future static assets
+└── src/                 # Future React/TypeScript structure
 ```
 
-## Lưu ý cho team
+The dashboard receives a route and its `search_trace` in one response, then
+replays that trace locally. Run tests with:
 
-- Không commit secret hoặc token vào frontend.
-- Giữ contract request/response đồng bộ với backend (`backend/app/schemas/`).
-- Khi backend đổi endpoint hoặc field dữ liệu, cập nhật tài liệu này và UI tương ứng.
+```bash
+node --test frontend/tests/dashboard.logic.test.js
+```
+
+Keep frontend fields and endpoints synchronized with the backend contract, and
+never place secrets or access tokens in client-side code.
+
+---
+
+## Tiếng Việt
+
+Frontend hiện là dashboard prototype dùng HTML, CSS, JavaScript thuần và
+Leaflet. Các thư mục trong `src/` mới là khung dành cho React/TypeScript trong
+giai đoạn sau, chưa phải ứng dụng có thể build độc lập.
+
+## Chạy dashboard
+
+Cách đơn giản nhất là để FastAPI phục vụ cả giao diện và API:
+
+```bash
+python -m pip install -r backend/requirements.txt
+python -m uvicorn backend.main:app --reload
+```
+
+Sau đó mở `http://127.0.0.1:8000/`.
+
+Nếu chỉ cần xem static frontend, có thể chạy server riêng:
+
+```bash
+cd frontend
+python -m http.server 5500
+```
+
+Cách này cần cấu hình backend URL/CORS phù hợp vì dashboard gọi các endpoint
+`/api/...`.
+
+## Cấu trúc
+
+```text
+frontend/
+├── dashboard.html       # Bố cục giao diện
+├── dashboard.css        # Style và trạng thái hiển thị
+├── dashboard.js         # Leaflet, gọi API và phát search trace
+├── tests/               # Test logic JavaScript
+├── public/              # Static assets tương lai
+└── src/                 # Khung React/TypeScript tương lai
+```
+
+Dashboard nhận route và `search_trace` trong cùng response, sau đó phát lại
+trace ở phía client. Thuật toán không ghi file JSON trong lúc xử lý request.
+
+## Kiểm tra
+
+```bash
+node --test frontend/tests/dashboard.logic.test.js
+```
+
+Khi đổi API field hoặc endpoint, cập nhật đồng thời backend, frontend và tài
+liệu contract. Không đặt token hoặc secret trong mã frontend.

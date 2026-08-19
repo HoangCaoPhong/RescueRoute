@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="light">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,7 +13,7 @@
             rel="stylesheet">
         <link rel="stylesheet"
             href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-        <link rel="stylesheet" href="dashboard.css?v=20260817-theme8">
+        <link rel="stylesheet" href="dashboard.css?v=20260819-light-default">
     </head>
     <body>
         <header class="app-header">
@@ -26,14 +26,9 @@
                 </div>
             </div>
             <div class="header-actions">
-                <span id="connectionStatus" class="connection-badge is-loading"
-                    role="status">
-                    <span class="status-dot" aria-hidden="true"></span>
-                    Đang kết nối API
-                </span>
-                <button id="themeToggleBtn" type="button" class="btn-theme-toggle" onclick="toggleTheme()" aria-label="Chuyển đổi giao diện Sáng / Tối" title="Chuyển đổi giao diện Sáng / Tối">
-                    <span class="theme-icon" aria-hidden="true">🌙</span>
-                    <span class="theme-label">Tối</span>
+                <button id="themeToggleBtn" type="button" class="btn-theme-toggle" onclick="toggleTheme()" aria-label="Chuyển sang chế độ Tối" title="Đang ở chế độ Sáng. Nhấp để chuyển sang Tối">
+                    <span class="theme-icon" aria-hidden="true">☀️</span>
+                    <span class="theme-label">Sáng</span>
                 </button>
                 <a href="/docs" target="_blank" rel="noopener noreferrer"
                     class="btn-docs">Tài liệu API</a>
@@ -578,6 +573,6 @@
         <div id="toast" role="status" aria-live="polite"></div>
 
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script src="dashboard.js?v=20260817-theme8"></script>
+        <script src="dashboard.js?v=20260819-light-default"></script>
     </body>
 </html>

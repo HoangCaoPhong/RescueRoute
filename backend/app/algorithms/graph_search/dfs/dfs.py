@@ -25,14 +25,14 @@ def solve_depth_limited_dfs(
     """
     start_time = perf_counter()
 
-    # Validate input nodes
+    # Kiểm tra node trước khi bắt đầu duyệt sâu.
     if not has_node(graph, start_node_id) or not has_node(graph, goal_node_id):
         raise ValueError(
             f"Start node '{start_node_id}' or "
             f"goal node '{goal_node_id}' does not exist."
         )
 
-    # stack items: (node_id, parent_node_id, depth)
+    # Mỗi phần tử stack gồm (node_id, parent_node_id, depth).
     stack = [(start_node_id, None, 0)]
     visited = set()
     parent = {}
@@ -53,7 +53,6 @@ def solve_depth_limited_dfs(
         visited.add(current_node)
         parent[current_node] = current_parent
 
-        # Goal found
         if current_node == goal_node_id:
             path = reconstruct_path(parent, goal_node_id)
             total_distance, estimated_time, total_cost = calculate_path_metrics(
@@ -102,13 +101,13 @@ def solve_depth_limited_dfs(
         if max_depth is not None and current_depth >= max_depth:
             continue
 
-        # Expand neighbors: push in reverse order so LIFO pops smaller IDs first
+        # Push đảo thứ tự để stack ưu tiên ID nhỏ hơn khi pop.
         neighbors = get_neighbors(graph, current_node)
         for neighbor_node in reversed(neighbors):
             if neighbor_node not in visited:
                 stack.append((neighbor_node, current_node, current_depth + 1))
 
-    # No route found
+    # Hết stack nhưng vẫn giữ partial trace trong lỗi trả về.
     message = f"No route found from '{start_node_id}' to '{goal_node_id}'."
     raise SearchFailure(
         message,
@@ -145,5 +144,4 @@ def solve_dfs(
 
 
 solve_bounded_dfs = solve_depth_limited_dfs
-
 
