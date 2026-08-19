@@ -1,41 +1,52 @@
 # Chỉ mục tài liệu
 
-## Tài liệu nguồn chỉ lưu local
+## English
 
-Các file PDF/DOCX nguồn như đề bài, biên bản họp và kế hoạch triển khai được
-đặt local trong `docs/` khi cần đối chiếu, nhưng bị `.gitignore` loại khỏi
-repository và lịch sử Git. Không thêm lại các file nhị phân này vào commit.
+Markdown documentation is organized by purpose:
 
-Không chỉnh sửa các file nguồn để ghi quyết định mới. Thêm tài liệu Markdown
-vào đúng thư mục dưới đây để Git review được thay đổi.
+| Directory | Content |
+| --- | --- |
+| `architecture/` | Architecture, trace contracts, and technical decisions |
+| `algorithms/` | Algorithm designs, assumptions, and complexity |
+| `api/` | Request/response contracts and examples |
+| `development/` | Benchmarking, testing, and development guides |
+| `diagrams/` | Diagram sources and report figures |
+| `meeting-notes/` | Notes named `YYYY-MM-DD-topic.md` |
 
-## Tài liệu sẽ phát triển
+Recommended starting points:
 
-- `architecture/`: sơ đồ hệ thống, ADR và quyết định kỹ thuật.
-  - `architecture/search-visualization-contract.md`: contract trả kết quả route
-    và trace cho mô phỏng phía frontend.
-  - `architecture/search-trace-history-contract.md`: contract ghi trace thống nhất
-    trong các thuật toán tìm kiếm và chuyển đổi sang response cho UI playback.
-- `algorithms/`: design, pseudocode, flowchart và benchmark của từng thuật toán.
-- `api/`: API contracts, schema và ví dụ request/response.
-  - `api/multi-location-routing.md`: API tối ưu thứ tự waypoint bằng Nearest
-    Neighbor hoặc Held-Karp.
-- `development/`: hướng dẫn môi trường, test, benchmark và release.
-- `diagrams/`: source của flowchart, sequence diagram và hình dùng trong báo cáo.
-- `meeting-notes/`: biên bản họp mới theo ngày `YYYY-MM-DD-topic.md`.
-- `report/`: nội dung, số liệu và tài nguyên cho technical report.
+- [Search visualization contract](architecture/search-visualization-contract.md)
+- [Search trace history contract](architecture/search-trace-history-contract.md)
+- [Backend integration](architecture/backend-integration.md)
+- [Multi-location routing API](api/multi-location-routing.md)
+- [Ambulance GPS API](api/ambulance-gps.md)
+- [Algorithm benchmarking](development/algorithm-benchmarking.md)
+- [Algorithm index](algorithms/README.md)
 
-## Checklist bám đề bài
+Binary assignment files and report drafts are local-only and ignored by Git.
+Record new technical decisions in Markdown so they can be reviewed in diffs.
 
-- [x] Graph có ít nhất 20 node, 30 edge với ngữ cảnh giao thông Việt Nam.
-- [x] Hỗ trợ tìm đường hai điểm và tối ưu nhiều điểm.
-- [x] BFS, DFS, UCS và A* chạy đúng và được so sánh.
-- [x] Có ít nhất hai thuật toán bổ sung (Dijkstra, Hill Climbing).
-- [ ] Cost không chỉ dựa vào khoảng cách; có giải thích trọng số.
-- [x] Heuristic được phân tích admissible/consistent hoặc practical-only.
-- [x] GUI cho chọn điểm, thuật toán, tiêu chí tối ưu và điểm trung gian.
-- [x] GUI mô phỏng visited nodes, frontier và final route từng bước.
-- [x] Kết quả có path, visiting order, explored nodes, distance, time, cost và processing time.
-- [ ] Có giải thích route, tuyến thay thế, ùn tắc và bảo đảm tối ưu.
-- [x] Benchmark các thuật toán trên cùng điều kiện.
-- [ ] Technical report, slide, demo video và dataset đúng định dạng nộp bài.
+---
+
+## Tiếng Việt
+
+Tài liệu Markdown được tổ chức theo mục đích:
+
+| Thư mục | Nội dung |
+| --- | --- |
+| `architecture/` | Kiến trúc, contract trace và quyết định kỹ thuật |
+| `algorithms/` | Thiết kế, giả định và độ phức tạp thuật toán |
+| `api/` | Request/response contract và ví dụ sử dụng |
+| `development/` | Hướng dẫn benchmark, test và phát triển |
+| `diagrams/` | Source sơ đồ và hình dùng trong báo cáo |
+| `meeting-notes/` | Biên bản theo ngày `YYYY-MM-DD-topic.md` |
+
+## Tài liệu nên đọc
+
+- [Search visualization contract](architecture/search-visualization-contract.md)
+- [Search trace history contract](architecture/search-trace-history-contract.md)
+- [Backend integration](architecture/backend-integration.md)
+- [Multi-location routing API](api/multi-location-routing.md)
+- [Ambulance GPS API](api/ambulance-gps.md)
+- [Algorithm benchmarking](development/algorithm-benchmarking.md)
+- [Algorithm index](algorithms/README.md)

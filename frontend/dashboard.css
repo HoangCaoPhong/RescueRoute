@@ -227,7 +227,6 @@ input:disabled {
     transform: translateY(-1px);
 }
 
-.connection-badge,
 .status-badge {
     align-items: center;
     border: 1px solid var(--border);
@@ -240,27 +239,16 @@ input:disabled {
     white-space: nowrap;
 }
 
-.status-dot {
-    background: currentColor;
-    border-radius: 50%;
-    box-shadow: 0 0 0 4px rgba(127, 150, 162, 0.1);
-    height: 7px;
-    width: 7px;
-}
-
-.connection-badge.is-loading,
 .status-badge.neutral {
     color: var(--text-secondary);
 }
 
-.connection-badge.is-online,
 .status-badge.success {
     background: rgba(56, 217, 150, 0.09);
     border-color: rgba(56, 217, 150, 0.28);
     color: var(--emerald);
 }
 
-.connection-badge.is-offline,
 .status-badge.warning {
     background: rgba(255, 102, 132, 0.09);
     border-color: rgba(255, 102, 132, 0.28);
@@ -2294,10 +2282,6 @@ tr.best-row td {
         height: auto;
         min-height: 64px;
         padding: 10px 14px;
-    }
-
-    .connection-badge {
-        display: none;
     }
 
     .workspace {

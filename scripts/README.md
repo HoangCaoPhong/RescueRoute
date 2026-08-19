@@ -1,42 +1,61 @@
-# Dành cho các file .py
+# Scripts
 
-Thư mục này chứa các script python để chạy nghiệm thu graph từ cleaned dataset. 
+## English
 
-## Hướng dẫn chạy Script
+This directory contains data-processing scripts, graph builders, benchmark
+plot utilities, and notebooks for exploratory work.
 
-Để các module import hoạt động chính xác (đặc biệt là các script có gọi `from scripts import ...`), bạn **bắt buộc** phải chạy script từ thư mục gốc của toàn bộ dự án (`RescueRoute/`), **KHÔNG** chạy trực tiếp khi đang đứng bên trong thư mục `scripts/`.
-
-### Ví dụ: Chạy test `dataset_2_graph.py`
-
-Thay vì gõ `python dataset_2_graph.py` bên trong thư mục `scripts/`, hãy mở terminal, di chuyển ra thư mục ngoài cùng và chạy script dưới dạng module (`-m`):
+Run commands from the repository root so internal imports resolve consistently:
 
 ```bash
-# 1. Đảm bảo bạn đang đứng ở thư mục gốc RescueRoute
-cd /path/to/RescueRoute
-
-# 2. Chạy script dưới dạng module
 python -m scripts.dataset_2_graph
+python scripts/build_hcmus_minimap_edges.py
+python scripts/generate_benchmark_plots.py
 ```
 
-Cách chạy này áp dụng cho mọi file python bên trong thư mục `scripts/`.
+| File | Purpose |
+| --- | --- |
+| `dataset_2_graph.py` | Load processed data and build the adjacency graph |
+| `enrich_data.py` | Derive traffic-related fields |
+| `build_hcmus_minimap_edges.py` | Normalize the HCMUS minimap into `edges.csv` |
+| `generate_benchmark_plots.py` | Generate plots from benchmark artifacts |
+| `EDA.ipynb` | Explore and clean data |
+| `benchmark_algorithms.ipynb` | Compare algorithm behavior |
+| `visualize.ipynb` | Inspect graphs and datasets visually |
 
-## Data builders
+Data builders must be reproducible and must not modify `data/raw/` in place.
+Additional notebook/script dependencies are listed in
+`scripts/requirements.txt`.
 
-- `build_simulated_traffic_sample.py`: tạo fixture 40 node/60 edge dùng cho
-  unit test nhỏ.
-- `build_hcmus_minimap_edges.py`: gom các bảng HCMUS minimap thành
-  `edges.csv` có đủ distance, estimated time, congestion và road type.
-- `dataset_2_graph.py`: nạp processed data thành adjacency graph cho runtime.
+---
 
-Chạy data builder từ root project, ví dụ:
+## Tiếng Việt
+
+Thư mục này chứa script xử lý dữ liệu, dựng graph và tạo biểu đồ benchmark.
+Notebook dùng cho EDA và thử nghiệm thủ công.
+
+## Chạy đúng thư mục
+
+Chạy lệnh từ thư mục gốc repository để import nội bộ hoạt động ổn định:
 
 ```bash
+python -m scripts.dataset_2_graph
 python scripts/build_hcmus_minimap_edges.py
+python scripts/generate_benchmark_plots.py
 ```
 
-# Dành cho các file .ipynb
+## Nội dung chính
 
-Thư mục này cũng chứa các notebook Jupyter để clean dữ liệu, trực quan hóa graph và thử nghiệm thuật toán. Các notebook này có thể được mở trực tiếp trong VSCode hoặc Jupyter Notebook.
+| File | Mục đích |
+| --- | --- |
+| `dataset_2_graph.py` | Đọc dữ liệu processed và dựng adjacency graph |
+| `enrich_data.py` | Tạo các trường dẫn xuất cho dữ liệu giao thông |
+| `build_hcmus_minimap_edges.py` | Chuẩn hóa minimap HCMUS thành `edges.csv` |
+| `generate_benchmark_plots.py` | Tạo hình từ artifact benchmark |
+| `EDA.ipynb` | Khám phá và làm sạch dữ liệu |
+| `benchmark_algorithms.ipynb` | Thử nghiệm so sánh thuật toán |
+| `visualize.ipynb` | Kiểm tra trực quan graph/dữ liệu |
 
-## Cách chạy
-Kết nối với kernel python/jupyter rồi chạy bình thường từ đầu đến cuối thôi.
+Script sinh dữ liệu phải cho kết quả tái lập được và không sửa trực tiếp file
+trong `data/raw/`. Dependency riêng cho notebook/script nằm trong
+`scripts/requirements.txt`.

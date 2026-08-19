@@ -1,21 +1,45 @@
-# Dijkstra's Algorithm
+# Dijkstra
 
-- Owner: Hòa
-- Branch: `feature/dijkstra-search`
-- Test folder: `backend/tests/unit/algorithms/graph_search/dijkstra/`
-- Docs folder: `docs/algorithms/dijkstra/`
+## English
 
-## API and guarantees
+Entry point:
 
-`solve_dijkstra(graph, start_node_id, goal_node_id, edge_cost=...)` is a
-dedicated public entry point backed by the shared priority-search
-implementation with `h = 0`. It is complete and optimal for the selected
-non-negative edge weight. The default demo service supplies road distance as
-that weight. Trace events expose each node's accumulated cost and an
-unreachable goal preserves the partial trace in `SearchFailure`.
+```python
+solve_dijkstra(graph, start_node_id, goal_node_id,
+               cost_profile=None, edge_cost=None)
+```
 
-## Expected output
+The implementation uses the shared priority-search core with a zero heuristic.
+The `edge_cost` callback selects the weight to optimize; the current demo
+service supplies physical road distance for Dijkstra.
 
-The algorithm returns the route path, visited order, frontier snapshots,
-computed total distance, estimated time, total cost, explored node count,
-processing time, optimality flag, and structured explanation data for the UI.
+- Complete and optimal when all reachable weights are finite and non-negative.
+- Does not mutate the input graph.
+- Returns the shared A*/UCS result and trace shape.
+- Raises `SearchFailure` with a partial trace when no route exists.
+
+Tests: `backend/tests/unit/algorithms/graph_search/dijkstra/`.
+
+---
+
+## Tiếng Việt
+
+Entry point:
+
+```python
+solve_dijkstra(graph, start_node_id, goal_node_id,
+               cost_profile=None, edge_cost=None)
+```
+
+Implementation dùng priority search chung với heuristic bằng 0. Callback
+`edge_cost` quyết định trọng số cần tối ưu; demo hiện truyền khoảng cách đường
+cho Dijkstra.
+
+## Bảo đảm
+
+- Hoàn chỉnh và tối ưu khi mọi trọng số có thể đi tới đều hữu hạn, không âm.
+- Không sửa graph đầu vào.
+- Trả cùng result/trace contract với A* và UCS.
+- Khi không có đường, ném `SearchFailure` kèm partial trace.
+
+Test: `backend/tests/unit/algorithms/graph_search/dijkstra/`.

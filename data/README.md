@@ -1,37 +1,55 @@
-# Dataset workspace
+# Dữ liệu
+
+## English
 
 ```text
 data/
-├── raw/          # Dữ liệu nguồn, giữ nguyên sau khi nhập
-├── processed/    # Dữ liệu đã clean/normalize dùng cho ứng dụng
-└── samples/      # Bộ nhỏ, ổn định cho test và demo
+├── raw/          # Upstream data; never edited manually
+├── processed/    # Cleaned data used by the runtime
+└── samples/      # Stable fixtures for tests and demonstrations
 ```
 
-Mọi dataset cần mô tả nguồn, schema, đơn vị và giả định. Không commit GPS thật của người dùng hoặc dữ liệu định danh cá nhân.
+### Available datasets
 
-Dataset mẫu nên bao phủ tối thiểu:
+- [Simulated Vietnamese traffic](samples/simulated_vietnamese_traffic/README.md):
+  a deterministic fixture with 40 nodes and 60 directed edges.
+- [HCMUS surrounding minimap](samples/HCMUS_surrounding_filter/Minimap_ouput/README.md):
+  a graph with 3,364 nodes and 4,918 directed edges around HCMUS and nearby
+  hospitals.
+- [Processed data](processed/README.md): the dataset currently loaded into
+  memory by the dashboard backend.
 
-- Đường một chiều và hai chiều.
-- Nhiều tuyến hợp lệ giữa cùng hai node.
-- Một node không thể đến được.
-- Cạnh ùn tắc/rủi ro cao.
-- Trường hợp tuyến ngắn nhất theo distance không tốt nhất theo total cost.
-- Nhiều điểm cần tối ưu thứ tự ghé.
+Every dataset must document its source, schema, units, and fallback assumptions.
+Node and edge IDs must remain stable, coordinates use WGS84, and real user GPS
+or personally identifiable data must never be committed. Algorithm comparisons
+must use the same dataset version and cost profile.
 
-Tất cả thuật toán phải benchmark trên cùng phiên bản dataset và cost profile.
+---
 
-## Dataset mẫu hiện có
+## Tiếng Việt
 
-- [`samples/simulated_vietnamese_traffic/`](samples/simulated_vietnamese_traffic/README.md):
-  graph giao thông TP.HCM gồm 40 node và 60 cạnh, cắt cùng ngày `2020-08-02`,
-  cùng khung giờ `23:30`, dùng cho unit test nhỏ và đối chiếu đúng
-  ngưỡng 20 node/30 edge của đề.
-- [`samples/HCMUS_surrounding_filter/Minimap_ouput/`](samples/HCMUS_surrounding_filter/Minimap_ouput/README.md):
-  graph khu vực HCMUS và các bệnh viện lân cận, gồm 3.364 node và
-  4.918 cạnh có hướng. `edges.csv` là contract chuẩn hóa có distance,
-  estimated time, congestion và road type cho demo/benchmark tích hợp.
+```text
+data/
+├── raw/          # Dữ liệu nguồn, không sửa thủ công
+├── processed/    # Dữ liệu đã làm sạch dùng bởi runtime
+└── samples/      # Fixture ổn định cho test và demo
+```
 
-Runtime dashboard hiện vẫn đọc graph từ `data/processed/` qua
-`scripts/dataset_2_graph.py`. Hai folder sample là fixture ổn định; việc chuyển
-runtime sang HCMUS minimap nên được thực hiện qua một data adapter riêng,
-không hard-code schema CSV trong từng thuật toán.
+## Bộ dữ liệu hiện có
+
+- [Simulated Vietnamese traffic](samples/simulated_vietnamese_traffic/README.md):
+  fixture 40 node, 60 cạnh để test xác định.
+- [HCMUS surrounding minimap](samples/HCMUS_surrounding_filter/Minimap_ouput/README.md):
+  graph 3.364 node, 4.918 cạnh quanh HCMUS và các bệnh viện lân cận.
+- [Processed data](processed/README.md): dữ liệu mà dashboard hiện nạp vào RAM.
+
+## Quy ước
+
+- Mỗi dataset phải ghi nguồn, schema, đơn vị và giả định fallback.
+- ID node/cạnh phải ổn định; tọa độ dùng WGS84.
+- Không commit GPS người dùng thật hoặc dữ liệu định danh cá nhân.
+- So sánh thuật toán phải dùng cùng phiên bản dữ liệu và cùng cost profile.
+- `raw/` chỉ dùng làm nguồn; các biến đổi phải đi qua script có thể chạy lại.
+
+Các fixture nên bao phủ đường một chiều, nhiều tuyến hợp lệ, node không thể tới,
+cạnh ùn tắc/rủi ro cao và bài toán nhiều waypoint.
