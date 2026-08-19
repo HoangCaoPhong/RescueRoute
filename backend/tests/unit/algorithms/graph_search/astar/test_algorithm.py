@@ -50,8 +50,8 @@ def test_astar_reports_search_frontier():
         WEIGHTED_GRAPH, "A", "D", lambda node, _goal: HEURISTIC[node]
     )
 
-    assert result["frontier_steps"][0] == ["A"]
-    assert result["frontier_steps"][1] == ["B", "C"]
+    assert [item["node_id"] for item in result["frontier_steps"][0]] == ["A"]
+    assert [item["node_id"] for item in result["frontier_steps"][1]] == ["B", "C"]
     assert result["visited_order"] == ["A", "B", "D"]
 
 

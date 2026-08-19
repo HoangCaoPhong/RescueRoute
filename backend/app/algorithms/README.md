@@ -45,7 +45,7 @@ Input:
 Output:
 - path
 - visited_order
-- frontier_steps/search_events
+- trace_history
 - total_distance
 - estimated_time
 - total_cost

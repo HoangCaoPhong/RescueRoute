@@ -29,7 +29,7 @@ def test_hill_climbing_start_equals_goal():
 
     assert result["path"] == ["A"]
     assert result["explored_nodes"] == 1
-    assert result["frontier_steps"] == []
+    assert result["frontier_steps"] == [[]]
 
 
 def test_hill_climbing_reports_ranked_candidates():
@@ -37,7 +37,7 @@ def test_hill_climbing_reports_ranked_candidates():
         GRAPH, "A", "D", lambda node, _goal: HEURISTIC[node]
     )
 
-    assert result["frontier_steps"][0] == ["B", "C"]
+    assert [item["node_id"] for item in result["frontier_steps"][0]] == ["B", "C"]
     assert result["heuristic_steps"][0] == {
         "current": "A",
         "current_heuristic": 4,

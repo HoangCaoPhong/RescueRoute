@@ -1,9 +1,9 @@
 flowchart TD
-    Start([Bắt đầu]) --> Init["Khởi tạo: <br/>Stack = [(start_node, [start_node])]<br/>explored_set = {}<br/>visited_order = []<br/>frontier_steps = []"]
+    Start([Bắt đầu]) --> Init["Khởi tạo: <br/>Stack = [(start_node, [start_node])]<br/>explored_set = {}<br/>visited_order = []<br/>trace_history = SearchTraceHistory()"]
     Init --> LoopCheck{"Stack rỗng?"}
     
     LoopCheck -- Có --> NoPath["Ném ngoại lệ: NoRouteFoundException"]
-    LoopCheck -- Không --> RecordFrontier["Ghi nhận trạng thái Stack vào frontier_steps"]
+    LoopCheck -- Không --> RecordFrontier["Ghi nhận trạng thái Stack vào trace_history"]
     
     RecordFrontier --> PopStack["Pop (current_node, path) từ Stack"]
     PopStack --> VisitedCheck{"current_node in explored_set?"}

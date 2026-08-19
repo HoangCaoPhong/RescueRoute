@@ -34,7 +34,7 @@ Depth-First Search (DFS) trong hệ thống tối ưu hóa lộ trình xe cấp 
 - **Output (`SearchResult`)**:
   - `path`: `list[str]` - Danh sách node ID theo thứ tự từ start đến goal.
   - `visited_order`: `list[str]` - Thứ tự mở rộng các node để frontend mô phỏng.
-  - `frontier_steps`: `list[list[str]]` - Lịch sử trạng thái của Stack ở từng bước duyệt.
+  - `trace_history.events`: `list[dict]` - Lịch sử trạng thái của Stack ở từng bước duyệt.
   - `total_distance`: `float` - Tổng khoảng cách lộ trình (mét).
   - `estimated_time`: `float` - Thời gian di chuyển ước tính (giây).
   - `total_cost`: `float` - Tổng chi phí theo Cost Function chung của dự án.
@@ -52,13 +52,13 @@ def solve_dfs(graph, start_node_id, goal_node_id, cost_profile) -> SearchResult:
     # 1. Initialize Stack with tuple (current_node, path_to_node)
     stack = [(start_node_id, [start_node_id])]
     visited_order = []
-    frontier_steps = []
+    trace_history = SearchTraceHistory()
     explored_set = set()
     
     # 2. Main Search Loop
     while stack is not None and len(stack) > 0:
-        # Record frontier state for animation
-        frontier_steps.append([node for node, _ in stack])
+        # Lưu trạng thái biên
+        trace_history.record_expansion(current_node, [node for node, _ in stack])
         
         current_node, path = stack.pop()
         
@@ -74,7 +74,7 @@ def solve_dfs(graph, start_node_id, goal_node_id, cost_profile) -> SearchResult:
             return SearchResult(
                 path=path,
                 visited_order=visited_order,
-                frontier_steps=frontier_steps,
+                trace_history=trace_history,
                 total_distance=total_distance,
                 estimated_time=estimated_time,
                 total_cost=total_cost,
@@ -103,11 +103,11 @@ def solve_dfs(graph, start_node_id, goal_node_id, cost_profile) -> SearchResult:
 
 ```mermaid
 flowchart TD
-    Start([Bắt đầu]) --> Init["Khởi tạo: <br/>Stack = [(start_node, [start_node])]<br/>explored_set = {}<br/>visited_order = []<br/>frontier_steps = []"]
+    Start([Bắt đầu]) --> Init["Khởi tạo: <br/>Stack = [(start_node, [start_node])]<br/>explored_set = {}<br/>visited_order = []<br/>trace_history = SearchTraceHistory()"]
     Init --> LoopCheck{"Stack rỗng?"}
     
     LoopCheck -- Có --> NoPath["Ném ngoại lệ: NoRouteFoundException"]
-    LoopCheck -- Không --> RecordFrontier["Ghi nhận trạng thái Stack vào frontier_steps"]
+    LoopCheck -- Không --> RecordFrontier["Ghi nhận trạng thái Stack vào trace_history"]
     
     RecordFrontier --> PopStack["Pop (current_node, path) từ Stack"]
     PopStack --> VisitedCheck{"current_node in explored_set?"}
@@ -146,8 +146,8 @@ class SearchResult:
         self,
         path: List[str],
         visited_order: List[str],
-        frontier_steps: List[List[str]],
-        total_distance: float,
+        trace_history: Any,
+    ):    total_distance: float,
         estimated_time: float,
         total_cost: float,
         explored_nodes: int,
@@ -157,7 +157,7 @@ class SearchResult:
     ):
         self.path = path
         self.visited_order = visited_order
-        self.frontier_steps = frontier_steps
+        self.trace_history = trace_history
         self.total_distance = total_distance
         self.estimated_time = estimated_time
         self.total_cost = total_cost
@@ -194,12 +194,12 @@ def solve_dfs(
     # Stack chứa các tuple: (current_node_id, path_so_far)
     stack: List[Tuple[str, List[str]]] = [(start_node_id, [start_node_id])]
     visited_order: List[str] = []
-    frontier_steps: List[List[str]] = []
+    trace_history = SearchTraceHistory()
     explored_set: Set[str] = set()
     
     while stack:
-        # Ghi nhận trạng thái Stack cho frontend mô phỏng (frontier animation)
-        frontier_steps.append([node_id for node_id, _ in stack])
+        # Lưu snapshot của Stack hiện tại
+        trace_history.record_expansion(current_node_id, [node_id for node_id, _ in stack])
         
         current_node, path = stack.pop()
         
@@ -220,7 +220,7 @@ def solve_dfs(
             return SearchResult(
                 path=path,
                 visited_order=visited_order,
-                frontier_steps=frontier_steps,
+                trace_history=trace_history,
                 total_distance=total_distance,
                 estimated_time=estimated_time,
                 total_cost=total_cost,
