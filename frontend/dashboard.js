@@ -992,8 +992,8 @@ function finiteMetric(value) {
         : Number.POSITIVE_INFINITY;
 }
 
-async function runRouteSegment(startId, goalId, algorithm) {
-    const cacheKey = `${algorithm}:${startId}:${goalId}`;
+async function runRouteSegment(startId, goalId, algorithm, criterion = "cost") {
+    const cacheKey = `${algorithm}:${criterion}:${startId}:${goalId}`;
     if (routeRequestCache.has(cacheKey)) return routeRequestCache.get(cacheKey);
 
     const request = fetchJson(`${API_BASE}/route`, {
@@ -1003,6 +1003,7 @@ async function runRouteSegment(startId, goalId, algorithm) {
             start_node_id: startId,
             goal_node_id: goalId,
             algorithm,
+            criterion
         }),
     })
         .then((data) => {
@@ -1027,13 +1028,14 @@ async function runOrderedRoute(
     nodeOrder,
     algorithm,
     progressCallback = () => { },
+    criterion = "cost"
 ) {
     const segments = [];
     for (let index = 0; index < nodeOrder.length - 1; index += 1) {
         progressCallback(index + 1, nodeOrder.length - 1);
         const start = nodeOrder[index];
         const goal = nodeOrder[index + 1];
-        const result = await runRouteSegment(start, goal, algorithm);
+        const result = await runRouteSegment(start, goal, algorithm, criterion);
         segments.push({ start, goal, result });
     }
     return segments;
@@ -1167,6 +1169,7 @@ async function calculateRoute() {
                         `Đang tính thứ tự ban đầu: chặng ${current}/${total}…`,
                     );
                 },
+                input.criterion
             );
             originalAggregate = aggregateSegments(originalSegments, originalOrder);
 
@@ -1187,6 +1190,7 @@ async function calculateRoute() {
                 (current, total) => {
                     setOperationStatus(`Đang tìm chặng ${current}/${total}…`);
                 },
+                input.criterion
             );
         }
 
@@ -2115,7 +2119,8 @@ function renderSearchStep(stepIndex) {
             normalizeNodeCoordinateKey(nodeId) !==
             normalizeNodeCoordinateKey(step.current_node),
     );
-    const rawFrontier = Array.isArray(step.frontier) ? step.frontier : [];
+    const targetFrontierStep = safeIndex < steps.length - 1 ? steps[safeIndex + 1] : step;
+    const rawFrontier = Array.isArray(targetFrontierStep.frontier) ? targetFrontierStep.frontier : [];
     const frontier = rawFrontier.filter(
         (item) =>
             normalizeNodeCoordinateKey(item.node_id) !==
@@ -2126,7 +2131,7 @@ function renderSearchStep(stepIndex) {
     );
     const fullFrontierCount = Math.max(
         0,
-        Number(step.frontier_size ?? rawFrontier.length) -
+        Number(targetFrontierStep.frontier_size ?? rawFrontier.length) -
         (currentWasInFrontier ? 1 : 0),
     );
     const nodeCoords = searchVisualizationData.node_coords || {};
@@ -2583,7 +2588,7 @@ async function compareAlgorithms() {
                 `Đang chạy ${ALGORITHM_SPECS[algorithm].label} (${index + 1}/${algorithms.length})…`,
             );
             try {
-                const segments = await runOrderedRoute(nodeOrder, algorithm);
+                const segments = await runOrderedRoute(nodeOrder, algorithm, () => {}, input.criterion);
                 results.push({
                     algorithm,
                     aggregate: aggregateSegments(segments, nodeOrder),

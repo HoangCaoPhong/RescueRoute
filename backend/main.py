@@ -271,11 +271,13 @@ class NearestHospitalRouteRequest(BaseModel):
     start_node_id: Optional[int] = None
     algorithm: str = "astar"
     emergency_only: bool = True
+    criterion: Literal["cost", "distance", "hops", "time"] = "cost"
 
 class RouteRequest(BaseModel):
     start_node_id: Optional[int] = None
     goal_node_id: int
     algorithm: str = "astar"
+    criterion: Literal["cost", "distance", "hops", "time"] = "cost"
 
 class MultiLocationRouteRequest(BaseModel):
     start_node_id: Optional[int] = None
@@ -501,9 +503,9 @@ def calculate_route(body: RouteRequest):
 
     # Nếu goal_node_id <= 0 -> Chế độ tự động dò tìm BV gần nhất trên đồ thị (Multi-Goal Search)
     if body.goal_node_id is None or body.goal_node_id <= 0:
-        return run_search_nearest_hospital(graph_mgr, start_id, body.algorithm, emergency_only=True)
+        return run_search_nearest_hospital(graph_mgr, start_id, body.algorithm, emergency_only=True, criterion=body.criterion)
 
-    return run_search(graph_mgr, start_id, body.goal_node_id, body.algorithm)
+    return run_search(graph_mgr, start_id, body.goal_node_id, body.algorithm, criterion=body.criterion)
 
 @app.post("/api/route/multi-location", response_model=MultiLocationRouteResponse)
 @app.post("/api/v1/route/multi-location", response_model=MultiLocationRouteResponse)
@@ -540,7 +542,7 @@ def calculate_nearest_hospital_route(body: NearestHospitalRouteRequest):
         nearest_node, _ = graph_mgr.find_nearest_road_node(graph_mgr.ambulance_lat, graph_mgr.ambulance_lng)
         start_id = nearest_node["id"] if nearest_node else list(graph_mgr.road_nodes.keys())[0]
 
-    return run_search_nearest_hospital(graph_mgr, start_id, body.algorithm, emergency_only=body.emergency_only)
+    return run_search_nearest_hospital(graph_mgr, start_id, body.algorithm, emergency_only=body.emergency_only, criterion=body.criterion)
 
 
 @app.post("/api/edges/congestion")
