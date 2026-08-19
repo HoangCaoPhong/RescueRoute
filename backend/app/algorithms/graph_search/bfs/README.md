@@ -70,13 +70,13 @@ visited_order = []
 
 Lưu thứ tự các node được mở rộng, phục vụ kiểm thử, visualization và demo thuật toán.
 
-### Frontier Steps
+### Trace History
 
 ```python
-frontier_steps = []
+trace_history = SearchTraceHistory()
 ```
 
-Lưu trạng thái queue trước mỗi bước mở rộng để frontend có thể mô phỏng quá trình BFS.
+Lưu trạng thái queue trước mỗi bước mở rộng vào tập events để frontend có thể mô phỏng quá trình BFS.
 
 Ví dụ:
 
@@ -117,7 +117,7 @@ BFS hiện chuẩn bị các field theo contract chung:
 ```text
 path
 visited_order
-frontier_steps
+trace_history
 total_distance
 estimated_time
 total_cost
@@ -137,7 +137,7 @@ hop_count
 
 - `path`: danh sách node từ start đến goal.
 - `visited_order`: thứ tự node được mở rộng.
-- `frontier_steps`: trạng thái queue qua từng bước.
+- `trace_history`: chứa events mô tả trạng thái queue qua từng bước.
 - `total_distance`: tổng khoảng cách của final path.
 - `estimated_time`: tổng thời gian ước tính của final path.
 - `total_cost`: tổng traffic cost của final path.
@@ -212,7 +212,7 @@ Input:
 Output:
     path
     visited_order
-    frontier_steps
+    trace_history
     total_distance
     estimated_time
     total_cost
@@ -234,13 +234,13 @@ BEGIN
     visited <- {start_node_id}
     parent[start_node_id] <- NULL
     visited_order <- empty list
-    frontier_steps <- empty list
+    trace_history <- init SearchTraceHistory
 
     START processing timer
 
     WHILE queue is not empty DO
 
-        SAVE current queue into frontier_steps
+        SAVE current queue into trace_history
 
         current_node <- DEQUEUE queue
 
@@ -261,7 +261,7 @@ BEGIN
             RETURN result containing:
                 path
                 visited_order
-                frontier_steps
+                trace_history
                 total_distance
                 estimated_time
                 total_cost
@@ -343,11 +343,11 @@ flowchart TD
     C{Start and goal<br/>exist in graph?}
 
     D[Initialize FIFO queue]
-    E[visited = start<br/>parent start = None<br/>visited_order = empty<br/>frontier_steps = empty]
+    E[visited = start<br/>parent start = None<br/>visited_order = empty<br/>trace_history = empty]
 
     F{Queue empty?}
 
-    G[Save queue state<br/>to frontier_steps]
+    G[Save queue state<br/>to trace_history]
     H[current_node = queue.popleft]
     I[Add current_node<br/>to visited_order]
 
@@ -433,7 +433,7 @@ O(V)
 
 Bộ nhớ chính dùng cho queue, visited, parent và visited_order.
 
-`frontier_steps` được lưu để phục vụ visualization nên có thể làm tăng lượng bộ nhớ thực tế so với BFS tối giản.
+`trace_history` được lưu để phục vụ visualization nên có thể làm tăng lượng bộ nhớ thực tế so với BFS tối giản.
 
 ---
 
@@ -565,7 +565,7 @@ Các trường hợp nên được kiểm tra:
 3. no path exists
 4. directed edge is respected
 5. node is not expanded twice
-6. frontier_steps are recorded correctly
+6. trace_history events are recorded correctly
 ```
 
 Unit test chỉ kiểm tra correctness của BFS bằng graph nhỏ, không gọi API, database hoặc Internet.

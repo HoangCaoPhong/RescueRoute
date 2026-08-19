@@ -58,7 +58,6 @@ def solve_hill_climbing(
     path: list[NodeId] = [current]
     visited = {current}
     trace_history = SearchTraceHistory()
-    frontier_steps: list[list[NodeId]] = []
     heuristic_steps: list[dict[str, Any]] = []
 
     while True:
@@ -68,7 +67,6 @@ def solve_hill_climbing(
                 graph, path, cost_profile, edge_cost
             )
             trace_fields = trace_history.as_result_fields()
-            trace_fields["frontier_steps"] = frontier_steps
             return {
                 "found": True,
                 "path": path,
@@ -94,19 +92,16 @@ def solve_hill_climbing(
             trace_history.record_expansion(current, [])
             _raise_search_failure(
                 trace_history,
-                frontier_steps,
                 started_at,
                 f"Hill Climbing did not reach '{goal_node_id}' within {max_steps} steps.",
             )
 
         candidates = [node for node in get_neighbors(graph, current) if node not in visited]
         ranked = sorted((estimate(node), repr(node), node) for node in candidates)
-        frontier_steps.append([node for _score, _key, node in ranked])
         if not ranked:
             trace_history.record_expansion(current, [])
             _raise_search_failure(
                 trace_history,
-                frontier_steps,
                 started_at,
                 f"Hill Climbing reached a dead end at '{current}' before '{goal_node_id}'.",
             )
@@ -130,7 +125,6 @@ def solve_hill_climbing(
         if not improves and not sideways:
             _raise_search_failure(
                 trace_history,
-                frontier_steps,
                 started_at,
                 f"Hill Climbing reached a local optimum at '{current}' before "
                 f"'{goal_node_id}'.",
@@ -152,12 +146,10 @@ def solve_hill_climbing(
 
 def _raise_search_failure(
     trace_history: SearchTraceHistory,
-    frontier_steps: list[list[NodeId]],
     started_at: float,
     message: str,
 ) -> None:
     trace_fields = trace_history.as_result_fields()
-    trace_fields["frontier_steps"] = frontier_steps
     raise SearchFailure(
         message,
         {

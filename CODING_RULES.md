@@ -44,7 +44,7 @@ Tất cả thuật toán tìm đường hai điểm phải nhận cùng một gr
 
 - `path`: danh sách node theo đúng thứ tự.
 - `visited_order`: thứ tự node đã mở rộng để frontend mô phỏng.
-- `frontier_steps` hoặc event tương đương cho diễn tiến tìm kiếm.
+- `trace_history.events` cho diễn tiến tìm kiếm.
 - `total_distance`, `estimated_time`, `total_cost`.
 - `explored_nodes`, `processing_time_ms`.
 - `is_optimal` và mô tả điều kiện đảm bảo tối ưu.

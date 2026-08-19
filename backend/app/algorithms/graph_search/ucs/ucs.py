@@ -59,7 +59,6 @@ def solve_ucs(
 
     expanded_at_cost: dict[NodeId, float] = {}
     trace_history = SearchTraceHistory()
-    legacy_frontier_steps: list[list[NodeId]] = []
 
     while open_heap:
         current_g, _order, current = heappop(open_heap)
@@ -71,7 +70,7 @@ def solve_ucs(
             continue
 
         # Build canonical frontier snapshot before expansion
-        if len(legacy_frontier_steps) < 5000:
+        if trace_history.explored_nodes < 5000:
             remaining_frontier = _active_frontier(
                 open_heap,
                 g_score,
@@ -83,12 +82,8 @@ def solve_ucs(
                 current,
                 [current_item, *remaining_frontier],
             )
-            legacy_frontier_steps.append(
-                [current, *[item["node_id"] for item in remaining_frontier]]
-            )
         else:
             trace_history.record_expansion(current, [])
-            legacy_frontier_steps.append([current])
         expanded_at_cost[current] = current_g
 
 
@@ -98,7 +93,6 @@ def solve_ucs(
                 graph, path, cost_profile, edge_cost
             )
             trace_fields = trace_history.as_result_fields()
-            trace_fields["frontier_steps"] = legacy_frontier_steps
             return {
                 "found": True,
                 "path": path,
@@ -131,7 +125,6 @@ def solve_ucs(
 
     message = f"No route found from '{start_node_id}' to '{goal_node_id}'."
     trace_fields = trace_history.as_result_fields()
-    trace_fields["frontier_steps"] = legacy_frontier_steps
     raise SearchFailure(
         message,
         {
