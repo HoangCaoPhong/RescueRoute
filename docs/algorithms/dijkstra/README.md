@@ -1,72 +1,73 @@
-# Dijkstra
+# Thiết kế Dijkstra
 
-## Objective
+## English
 
-Dijkstra finds the shortest path from a source node to a target node in a graph with non-negative edge weights. In RescueRoute, this algorithm is used to identify the optimal route when the selected edge weight is either road distance or a traffic-configured cost profile.
+### Objective
 
-## Assumptions
+Dijkstra finds a minimum-total-weight route on a graph with non-negative edge
+weights. The selected weight may be physical distance or a caller-provided cost,
+but it must remain consistent throughout one run.
 
-- The graph may be directed or undirected and is represented explicitly.
-- All edge weights are non-negative.
-- The input graph is not modified during execution.
-- Optimality is guaranteed whenever edge weights are non-negative.
+### Pseudocode
 
-## Candidate route and objective
+```text
+distance[start] <- 0
+open <- priority queue containing (0, start)
 
-- Candidate route: the path from `start_node_id` to `goal_node_id`.
-- Objective function: the total route cost, computed as the sum of edge weights according to `resolve_edge_cost`.
-- When the weight is distance, the resulting value reflects distance; when it is a traffic cost profile, `total_cost` reflects the configured route cost.
+while open is not empty:
+    current <- node with the lowest accumulated weight
+    skip stale entries and record the frontier
+    if current is goal: reconstruct and return the path
 
-## Algorithm
+    for each neighbor:
+        candidate <- distance[current] + edge_weight(current, neighbor)
+        if candidate improves distance[neighbor]:
+            update distance, parent, and open
 
-1. Initialize the distance from the start node to 0 and all other nodes to infinity.
-2. Select the unvisited node with the smallest current distance.
-3. Examine its neighbors and relax the distances when a better path is found.
-4. Continue until all reachable nodes are processed or the goal is reached.
-5. Reconstruct the route by walking backward through the parent map.
+report no route with a partial trace
+```
+
+Dijkstra is complete and optimal with finite, non-negative weights. Using a
+binary heap, it runs in `O((V + E) log V)` time. Tests compare it with UCS and
+A* using `h=0`, and cover custom weights, directed graphs, invalid inputs, and
+no-route traces.
+
+---
+
+## Tiếng Việt
+
+## Mục tiêu
+
+Dijkstra tìm tuyến có tổng trọng số nhỏ nhất trên graph có trọng số không âm.
+Trọng số có thể là khoảng cách hoặc cost do caller cung cấp, nhưng phải được
+dùng nhất quán trong toàn bộ lần chạy.
 
 ## Pseudocode
 
 ```text
-dist[start] = 0
-priority_queue = [(0, start)]
-parent = {start: None}
+distance[start] <- 0
+open <- priority queue chứa (0, start)
 
-while queue is not empty:
-    current = node with minimum dist
-    if current == goal:
-        break
-    for neighbor in graph[current]:
-        new_cost = dist[current] + edge_cost(current, neighbor)
-        if new_cost < dist[neighbor]:
-            dist[neighbor] = new_cost
-            parent[neighbor] = current
-            push(neighbor, new_cost)
+while open không rỗng:
+    current <- node có accumulated weight nhỏ nhất
+    bỏ qua heap entry cũ
+    ghi frontier vào trace
+    nếu current là goal: dựng lại path và trả kết quả
 
-return reconstruct_path(parent, goal)
+    với mỗi neighbor:
+        candidate <- distance[current] + edge_weight(current, neighbor)
+        nếu candidate tốt hơn distance[neighbor]:
+            cập nhật distance, parent và open
+
+báo không có đường kèm partial trace
 ```
 
-## Stop condition
+## Thuộc tính
 
-- Stop when the goal node is extracted from the priority queue.
-- If no route exists, return a `SearchFailure` with partial trace information.
+- Tối ưu và complete khi mọi trọng số hữu hạn, không âm.
+- Thời gian `O((V + E) log V)` với binary heap.
+- Bộ nhớ `O(V + E)` tùy số heap entry đang giữ.
+- Không cần heuristic.
 
-## Optimality
-
-- The algorithm is fully optimal for graphs with non-negative edge weights.
-- It does not require a heuristic because it expands the lowest accumulated cost first.
-
-## Trace and UI
-
-The algorithm records search history using `SearchTraceHistory`, including:
-- `visited_order`
-- `frontier_steps`
-- `trace_history.events`
-
-This is compatible with the UI playback for visited nodes and frontier evolution.
-
-## Example benchmark
-
-- Sample graph: 5–10 nodes with a mix of short and long edges.
-- Expected result: the selected path minimizes total cost and avoids unnecessary detours.
-- Compared with A* and UCS on the same graph, it yields the same optimal route but differs in expansion order and trace layout.
+Test so sánh kết quả với UCS/A* dùng `h=0`, đồng thời kiểm tra edge weight tùy
+chọn, graph có hướng, input không hợp lệ và no-route trace.

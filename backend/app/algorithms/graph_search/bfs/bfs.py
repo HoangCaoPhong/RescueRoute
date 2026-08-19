@@ -23,29 +23,26 @@ def solve_bfs(graph, start_node_id, goal_node_id, cost_profile=None):
 
     start_time = perf_counter()
 
-    # Validate input
+    # Kiểm tra hai node đầu vào trước khi tạo frontier.
     if (not has_node(graph, start_node_id) or not has_node(graph, goal_node_id)):
         raise ValueError(
             f"Start node '{start_node_id}' or "
             f"goal node '{goal_node_id}' does not exist."
         )
 
-    # BFS initialization
+    # Hàng đợi FIFO giữ đúng thứ tự duyệt theo từng tầng.
     queue = deque([start_node_id])
     visited = {start_node_id}
     parent = {start_node_id: None}
     
     trace_history = SearchTraceHistory()
 
-    # BFS search
     while queue:
-
-        # The template keeps the frontier snapshot before this expansion.
+        # Chụp frontier ngay trước khi mở rộng node hiện tại.
         current_node = queue[0]
         trace_history.record_expansion(current_node, queue)
         current_node = queue.popleft()
 
-        # Goal found
         if current_node == goal_node_id:
 
             path = reconstruct_path(parent, goal_node_id)
@@ -65,7 +62,7 @@ def solve_bfs(graph, start_node_id, goal_node_id, cost_profile=None):
                 "explored_nodes": trace_history.explored_nodes,
                 "processing_time_ms": processing_time_ms,
 
-                # BFS is optimal for minimum number of hops.
+                # BFS chỉ tối ưu theo số cạnh khi mọi cạnh ngang nhau.
                 "is_optimal": True,
 
                 "explanation_data": {
@@ -83,17 +80,14 @@ def solve_bfs(graph, start_node_id, goal_node_id, cost_profile=None):
                 "hop_count": len(path) - 1
             }
 
-        # Expand neighbors
         for neighbor_node in get_neighbors(graph, current_node):
             if neighbor_node not in visited:
-
-                # Mark visited when inserted into queue
-                # to prevent duplicate entries.
+                # Đánh dấu lúc enqueue để một node không xuất hiện hai lần.
                 visited.add(neighbor_node)
                 parent[neighbor_node] = current_node
                 queue.append(neighbor_node)
 
-    # No route found
+    # Giữ partial trace để frontend vẫn phát lại được lần tìm thất bại.
     message = f"No route found from '{start_node_id}' to '{goal_node_id}'."
     raise SearchFailure(
         message,

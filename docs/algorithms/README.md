@@ -1,29 +1,53 @@
 # Tài liệu thuật toán
 
-Mỗi thuật toán tạo một folder cùng tên với source:
+## English
+
+Each documentation directory follows the corresponding source algorithm name.
+Documents should explain the objective, input/output, data structures,
+pseudocode, complexity, limitations, and verification strategy.
 
 ```text
 docs/algorithms/
-├── astar/
-├── bfs/
-├── dfs/
-├── dijkstra/
-├── ucs/
-├── genetic_algorithm/
-├── held_karp/
-├── hill_climbing/
-├── nearest_neighbor/
-└── simulated_annealing/
+├── astar/                  ┐
+├── bfs/                    │ two-location search
+├── dfs/                    │
+├── dijkstra/               │
+├── ucs/                    ┘
+├── genetic_algorithm/      ┐
+├── held_karp/              │ multi-location optimization
+├── hill_climbing/          │
+├── nearest_neighbor/       │
+└── simulated_annealing/    ┘
 ```
 
-Nội dung đề xuất trong mỗi folder:
+Do not copy implementation source into README files. Pseudocode should explain
+only the core logic; implementation details belong in
+`backend/app/algorithms/`. Reproducible benchmarks must record the dataset,
+cost profile, input, seed, and runtime environment.
+
+---
+
+## Tiếng Việt
+
+Mỗi thuật toán dùng cùng tên thư mục với source. Tài liệu tập trung vào mục
+tiêu, input/output, cấu trúc dữ liệu, pseudocode, độ phức tạp, giới hạn và cách
+kiểm tra.
 
 ```text
-<algorithm>/
-├── design.md        # Ý tưởng, input/output, data structure, complexity
-├── pseudocode.md    # Pseudocode do nhóm tự viết
-├── flowchart.mmd    # Mermaid source cho flowchart
-└── benchmark.md     # Test cases và kết quả so sánh
+docs/algorithms/
+├── astar/                  ┐
+├── bfs/                    │ tìm đường hai điểm
+├── dfs/                    │
+├── dijkstra/               │
+├── ucs/                    ┘
+├── genetic_algorithm/      ┐
+├── held_karp/              │ tối ưu nhiều điểm
+├── hill_climbing/          │
+├── nearest_neighbor/       │
+└── simulated_annealing/    ┘
 ```
 
-Không chép nguyên walkthrough từ tutorial. Tài liệu phải giải thích thứ tự mở rộng node, frontier/open list, cost/heuristic và cách tạo final route theo yêu cầu demo video.
+Không sao chép nguyên mã nguồn vào README. Pseudocode chỉ nên mô tả logic cốt
+lõi; chi tiết triển khai nằm trong `backend/app/algorithms/`. Kết quả benchmark
+phải ghi dataset, cost profile, input, seed và môi trường chạy để có thể tái
+lập.

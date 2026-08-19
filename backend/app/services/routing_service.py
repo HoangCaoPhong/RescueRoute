@@ -142,7 +142,7 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str, criterion
     algo = algorithm.lower().strip()
     goal_node = graph_mgr.road_nodes[goal_id]
 
-    # Helper function for coordinate mapping
+    # Ghép node ID với tọa độ và cộng các chỉ số của tuyến.
     def build_path_response(path_nodes, exec_time, expanded=0):
         total_cost = 0.0
         total_dist = 0.0
@@ -502,7 +502,7 @@ def _route_objective(result: Dict[str, Any], criterion: str) -> float:
         return float(result.get("total_distance_m", float("inf")))
     if normalized == "hops":
         return float(max(0, len(result.get("path_nodes", [])) - 1))
-    # The current dataset folds estimated travel time and congestion into cost.
+    # Dataset hiện gộp thời gian và ùn tắc vào cost tổng hợp.
     return float(result.get("total_cost", float("inf")))
 
 

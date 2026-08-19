@@ -1,15 +1,46 @@
-# Hill Climbing design
+# Thiết kế Hill Climbing
 
-## Objective
+## English
 
-This implementation constructs a directed route by repeatedly selecting the
-unvisited neighbor with the smallest heuristic estimate to the goal. It is a
-greedy local-search baseline: it can be fast and memory-light, but it is not
-complete and does not guarantee a globally minimum-cost path.
+### Objective
 
-Equal heuristic values use a stable node-ID tie-break. Sideways moves are off by
-default and may be enabled explicitly; visited nodes are never selected again,
-so a plateau cannot create an infinite cycle.
+Hill Climbing constructs a route by repeatedly selecting the unvisited neighbor
+with the lowest heuristic. It is a fast, memory-light local-search baseline and
+does not guarantee an optimal route.
+
+### Pseudocode
+
+```text
+current <- start
+path <- [start]
+visited <- {start}
+
+until current is goal:
+    rank unvisited neighbors by (heuristic, node ID)
+    record candidates in the trace
+    if no candidate exists: report a dead end
+
+    next <- best candidate
+    if next does not improve and sideways moves are disabled:
+        report a local optimum
+    append next and continue
+
+return path and heuristic_steps
+```
+
+Hill Climbing is incomplete and not globally optimal. It may stop at a local
+optimum, plateau, dead end, or step limit. Stable tie-breaking makes repeated
+runs deterministic; visited nodes are not revisited.
+
+---
+
+## Tiếng Việt
+
+## Mục tiêu
+
+Hill Climbing xây dựng tuyến bằng cách chọn neighbor chưa thăm có heuristic nhỏ
+nhất. Đây là local-search baseline nhanh và ít bộ nhớ, không phải thuật toán
+đảm bảo đường đi tối ưu.
 
 ## Pseudocode
 
@@ -18,37 +49,25 @@ current <- start
 path <- [start]
 visited <- {start}
 
-until current is goal:
-    candidates <- all unvisited directed neighbors
-    rank candidates by (heuristic, stable node ID)
-    record ranked candidates
+đến khi current là goal:
+    xếp các neighbor chưa thăm theo (heuristic, node ID)
+    ghi danh sách ứng viên vào trace
+    nếu không có ứng viên: báo dead end
 
-    if no candidate exists:
-        raise dead-end error
-    next <- best candidate
-    if next is not better and no permitted sideways move:
-        raise local-optimum error
-
-    append next to path and visited
+    next <- ứng viên tốt nhất
+    nếu next không cải thiện và không cho sideways: báo local optimum
+    thêm next vào path và visited
     current <- next
 
-return path, decision steps, and route metrics
+trả path và heuristic_steps
 ```
 
-```mermaid
-flowchart TD
-    A["Validate nodes, heuristic, and step limit"] --> B["Set current to start"]
-    B --> C{"Current is goal?"}
-    C -- Yes --> D["Return route and metrics"]
-    C -- No --> E["Rank unvisited outgoing neighbors"]
-    E --> F{"Best move improves heuristic?"}
-    F -- Yes --> G["Move and record decision"]
-    F -- "No / disallowed plateau" --> H["Raise local-optimum error"]
-    G --> C
-```
+## Thuộc tính
 
-## Verification
+- Không complete và không tối ưu toàn cục.
+- Có thể kẹt ở local optimum, plateau hoặc dead end.
+- Tie-breaking xác định; không quay lại node đã thăm.
+- `allow_sideways` và `max_steps` giúp caller kiểm soát hành vi.
 
-Unit tests cover successful routing, start equals goal, ranked candidates,
-local optima, optional sideways moves, directed/dead-end behavior, deterministic
-ties, step limits, invalid inputs, route metrics, and the result contract.
+Test bao phủ local optimum, sideways move, step limit, graph có hướng, heuristic
+không hợp lệ, tie xác định và route metrics.

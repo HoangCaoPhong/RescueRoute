@@ -1,18 +1,43 @@
 # Genetic Algorithm
 
-- Owner: Hòa
-- Branch: `feature/genetic-algorithm`
-- Test folder: `backend/tests/unit/algorithms/optimization/genetic_algorithm/`
-- Docs folder: `docs/algorithms/genetic_algorithm/`
+## English
 
-## API and guarantees
+Entry point:
 
-`solve_genetic_algorithm(locations, distance_matrix, start_city, end_city, population_size=20, generations=30, seed=7)` is a deterministic heuristic optimizer for fixed start/end routes. It evolves a population of candidate tours, where each candidate is an ordered list of cities starting at `start_city` and ending at `end_city`, with intermediate cities arranged as a permutation of the remaining locations.
+```python
+solve_genetic_algorithm(locations, distance_matrix, start_city, end_city,
+                        population_size=20, generations=30, seed=7)
+```
 
-The objective function is the total travel cost defined by the supplied `distance_matrix`, summed over consecutive city pairs in the candidate route. The algorithm stops after the configured number of generations and keeps the best route found in the current population. Because mutation and crossover are heuristic search steps, the method is approximate rather than globally optimal; it is useful for multi-stop routing and benchmark comparison, but it does not guarantee the true minimum tour.
+Each individual is a waypoint permutation with fixed start and end locations.
+The algorithm retains elites, performs segment crossover, and applies swap
+mutation to reduce the total pairwise route cost.
 
-The random search is reproducible because the caller supplies a `seed`, and invalid city entries or missing distances raise `ValueError`.
+- Heuristic only; no global-optimum guarantee.
+- Reproducible for the same input and `seed`.
+- Minimum population size is 2 and minimum generation count is 1.
+- Missing locations or invalid pairwise costs raise `ValueError`.
 
-## Expected output
+Tests: `backend/tests/unit/algorithms/optimization/genetic_algorithm/`.
 
-The result includes the best route path, visiting order, objective cost, total cost, processing time, generation metadata, and structured explanation data so the frontend can present the solution clearly.
+---
+
+## Tiếng Việt
+
+Entry point:
+
+```python
+solve_genetic_algorithm(locations, distance_matrix, start_city, end_city,
+                        population_size=20, generations=30, seed=7)
+```
+
+Mỗi cá thể là một hoán vị waypoint với start/end cố định. Thuật toán giữ nhóm
+elite, lai ghép theo đoạn và đột biến hoán đổi để giảm tổng cost giữa các cặp
+liên tiếp.
+
+- Lời giải là heuristic, không bảo đảm tối ưu toàn cục.
+- Cùng input và `seed` cho kết quả tái lập được.
+- `population_size` tối thiểu 2, `generations` tối thiểu 1.
+- Input thiếu location hoặc pairwise cost không hợp lệ gây `ValueError`.
+
+Test: `backend/tests/unit/algorithms/optimization/genetic_algorithm/`.
