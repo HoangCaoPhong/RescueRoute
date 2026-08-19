@@ -44,15 +44,33 @@ def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-def distance_edge_cost(graph, source, target, _cost_profile=None) -> float:
-    """Return the distance weight used by Dijkstra in the demo graph."""
+def get_edge_cost_function(criterion: str):
+    """Return an edge cost function based on the selected criterion."""
+    def edge_cost_fn(graph, source, target, _cost_profile=None) -> float:
+        edge = get_edge_data(graph, source, target)
+        if isinstance(edge, dict):
+            if criterion == "distance":
+                return float(edge.get("distance", edge.get("weight", 1.0)))
+            elif criterion == "hops":
+                return 1.0
+            elif criterion == "time":
+                return float(edge.get("estimated_time", edge.get("time", 1.0)))
+            else:
+                return float(edge.get("total_cost", edge.get("weight", 1.0)))
+        
+        if isinstance(edge, (list, tuple)):
+            if criterion == "distance":
+                return float(edge[2]) if len(edge) > 2 else 1.0
+            elif criterion == "hops":
+                return 1.0
+            elif criterion == "time":
+                return float(edge[3]) if len(edge) > 3 else (float(edge[2]) / (40000 / 60) if len(edge) > 2 else 1.0)
+            else:
+                return float(edge[0]) if len(edge) > 0 else 1.0
+        
+        return float(edge)
+    return edge_cost_fn
 
-    edge = get_edge_data(graph, source, target)
-    if isinstance(edge, dict):
-        return float(edge.get("distance", edge.get("weight", 1.0)))
-    if isinstance(edge, (list, tuple)) and len(edge) > 2:
-        return float(edge[2])
-    return float(edge)
 
 
 def build_priority_frontier_snapshot(
@@ -100,7 +118,7 @@ def build_priority_frontier_snapshot(
 
 
 
-def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[str, Any]:
+def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str, criterion: str = "cost") -> Dict[str, Any]:
     t0 = time.perf_counter()
     
     # Kiểm tra và ánh xạ nếu node nằm ngoài road_nodes
@@ -250,26 +268,40 @@ def run_search(graph_mgr, start_id: int, goal_id: int, algorithm: str) -> Dict[s
 
     elif algo in {"astar", "ucs", "dijkstra", "hill_climbing", "hill-climbing"}:
         def h(n_id: int) -> float:
+            if criterion == "hops":
+                return 0.0
             node = graph_mgr.road_nodes.get(n_id)
             if not node:
                 return 0.0
             distance = haversine(
                 node["lat"], node["lng"], goal_node["lat"], goal_node["lng"]
             )
-            return distance if algo.startswith("hill") else distance * 0.00135287
+            
+            if algo.startswith("hill"):
+                return distance
+            
+            if criterion == "distance":
+                return distance
+            elif criterion == "time":
+                return distance / (40000 / 60) # fallback speed
+            else: # cost
+                return distance * 0.00135287
 
         try:
+            custom_edge_cost = get_edge_cost_function(criterion)
             if algo.startswith("hill"):
                 result = solve_hill_climbing (graph_mgr.adj, start_id, goal_id,
                     lambda node_id, _goal_id: h(node_id),
+                    edge_cost=custom_edge_cost
                 )
             elif algo == "ucs":
-                result = solve_ucs(graph_mgr.adj, start_id, goal_id)
+                result = solve_ucs(graph_mgr.adj, start_id, goal_id, edge_cost=custom_edge_cost)
             elif algo == "dijkstra":
-                result = solve_dijkstra(graph_mgr.adj, start_id, goal_id, edge_cost=distance_edge_cost)
+                result = solve_dijkstra(graph_mgr.adj, start_id, goal_id, edge_cost=custom_edge_cost)
             else:
                 result = solve_astar(graph_mgr.adj, start_id, goal_id,
                     lambda node_id, _goal_id: h(node_id),
+                    edge_cost=custom_edge_cost
                 )
         except SearchFailure as error:
             return {
@@ -347,7 +379,7 @@ def run_multi_location_search(
     targets = [*waypoints, goal_id]
     for source in sources:
         for target in targets:
-            result = run_search(graph_mgr, source, target, route_algorithm)
+            result = run_search(graph_mgr, source, target, route_algorithm, criterion)
             pair_results[(source, target)] = result
             pair_costs[(source, target)] = (
                 _route_objective(result, criterion)
@@ -474,7 +506,7 @@ def _route_objective(result: Dict[str, Any], criterion: str) -> float:
     return float(result.get("total_cost", float("inf")))
 
 
-def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "astar", emergency_only: bool = True) -> Dict[str, Any]:
+def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "astar", emergency_only: bool = True, criterion: str = "cost") -> Dict[str, Any]:
     """
     Dò đường tìm Bệnh Viện Gần Nhất trực tiếp trên mạng lưới đồ thị (Multi-Goal Search).
     Điểm đích KHÔNG cố định trước, thuật toán sẽ tự động lan tỏa từ vị trí xuất phát
@@ -686,8 +718,9 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
             current = selected
             visited.add(current)
 
-    # Thuật toán 3: DIJKSTRA (Tìm bệnh viện có quãng đường thực tế ngắn nhất)
+    # Thuật toán 3: DIJKSTRA (Tìm bệnh viện có quãng đường/tiêu chí thực tế ngắn nhất)
     elif algo == "dijkstra":
+        custom_edge_cost = get_edge_cost_function(criterion)
         pq = [(0.0, start_id)]
         best_dist = {start_id: 0.0}
         while pq:
@@ -713,7 +746,8 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
                 found_goal_id = curr
                 break
             for nbr, edge in graph_mgr.adj.get(curr, {}).items():
-                new_d = d + edge[2]
+                cost_val = custom_edge_cost(graph_mgr.adj, curr, nbr)
+                new_d = d + cost_val
                 if new_d < best_dist.get(nbr, float('inf')):
                     best_dist[nbr] = new_d
                     parent[nbr] = curr
@@ -721,10 +755,17 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
 
     # Thuật toán 4 & 5: UCS / Multi-Goal A* (Tìm bệnh viện có chi phí tổng hợp thấp nhất)
     else:
+        custom_edge_cost = get_edge_cost_function(criterion)
         def h_multi(n_id: int) -> float:
-            if algo == "ucs":
+            if algo == "ucs" or criterion == "hops":
                 return 0.0
-            return nearest_goal_distance(n_id) * 0.00135287
+            dist = nearest_goal_distance(n_id)
+            if criterion == "distance":
+                return dist
+            elif criterion == "time":
+                return dist / (40000 / 60)
+            else:
+                return dist * 0.00135287
 
         pq = [(h_multi(start_id), 0.0, start_id)]
         g_scores = {start_id: 0.0}
@@ -754,7 +795,8 @@ def run_search_nearest_hospital(graph_mgr, start_id: int, algorithm: str = "asta
                 found_goal_id = curr
                 break
             for nbr, edge in graph_mgr.adj.get(curr, {}).items():
-                tentative_g = g + edge[0]
+                cost_val = custom_edge_cost(graph_mgr.adj, curr, nbr)
+                tentative_g = g + cost_val
                 if tentative_g < g_scores.get(nbr, float('inf')):
                     g_scores[nbr] = tentative_g
                     parent[nbr] = curr

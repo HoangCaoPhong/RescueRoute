@@ -89,7 +89,8 @@ def build_graph(df_base, df_train):
         v = row['e_node_id']
         w = row['base_cost']
         length = row['length']
-        graph[u][v] = [w, 1, length]
+        time = row.get('base_time', length / (40000 / 60)) # fallback if not found
+        graph[u][v] = [w, 1, length, time]
         
     # 2. Overwrite with dynamic traffic cost where available
     los_map = {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6}
@@ -98,9 +99,12 @@ def build_graph(df_base, df_train):
         v = row['e_node_id']
         w = row['cost']
         cong = los_map.get(row['LOS'], 1) if pd.notna(row['LOS']) else 1
+        time = row.get('time')
         if u in graph and v in graph[u]:
             graph[u][v][0] = w
             graph[u][v][1] = cong
+            if pd.notna(time):
+                graph[u][v][3] = time
         
     return graph
 

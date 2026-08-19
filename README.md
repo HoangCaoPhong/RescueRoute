@@ -4,7 +4,7 @@
 
 ### Project and team
 
-RescueRoute is Team 4's Lab 01 project for the **Introduction to Artificial
+RescueRoute is Team 4's project for the **Introduction to Artificial
 Intelligence** course at the Faculty of Information Technology, University of
 Science, Vietnam National University Ho Chi Minh City. Developed under the
 guidance of instructors **Bùi Tiến Lên, Võ Nhật Tân, and Bùi Duy Đăng**, the
@@ -17,13 +17,13 @@ not only to return a path, but also to make the search process observable
 through replayable traces and to explain the conditions under which a result is
 optimal, approximate, or incomplete.
 
-| Member | Student ID | Role | Primary responsibilities |
-| --- | --- | --- | --- |
-| Hoàng Cao Phong | 24127486 | Tech Lead / MLOps | A*, Hill Climbing, coordination, review, and integration |
-| Võ Mỹ Ngọc | 24127294 | Frontend Developer | BFS, UCS, route visualization, and presentation slides |
-| Nguyễn Trung Kiên | 24127068 | Backend Developer | DFS, FastAPI, routing services, and search-trace integration |
-| Huỳnh Thái Hòa | 24127374 | Data Engineer | Dijkstra, Genetic Algorithm, cost model, benchmarking, and report editing |
-| Lương Thiện Nhân | 24127475 | Data Engineer | Held-Karp, Simulated Annealing, data processing, and voice-over |
+| Member | Role | Primary responsibilities |
+| --- | --- | --- |
+| Hoàng Cao Phong | Tech Lead / MLOps | A*, Hill Climbing, coordination, review, and integration |
+| Võ Mỹ Ngọc | Frontend Developer | BFS, UCS, route visualization, and presentation slides |
+| Nguyễn Trung Kiên | Backend Developer | DFS, FastAPI, routing services, and search-trace integration |
+| Huỳnh Thái Hòa | Data Engineer | Dijkstra, Genetic Algorithm, cost model, benchmarking, and report editing |
+| Lương Thiện Nhân  | Data Engineer | Held-Karp, Simulated Annealing, data processing, and voice-over |
 
 ### Project overview
 
@@ -146,13 +146,14 @@ Hệ thống giải quyết hai quyết định liên quan: tìm tuyến khả t
 đi, mà còn trực quan hóa quá trình tìm kiếm bằng trace có thể phát lại và giải
 thích khi nào kết quả là tối ưu, xấp xỉ hoặc có thể không hoàn chỉnh.
 
-| Thành viên | MSSV | Vai trò | Trách nhiệm chính |
-| --- | --- | --- | --- |
-| Hoàng Cao Phong | 24127486 | Tech Lead / MLOps | A*, Hill Climbing, điều phối, review và tích hợp |
-| Võ Mỹ Ngọc | 24127294 | Frontend Developer | BFS, UCS, trực quan hóa tuyến đường và slide |
-| Nguyễn Trung Kiên | 24127068 | Backend Developer | DFS, FastAPI, routing service và tích hợp search trace |
-| Huỳnh Thái Hòa | 24127374 | Data Engineer | Dijkstra, Genetic Algorithm, cost model, benchmark và biên tập báo cáo |
-| Lương Thiện Nhân | 24127475 | Data Engineer | Held-Karp, Simulated Annealing, xử lý dữ liệu và thu âm |
+| Thành viên | Vai trò | Trách nhiệm chính |
+| --- | --- | --- |
+| Hoàng Cao Phong | Tech Lead / MLOps | A*, Hill Climbing, coordination, review, and integration |
+| Võ Mỹ Ngọc | Frontend Developer | BFS, UCS, route visualization, and presentation slides |
+| Nguyễn Trung Kiên | Backend Developer | DFS, FastAPI, routing services, and search-trace integration |
+| Huỳnh Thái Hòa | Data Engineer | Dijkstra, Genetic Algorithm, cost model, benchmarking, and report editing |
+| Lương Thiện Nhân  | Data Engineer | Held-Karp, Simulated Annealing, data processing, and voice-over |
+
 
 ### Tổng quan dự án
 
