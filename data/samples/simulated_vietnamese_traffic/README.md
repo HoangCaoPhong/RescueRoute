@@ -1,78 +1,66 @@
-# Simulated Vietnamese traffic graph
+# Simulated Vietnamese traffic
 
-Bộ dữ liệu nhỏ này được cắt từ
-[`feature/EDA_data/data/raw/train.csv`](https://github.com/HoangCaoPhong/RescueRoute/blob/feature/EDA_data/data/raw/train.csv)
-để test và demo thuật toán tìm đường mà không phải nạp toàn bộ file nguồn.
-Snapshot nguồn đã kiểm tra tại commit
-`951258f5d475bcc8bd371d3844ba2bdefbcbb198`.
+## English
 
-Repository nguồn chưa ghi giấy phép riêng cho `train.csv`. Cần xác nhận quyền
-sử dụng/phân phối với chủ dataset trước khi phát hành bộ dữ liệu ra ngoài phạm
-vi đồ án.
+This deterministic fixture is a small slice of Ho Chi Minh City traffic data,
+used for tests and demonstrations without loading the full dataset. All rows
+share the date `2020-08-02` and time period `period_23_30`.
 
-## Điều kiện cắt
+- `nodes.csv`: 40 normalized nodes.
+- `edges.csv`: 60 directed edges across 14 street names.
+- `source_slice.csv`: 60 upstream rows retained for traceability.
 
-- Ngày: `2020-08-02`.
-- Khung giờ: `period_23_30` (23:30).
-- Tất cả cạnh cùng ngày và cùng khung giờ; các cạnh thuộc nhiều đoạn/tên đường
-  khác nhau.
-- Chọn xác định một tiểu đồ thị liên thông vô hướng có đúng 40 node và ít nhất
-  60 cạnh nội bộ, đồng thời ưu tiên số tên đường khác nhau lớn nhất.
-- Giữ một cây khung để không làm mất node hoặc tính liên thông, sau đó bổ sung
-  cạnh từ các đường chưa xuất hiện cho đến đúng 60 cạnh.
-- Kết quả: 40 node, 60 cạnh có hướng và 14 tên đường thực tại TP.HCM.
-- Tỷ lệ `node : edge = 40 : 60 = 2 : 3`.
-
-`source_slice.csv` giữ nguyên 60 dòng và schema nguồn. `nodes.csv` và
-`edges.csv` là graph đã chuẩn hóa dùng cho ứng dụng.
-
-## Schema node
-
-| Field | Ý nghĩa |
-|---|---|
-| `node_id` | ID node ổn định từ dữ liệu nguồn |
-| `name` | Tên thực tế/giả lập từ các đường kề node |
-| `latitude`, `longitude` | Tọa độ WGS84 từ nguồn |
-| `node_type` | `intersection` hoặc `road_point` |
-
-Tên dạng `Nút giao A - B` được dùng khi hai tên đường gặp nhau; node chỉ thuộc
-một đường được đặt tên `Điểm trên đường A`. Đây không phải GPS người dùng.
-
-## Schema edge
-
-| Field | Đơn vị/ý nghĩa |
-|---|---|
-| `edge_id` | `segment_id` từ nguồn |
-| `source_node_id`, `target_node_id` | Hướng đi của cạnh |
-| `distance_m` | Mét, lấy từ cột `length` |
-| `estimated_time_s` | Giây, tính từ khoảng cách và vận tốc thực tế |
-| `congestion_level` | `free_flow`, `light`, `moderate`, `heavy`, `severe`, `gridlock` |
-| `los` | Level of Service gốc A-F |
-| `congestion_factor` | A/B=1, C=2, D=3, E=5, F=8 |
-| `free_flow_speed_kph` | `max_velocity`; thiếu thì dùng giả định 70 km/h |
-| `actual_speed_kph` | `free_flow_speed_kph / congestion_factor` |
-| `road_type`, `street_name`, `street_level` | Thuộc tính đường từ nguồn |
-| `date`, `time_period` | Mốc thời gian chung của snapshot |
-| `source_row_id` | Cột `_id` để truy vết dòng nguồn |
+Nodes use `node_id`, `name`, `latitude`, `longitude`, and `node_type`. Edges
+include endpoints, distance, estimated time, LOS, congestion, speed, road
+attributes, and source metadata.
 
 ```text
 estimated_time_s = distance_m / (actual_speed_kph / 3.6)
 ```
 
-Mapping LOS bám theo `scripts/dataset_2_graph.py` trên nhánh EDA.
-
-## Tái tạo dữ liệu
-
-Khi đã fetch nhánh nguồn:
+Run validation with:
 
 ```bash
-python scripts/build_simulated_traffic_sample.py --source-ref origin/feature/EDA_data
+python -m pytest backend/tests/unit/data/test_simulated_traffic_data.py -q
 ```
 
-Hoặc dùng file local:
+The repository does not yet record a separate redistribution license for this
+slice; confirm permission before using it outside the assignment.
+
+---
+
+## Tiếng Việt
+
+Fixture này là một lát cắt nhỏ từ dữ liệu giao thông TP.HCM, dùng để test và
+demo mà không phải nạp toàn bộ dataset. Snapshot gồm cùng ngày `2020-08-02` và
+khung giờ `period_23_30`.
+
+## Quy mô và file
+
+- `nodes.csv`: 40 node đã chuẩn hóa.
+- `edges.csv`: 60 cạnh có hướng thuộc 14 tên đường.
+- `source_slice.csv`: 60 dòng nguồn để truy vết.
+
+## Schema chính
+
+Node dùng `node_id`, `name`, `latitude`, `longitude`, `node_type`.
+
+Edge dùng `edge_id`, hai node đầu cuối, `distance_m`, `estimated_time_s`, LOS,
+congestion, tốc độ và thuộc tính đường. Công thức thời gian:
+
+```text
+estimated_time_s = distance_m / (actual_speed_kph / 3.6)
+```
+
+LOS A/B/C/D/E/F lần lượt được ánh xạ thành mức ùn tắc dùng trong fixture. Nếu
+thiếu tốc độ tự do, dữ liệu dùng giả định 70 km/h và giữ lại trường nguồn để
+đối chiếu.
+
+## Kiểm tra
 
 ```bash
-python scripts/build_simulated_traffic_sample.py --input data/raw/train.csv
+python -m pytest backend/tests/unit/data/test_simulated_traffic_data.py -q
 ```
 
-Script chỉ đọc dữ liệu nguồn và ghi vào folder sample này; không sửa file raw.
+Repository chưa ghi giấy phép riêng cho lát cắt này; cần xác nhận quyền phân
+phối trước khi dùng ngoài phạm vi đồ án.

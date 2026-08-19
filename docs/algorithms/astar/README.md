@@ -1,55 +1,79 @@
-# A* Search design
+# Thiết kế A*
 
-## Objective
+## English
 
-A* finds a minimum-cost directed route by expanding the node with the smallest
-`f(n) = g(n) + h(n)`. `g` is obtained from the shared graph/cost callback; `h`
-must use the same cost unit and estimate the remaining cost.
+### Objective
 
-For geographic routing, a straight-line distance heuristic must be converted
-with a proven lower bound on cost per metre. A raw distance is admissible only
-when the route objective itself is distance. With non-negative edges and an
-admissible heuristic, A* is complete on finite graphs and optimal. Consistency
-additionally prevents node re-expansion.
+A* searches for a minimum-cost route by prioritizing the node with the lowest
+`f(n) = g(n) + h(n)`. Here, `g(n)` is the accumulated cost from the start and
+`h(n)` estimates the remaining cost in the same unit.
 
-## Pseudocode
+For geographic routing, straight-line distance is admissible only after it has
+been converted into a valid lower bound for the active objective. Do not set
+`heuristic_is_admissible=True` without that proof.
+
+### Pseudocode
 
 ```text
-open <- priority queue containing start with priority h(start)
 g[start] <- 0
-parent[start] <- null
+open <- priority queue containing start with f = h(start)
 
 while open is not empty:
-    record effective open frontier
-    current <- pop minimum f, ignoring stale entries
-    record current as expanded
-    if current is goal:
-        return reconstructed path and metrics
+    current <- valid node with the lowest f
+    record current and the frontier
+    if current is goal: reconstruct and return the path
 
     for each directed neighbor of current:
         tentative <- g[current] + edge_cost(current, neighbor)
         if tentative improves g[neighbor]:
-            g[neighbor] <- tentative
-            parent[neighbor] <- current
-            push neighbor with tentative + h(neighbor)
+            update g, parent, and open
 
-raise no-route error
+report no route while preserving the partial trace
 ```
 
-```mermaid
-flowchart TD
-    A["Validate graph, nodes, costs, heuristic"] --> B["Push start into open heap"]
-    B --> C{"Open heap empty?"}
-    C -- Yes --> X["Raise no-route error"]
-    C -- No --> D["Pop lowest valid f = g + h"]
-    D --> E{"Current is goal?"}
-    E -- Yes --> F["Reconstruct route and calculate metrics"]
-    E -- No --> G["Relax every directed outgoing edge"]
-    G --> C
+With a binary heap, the typical bound is `O((V + E) log V)` when each node has
+one best score, with `O(V)` auxiliary memory excluding stale heap entries.
+Tests compare A* with UCS and cover directed graphs, reopening, invalid
+heuristics, no-route behavior, and deterministic traces.
+
+---
+
+## Tiếng Việt
+
+## Mục tiêu
+
+A* tìm tuyến có cost nhỏ nhất bằng cách ưu tiên node có
+`f(n) = g(n) + h(n)` nhỏ nhất. `g(n)` là cost từ start; `h(n)` ước lượng phần
+còn lại đến goal và phải cùng đơn vị với `g(n)`.
+
+Với định tuyến địa lý, khoảng cách đường chim bay chỉ admissible khi được đổi
+sang một lower bound hợp lệ của cost đang tối ưu. Nếu chưa chứng minh được,
+không đánh dấu `heuristic_is_admissible=True`.
+
+## Pseudocode
+
+```text
+g[start] <- 0
+open <- priority queue chứa start với f = h(start)
+
+while open không rỗng:
+    current <- node hợp lệ có f nhỏ nhất
+    ghi frontier và current vào trace
+    nếu current là goal: dựng lại path và trả kết quả
+
+    với mỗi neighbor có hướng của current:
+        tentative <- g[current] + edge_cost(current, neighbor)
+        nếu tentative tốt hơn g[neighbor]:
+            cập nhật g, parent và đưa neighbor vào open
+
+báo không có đường và giữ partial trace
 ```
 
-## Verification
+## Độ phức tạp và kiểm tra
 
-Unit tests cover weighted optimal paths, UCS equivalence, start equals goal,
-directed/no-route behavior, high-cost edge avoidance, node reopening, invalid
-costs/heuristics, deterministic frontier snapshots, and the result contract.
+Worst case phụ thuộc heuristic và priority queue, thường được mô tả là
+`O((V + E) log V)` khi mỗi node giữ một best score. Bộ nhớ `O(V)` ngoài các
+heap entry cũ.
+
+Test đối chiếu A* với UCS, kiểm tra graph có hướng, node reopening, heuristic
+không hợp lệ, không có đường và tính xác định của frontier.

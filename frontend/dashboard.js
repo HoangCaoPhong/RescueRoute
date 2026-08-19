@@ -107,14 +107,8 @@ let searchVisitedLayer = null;
 let searchFrontierLayer = null;
 let searchCurrentLayer = null;
 
-let currentTheme = "dark";
-try {
-    if (typeof localStorage !== "undefined") {
-        currentTheme = localStorage.getItem("rescueroute_theme") || "dark";
-    }
-} catch (e) {
-    currentTheme = "dark";
-}
+// Mỗi lần mở dashboard đều bắt đầu ở giao diện sáng; nút vẫn đổi theme trong phiên hiện tại.
+let currentTheme = "light";
 
 function applyTheme(theme) {
     currentTheme = theme === "light" ? "light" : "dark";
@@ -126,12 +120,6 @@ function applyTheme(theme) {
             document.body.setAttribute("data-theme", currentTheme);
         }
     }
-    try {
-        if (typeof localStorage !== "undefined") {
-            localStorage.setItem("rescueroute_theme", currentTheme);
-        }
-    } catch (e) {}
-
     const btn = byId("themeToggleBtn");
     if (btn) {
         const icon = btn.querySelector(".theme-icon");
@@ -236,14 +224,6 @@ async function fetchJson(url, options = {}) {
 }
 
 
-function setConnectionStatus(mode, text) {
-    const badge = byId("connectionStatus");
-    if (!badge) return;
-    badge.className = `connection-badge is-${mode}`;
-    badge.innerHTML = '<span class="status-dot" aria-hidden="true"></span>';
-    badge.append(document.createTextNode(text));
-}
-
 function setOperationStatus(message = "", isError = false) {
     const status = byId("operationStatus");
     if (!status) return;
@@ -264,7 +244,6 @@ function initMap() {
     applyTheme(currentTheme);
     mountSearchPlaybackDock();
     if (typeof L === "undefined") {
-        setConnectionStatus("offline", "Không tải được Leaflet");
         setOperationStatus(
             "Không thể khởi tạo bản đồ. Hãy kiểm tra kết nối tới thư viện Leaflet.",
             true,
@@ -312,7 +291,6 @@ function createMapPane(name, zIndex) {
 }
 
 async function loadInitialData() {
-    setConnectionStatus("loading", "Đang kết nối API");
     try {
         const [nodes, edges, gps, health] = await Promise.all([
             fetchJson(`${API_BASE}/nodes?poi_type=all&limit=30000`),
@@ -354,10 +332,8 @@ async function loadInitialData() {
         renderHospitalsOnMap();
         renderEdgesOnMap();
         updateAmbulanceDisplay(currentAmbulanceData);
-        setConnectionStatus("online", "Backend trực tuyến");
     } catch (error) {
         console.error("loadInitialData failed:", error);
-        setConnectionStatus("offline", "Mất kết nối API");
         setText(
             "datasetSummary",
             "Không thể tải dữ liệu. Hãy chạy backend và mở dashboard từ cùng origin.",
@@ -2987,12 +2963,10 @@ async function checkSystemHealth() {
     try {
         const data = await fetchJson(`${API_BASE}/health`);
         const roundTrip = performance.now() - startedAt;
-        setConnectionStatus("online", "Backend trực tuyến");
         showToast(
             `Health ${data.status}: ${Number(data.nodes_count || 0).toLocaleString("vi-VN")} nodes · API ${data.latency_ms} ms · round trip ${roundTrip.toFixed(1)} ms.`,
         );
     } catch (error) {
-        setConnectionStatus("offline", "Mất kết nối API");
         showToast(`Health check thất bại: ${error.message}`, true);
     } finally {
         setButtonBusy("btnHealth", false, "Đang ping…", "Ping GET /api/health");

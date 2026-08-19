@@ -1,26 +1,49 @@
-# A\* Search
+# A* Search
 
-- Owner: Phong
-- Branch: `feature/astar-search`
-- Test folder: `backend/tests/unit/algorithms/graph_search/astar/`
-- Docs folder: `docs/algorithms/astar/`
+## English
 
-## API
+Entry point:
 
-`solve_astar(graph, start_node_id, goal_node_id, heuristic=None, ...)` uses a
-priority queue ordered by `f(n) = g(n) + h(n)`. The heuristic and optional
-edge-cost callback use the same unit as the shared cost profile. If no
-heuristic is supplied, the function behaves as Uniform Cost Search.
+```python
+solve_astar(graph, start_node_id, goal_node_id, heuristic=None,
+            cost_profile=None, edge_cost=None,
+            heuristic_is_admissible=False)
+```
 
-The implementation supports directed adjacency dictionaries and the shared
-Graph abstraction. It returns the route, expansion order, frontier snapshots,
-route metrics, timing, and structured optimality explanation.
+A* expands the node with the lowest `f(n) = g(n) + h(n)`. The heuristic must
+be finite, non-negative, and expressed in the same unit as edge cost. Without a
+heuristic, the implementation behaves like UCS.
 
-## Guarantees
+- Complete on a finite graph with finite, non-negative edge costs.
+- Optimal without a heuristic or with a proven admissible heuristic.
+- Deterministic for the same graph, neighbor order, and callbacks.
+- Raises `ValueError` for invalid nodes/costs/heuristics and `SearchFailure`
+  when no route exists.
 
-- Complete on a finite graph with non-negative finite edge costs.
-- Optimal when `h` is admissible; a consistent heuristic also avoids repeated
-  expansion. Set `heuristic_is_admissible=True` only after verifying that
-  property for the active cost profile.
-- Deterministic for the same graph iteration order, inputs, and callbacks.
-- Raises `ValueError` for missing nodes, invalid costs/heuristics, or no route.
+Tests: `backend/tests/unit/algorithms/graph_search/astar/`.
+
+---
+
+## Tiếng Việt
+
+Entry point:
+
+```python
+solve_astar(graph, start_node_id, goal_node_id, heuristic=None,
+            cost_profile=None, edge_cost=None,
+            heuristic_is_admissible=False)
+```
+
+A* mở rộng node có `f(n) = g(n) + h(n)` nhỏ nhất. `heuristic` phải trả giá trị
+hữu hạn, không âm và cùng đơn vị với edge cost. Nếu không truyền heuristic,
+thuật toán tương đương UCS.
+
+## Bảo đảm
+
+- Hoàn chỉnh trên graph hữu hạn với edge cost hữu hạn, không âm.
+- Tối ưu khi không dùng heuristic hoặc heuristic được chứng minh admissible.
+- Kết quả xác định với cùng graph, thứ tự neighbor và callback.
+- Ném `ValueError` cho node/cost/heuristic không hợp lệ và `SearchFailure` khi
+  không có đường.
+
+Test: `backend/tests/unit/algorithms/graph_search/astar/`.

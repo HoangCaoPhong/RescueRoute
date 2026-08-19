@@ -1,179 +1,255 @@
 # RescueRoute
 
-RescueRoute là ứng dụng web mô phỏng tìm đường tối ưu cho xe cấp cứu trong bối cảnh giao thông đô thị Việt Nam. Hệ thống biểu diễn mạng lưới đường dưới dạng đồ thị, so sánh các thuật toán tìm kiếm AI và giải thích vì sao một tuyến đường được chọn dựa trên thời gian, ùn tắc và rủi ro.
+## English
 
-> Trạng thái hiện tại: đã có FastAPI backend, dashboard Leaflet prototype,
-> sáu thuật toán tìm đường có unified trace và API tối ưu nhiều
-> waypoint. Khung React/TypeScript vẫn là hướng phát triển tiếp theo.
+### Project and team
 
-## Mục tiêu chính
+RescueRoute is Team 4's Lab 01 project for the **Introduction to Artificial
+Intelligence** course at the Faculty of Information Technology, University of
+Science, Vietnam National University Ho Chi Minh City. Developed under the
+guidance of instructors **Bùi Tiến Lên, Võ Nhật Tân, and Bùi Duy Đăng**, the
+project investigates how classical and heuristic AI search methods can support
+ambulance routing on the urban road network of Ho Chi Minh City.
 
-- Tìm tuyến giữa hai địa điểm bằng BFS, DFS, UCS, Dijkstra, A* và Hill Climbing.
-- Tối ưu thứ tự ghé nhiều địa điểm bằng Held-Karp, Nearest Neighbor, Genetic Algorithm và Simulated Annealing.
-- Trực quan hóa từng bước: node đã duyệt, frontier/open list và tuyến cuối cùng.
-- Báo cáo quãng đường, thời gian dự kiến, tổng chi phí, số node đã mở rộng và thời gian xử lý.
-- Giải thích tuyến đường, ảnh hưởng của ùn tắc/rủi ro và tính tối ưu hoặc xấp xỉ của thuật toán.
+The system addresses two related decisions: finding a feasible route between
+two locations and optimizing the visit order of multiple locations. Its goal is
+not only to return a path, but also to make the search process observable
+through replayable traces and to explain the conditions under which a result is
+optimal, approximate, or incomplete.
 
-## Kiến trúc hiện tại
+| Member | Student ID | Role | Primary responsibilities |
+| --- | --- | --- | --- |
+| Hoàng Cao Phong | 24127486 | Tech Lead / MLOps | A*, Hill Climbing, coordination, review, and integration |
+| Võ Mỹ Ngọc | 24127294 | Frontend Developer | BFS, UCS, route visualization, and presentation slides |
+| Nguyễn Trung Kiên | 24127068 | Backend Developer | DFS, FastAPI, routing services, and search-trace integration |
+| Huỳnh Thái Hòa | 24127374 | Data Engineer | Dijkstra, Genetic Algorithm, cost model, benchmarking, and report editing |
+| Lương Thiện Nhân | 24127475 | Data Engineer | Held-Karp, Simulated Annealing, data processing, and voice-over |
+
+### Project overview
+
+In urban emergency response, the shortest route by physical distance is not
+always the fastest or most suitable. One-way streets, congestion, road class,
+restricted segments, risk, and hospital accessibility can all affect the final
+decision. RescueRoute models the road network as a directed graph and provides
+both the selected route and a step-by-step view of how the algorithm reached
+that result.
+
+Current capabilities include:
+
+- two-location search with BFS, DFS, UCS, Dijkstra, A*, and Hill Climbing;
+- waypoint-order optimization with Nearest Neighbor, Held-Karp, Genetic
+  Algorithm, and Simulated Annealing;
+- visualization of expanded nodes, the frontier, and the final route;
+- route metrics such as distance, cost, expanded-node count, and execution time;
+- nearest-hospital lookup, ambulance-location updates, and congestion
+  simulation;
+- a FastAPI backend and an HTML/CSS/JavaScript Leaflet dashboard.
+
+### Architecture
 
 ```text
-HTML/JavaScript + Leaflet/OpenStreetMap
-          |
-          | HTTP/JSON
-          v
-FastAPI API -> application services -> search/optimization algorithms
-          |
-          v
-processed CSV -> graph dataset in RAM
+Leaflet dashboard
+      |
+      | HTTP/JSON
+      v
+FastAPI routes -> routing services -> search/optimization algorithms
+      |
+      v
+processed CSV -> in-memory directed graph
 ```
-
-- `frontend/`: dashboard Leaflet prototype, chọn thuật toán và mô phỏng
-  search trace; `frontend/src/` giữ khung React/TypeScript cho giai đoạn sau.
-- `backend/`: FastAPI, mô hình đồ thị, thuật toán, nghiệp vụ định tuyến và tích hợp ngoài.
-- `data/`: dữ liệu gốc, dữ liệu đã chuẩn hóa và bộ dữ liệu mẫu dùng cho demo/test.
-- `infra/`: cấu hình Render, Supabase và các tài nguyên triển khai.
-- `docs/`: đề bài, kế hoạch nhóm, tài liệu kiến trúc, API và báo cáo.
-- `scripts/`: script kiểm tra, chuyển đổi dữ liệu và tác vụ phát triển dùng chung.
-
-Xem chỉ mục đầy đủ tại [`docs/README.md`](docs/README.md).
-
-## Mô hình dữ liệu cốt lõi
-
-Node tối thiểu gồm `node_id`, `name`, `latitude`, `longitude`, `type`. Edge có hướng tối thiểu gồm `edge_id`, `source`, `target`, `distance`, `speed_limit`, `congestion_level`, `road_type` và `risk_factor`.
-
-Chi phí khởi điểm theo kế hoạch nhóm:
-
-```text
-estimated_time = distance / actual_speed
-actual_speed   = speed_limit / congestion_factor
-edge_cost      = alpha * estimated_time
-               + beta  * congestion_penalty
-               + gamma * risk_penalty
-```
-
-Các trọng số mặc định dự kiến là `alpha = 0.6`, `beta = 0.3`, `gamma = 0.1`. Giá trị cuối cùng phải được kiểm chứng bằng benchmark và ghi rõ giả định trong báo cáo.
-
-## Dataset demo và test
-
-- `data/samples/simulated_vietnamese_traffic/`: fixture nhỏ 40 node/60 edge,
-  dùng cho unit test deterministic.
-- `data/samples/HCMUS_surrounding_filter/Minimap_ouput/`: minimap thực tế quanh
-  HCMUS, gồm 3.364 node/4.918 edge. File `edges.csv` đã gom distance,
-  estimated time, congestion level và road type theo contract của đề.
-- `data/processed/`: graph hiện được FastAPI dashboard nạp vào RAM.
-
-Xem data dictionary, nguồn và chính sách fallback tại
-[`data/README.md`](data/README.md).
-
-## Cấu trúc repository
 
 ```text
 RescueRoute/
-├── .github/                 # Pull request template
-├── backend/
-│   ├── app/
-│   │   ├── api/routes/      # HTTP/WebSocket endpoints
-│   │   ├── algorithms/      # Mỗi thuật toán có một folder riêng
-│   │   │   ├── graph_search/
-│   │   │   │   ├── astar/
-│   │   │   │   ├── bfs/
-│   │   │   │   ├── dfs/
-│   │   │   │   ├── dijkstra/
-│   │   │   │   └── ucs/
-│   │   │   └── optimization/
-│   │   │       ├── held_karp/
-│   │   │       ├── hill_climbing/
-│   │   │       ├── nearest_neighbor/
-│   │   │       └── simulated_annealing/
-│   │   ├── core/            # Config, logging, constants
-│   │   ├── domain/          # Node, Edge, Graph, Route và luật nghiệp vụ
-│   │   ├── integrations/    # Map, Supabase và dịch vụ ngoài
-│   │   ├── repositories/    # Truy cập dữ liệu
-│   │   ├── schemas/         # Request/response schemas
-│   │   ├── services/        # Điều phối use case
-│   │   └── utils/
-│   └── tests/
-├── data/
-│   ├── raw/
-│   ├── processed/
-│   └── samples/
-├── docs/
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── features/
-│   │   ├── hooks/
-│   │   ├── lib/api/
-│   │   ├── pages/
-│   │   ├── services/
-│   │   ├── store/
-│   │   ├── styles/
-│   │   └── types/
-│   └── tests/
-├── infra/
-└── scripts/
+├── backend/     # FastAPI, services, algorithms, and tests
+├── data/        # Raw, processed, and sample datasets
+├── docs/        # Architecture, API, and algorithm documentation
+├── frontend/    # Leaflet dashboard prototype
+└── scripts/     # Data processing and benchmark-plot utilities
 ```
 
-## Quy trình Git cho nhóm
+### Quick start
 
-Repo dùng mô hình gọn:
-
-1. `main`: bản ổn định/demo được; không push trực tiếp.
-2. `dev`: nhánh tích hợp cho sprint; mọi feature merge vào đây qua pull request.
-3. `feature/<ten-ngan>`: tính năng mới, tạo từ `dev`.
-4. `fix/<ten-ngan>`: sửa lỗi, tạo từ `dev`.
-5. `docs/<ten-ngan>` và `experiment/<ten-ngan>`: tài liệu hoặc thử nghiệm có giới hạn.
-
-Ví dụ:
+Python 3.10 or later is required. Run from the repository root:
 
 ```bash
-git switch dev
-git pull --ff-only origin dev
-git switch -c feature/astar-search
-
-# Sau khi code và test
-git add backend/app/algorithms backend/tests
-git commit -m "feat(algorithm): implement A* route search"
-git push -u origin feature/astar-search
+python -m pip install -r backend/requirements.txt
+python -m uvicorn backend.main:app --reload
 ```
 
-Mở pull request vào `dev`, cần ít nhất một người khác review. Chỉ merge `dev` vào `main` khi sprint đã chạy test và demo ổn định. Chi tiết nằm trong [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Open `http://127.0.0.1:8000/` for the dashboard or
+`http://127.0.0.1:8000/docs` for the OpenAPI interface.
 
-## Bắt đầu một task thuật toán
+The backend loads its runtime graph from `data/processed/` at startup. If a
+required derived file is missing, consult the [data guide](data/README.md) and
+the [scripts guide](scripts/README.md).
 
-Đọc [`backend/app/algorithms/README.md`](backend/app/algorithms/README.md), sau đó mở README trong folder thuật toán được phân công. Mỗi folder đã ghi owner, branch đề xuất, vị trí test, tài liệu và checklist riêng.
+### Main API endpoints
 
-Thứ tự chung:
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/health` | Report application status and graph size |
+| `GET /api/nodes` | Return hospitals or points of interest |
+| `GET /api/edges` | Return road edges for map rendering |
+| `POST /api/route` | Search for a route between two nodes |
+| `POST /api/route/multi-location` | Optimize waypoint order and combine route segments |
+| `POST /api/route/nearest-hospital` | Route to a suitable hospital |
+| `GET/POST /api/ambulance/location` | Read or update the ambulance location |
 
-1. Chờ contract `Node`, `Edge`, `Graph`, cost và `SearchResult` dùng chung được merge vào `dev`.
-2. Tạo branch thuật toán từ `dev`, ví dụ `feature/astar-search`.
-3. Thêm `algorithm.py` và `__init__.py` trong đúng folder của thuật toán.
-4. Viết test trong folder đối xứng dưới `backend/tests/unit/algorithms/`.
-5. Viết design, pseudocode, flowchart và benchmark trong `docs/algorithms/`.
-6. Mở pull request vào `dev`.
+These endpoints also have `/api/v1` variants.
 
-Không đặt FastAPI route, database query hoặc API call trong folder thuật toán.
+### Verification
 
-## Bắt đầu phát triển
+```bash
+python -m pytest backend/tests -q
+node --test frontend/tests/dashboard.logic.test.js
+```
 
-- Cài dependency: `python -m pip install -r backend/requirements.txt`.
-- Chạy API/dashboard từ root: `python -m uvicorn backend.main:app --reload`.
-- Chạy backend tests: `python -m pytest backend/tests -q`.
-- Tái tạo HCMUS normalized edges:
-  `python scripts/build_hcmus_minimap_edges.py`.
+Algorithm tests are deterministic and do not call external services. See the
+[backend test guide](backend/tests/README.md) for focused commands and test
+conventions.
 
-Khung React + TypeScript trong `frontend/src/` chưa thay thế dashboard HTML/JS
-prototype. Không commit `.env`, virtual environment hoặc GPS người dùng.
+### Git workflow
 
-Đọc [`backend/README.md`](backend/README.md) và [`CODING_RULES.md`](CODING_RULES.md) trước khi viết code.
+- `main`: stable and demonstrable code.
+- `dev`: sprint integration branch.
+- `feature/<slug>` and `fix/<slug>`: short-lived branches created from `dev`.
 
-## Tài liệu nguồn
+Do not push directly to `main` or `dev`. See [CONTRIBUTING.md](CONTRIBUTING.md)
+and [CODING_RULES.md](CODING_RULES.md) for the full workflow.
 
-PDF/DOCX của đề bài và kế hoạch ban đầu chỉ được giữ local trong `docs/` và bị
-Git bỏ qua. Khi yêu cầu thay đổi, cập nhật chỉ mục Markdown và ghi quyết định
-kỹ thuật mới trong `docs/architecture/` thay vì commit lại tài liệu nhị phân.
+### Documentation map
 
-## Nhóm thực hiện
+- [Backend](backend/README.md)
+- [Frontend](frontend/README.md)
+- [Data](data/README.md)
+- [Algorithms](backend/app/algorithms/README.md)
+- [Documentation index](docs/README.md)
 
-Team 5 - môn Introduction to Artificial Intelligence. Phân công hiện tại được ghi trong tài liệu họp; mọi thay đổi owner nên được cập nhật qua issue/project board và pull request.
+Binary assignment briefs and draft report artifacts are kept locally and are
+not committed to Git history.
+
+---
+
+## Tiếng Việt
+
+### Giới thiệu dự án và nhóm
+
+RescueRoute là đồ án Lab 01 của **Nhóm 4** trong môn **Cơ sở Trí tuệ Nhân
+tạo**, Khoa Công nghệ Thông tin, Trường Đại học Khoa học Tự nhiên, Đại học Quốc
+gia Thành phố Hồ Chí Minh. Dưới sự hướng dẫn của các giảng viên **Bùi Tiến Lên,
+Võ Nhật Tân và Bùi Duy Đăng**, nhóm nghiên cứu cách ứng dụng các thuật toán tìm
+kiếm cổ điển và heuristic vào bài toán định tuyến xe cấp cứu trên mạng lưới giao
+thông đô thị Thành phố Hồ Chí Minh.
+
+Hệ thống giải quyết hai quyết định liên quan: tìm tuyến khả thi giữa hai địa
+điểm và tối ưu thứ tự ghé nhiều địa điểm. Mục tiêu không chỉ là trả về một đường
+đi, mà còn trực quan hóa quá trình tìm kiếm bằng trace có thể phát lại và giải
+thích khi nào kết quả là tối ưu, xấp xỉ hoặc có thể không hoàn chỉnh.
+
+| Thành viên | MSSV | Vai trò | Trách nhiệm chính |
+| --- | --- | --- | --- |
+| Hoàng Cao Phong | 24127486 | Tech Lead / MLOps | A*, Hill Climbing, điều phối, review và tích hợp |
+| Võ Mỹ Ngọc | 24127294 | Frontend Developer | BFS, UCS, trực quan hóa tuyến đường và slide |
+| Nguyễn Trung Kiên | 24127068 | Backend Developer | DFS, FastAPI, routing service và tích hợp search trace |
+| Huỳnh Thái Hòa | 24127374 | Data Engineer | Dijkstra, Genetic Algorithm, cost model, benchmark và biên tập báo cáo |
+| Lương Thiện Nhân | 24127475 | Data Engineer | Held-Karp, Simulated Annealing, xử lý dữ liệu và thu âm |
+
+### Tổng quan dự án
+
+Trong ứng cứu khẩn cấp đô thị, tuyến ngắn nhất theo khoảng cách chưa chắc là
+tuyến nhanh nhất hoặc phù hợp nhất. Đường một chiều, ùn tắc, loại đường, đoạn bị
+hạn chế, rủi ro và khả năng tiếp nhận của bệnh viện đều có thể ảnh hưởng đến
+quyết định. RescueRoute mô hình hóa mạng đường bằng đồ thị có hướng, đồng thời
+trả về tuyến được chọn và diễn tiến từng bước của thuật toán.
+
+Các khả năng hiện có:
+
+- tìm đường hai điểm bằng BFS, DFS, UCS, Dijkstra, A* và Hill Climbing;
+- tối ưu thứ tự waypoint bằng Nearest Neighbor, Held-Karp, Genetic Algorithm và
+  Simulated Annealing;
+- hiển thị node đã mở rộng, frontier và tuyến cuối cùng;
+- báo cáo khoảng cách, cost, số node mở rộng và thời gian thực thi;
+- tìm bệnh viện gần nhất, cập nhật vị trí xe cấp cứu và mô phỏng ùn tắc;
+- cung cấp FastAPI backend và dashboard Leaflet bằng HTML/CSS/JavaScript.
+
+### Kiến trúc
+
+```text
+Leaflet dashboard
+      |
+      | HTTP/JSON
+      v
+FastAPI routes -> routing services -> search/optimization algorithms
+      |
+      v
+processed CSV -> đồ thị có hướng trong bộ nhớ
+```
+
+```text
+RescueRoute/
+├── backend/     # FastAPI, services, thuật toán và test
+├── data/        # Dữ liệu raw, processed và fixture mẫu
+├── docs/        # Kiến trúc, API và tài liệu thuật toán
+├── frontend/    # Dashboard Leaflet prototype
+└── scripts/     # Xử lý dữ liệu và tạo biểu đồ benchmark
+```
+
+### Chạy nhanh
+
+Yêu cầu Python 3.10 trở lên. Chạy từ thư mục gốc repository:
+
+```bash
+python -m pip install -r backend/requirements.txt
+python -m uvicorn backend.main:app --reload
+```
+
+Mở `http://127.0.0.1:8000/` để dùng dashboard hoặc
+`http://127.0.0.1:8000/docs` để xem OpenAPI.
+
+Backend nạp graph runtime từ `data/processed/` khi khởi động. Nếu thiếu file
+dẫn xuất, xem [hướng dẫn dữ liệu](data/README.md) và
+[hướng dẫn scripts](scripts/README.md).
+
+### API chính
+
+| Endpoint | Mục đích |
+| --- | --- |
+| `GET /api/health` | Báo trạng thái ứng dụng và kích thước graph |
+| `GET /api/nodes` | Lấy bệnh viện hoặc điểm quan tâm |
+| `GET /api/edges` | Lấy cạnh đường để hiển thị bản đồ |
+| `POST /api/route` | Tìm đường giữa hai node |
+| `POST /api/route/multi-location` | Tối ưu waypoint và ghép các đoạn tuyến |
+| `POST /api/route/nearest-hospital` | Tìm tuyến đến bệnh viện phù hợp |
+| `GET/POST /api/ambulance/location` | Đọc hoặc cập nhật vị trí xe cấp cứu |
+
+Các endpoint trên cũng có biến thể dưới `/api/v1`.
+
+### Kiểm tra
+
+```bash
+python -m pytest backend/tests -q
+node --test frontend/tests/dashboard.logic.test.js
+```
+
+Test thuật toán có tính xác định và không gọi dịch vụ bên ngoài. Xem
+[hướng dẫn test backend](backend/tests/README.md) để chạy từng nhóm nhỏ.
+
+### Quy trình Git
+
+- `main`: mã nguồn ổn định, có thể demo.
+- `dev`: nhánh tích hợp trong sprint.
+- `feature/<slug>` và `fix/<slug>`: nhánh ngắn hạn tạo từ `dev`.
+
+Không push trực tiếp lên `main` hoặc `dev`. Xem [CONTRIBUTING.md](CONTRIBUTING.md)
+và [CODING_RULES.md](CODING_RULES.md) để biết quy trình đầy đủ.
+
+### Chỉ mục tài liệu
+
+- [Backend](backend/README.md)
+- [Frontend](frontend/README.md)
+- [Dữ liệu](data/README.md)
+- [Thuật toán](backend/app/algorithms/README.md)
+- [Chỉ mục tài liệu](docs/README.md)
+
+Đề bài dạng nhị phân và các bản báo cáo đang soạn chỉ được giữ local, không đưa
+vào lịch sử Git.

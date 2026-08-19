@@ -4,7 +4,8 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-function loadDashboardContext() {
+function loadDashboardContext({ storedTheme = null } = {}) {
+    const themeWrites = [];
     const context = vm.createContext({
         console,
         document: {
@@ -14,8 +15,13 @@ function loadDashboardContext() {
         fetch: async () => {
             throw new Error('Unexpected network call in unit test.');
         },
+        localStorage: {
+            getItem: () => storedTheme,
+            setItem: (key, value) => themeWrites.push([key, value])
+        },
         navigator: {},
         performance: { now: () => 0 },
+        themeWrites,
         window: {
             addEventListener: () => { },
             clearInterval,
@@ -28,6 +34,23 @@ function loadDashboardContext() {
     vm.runInContext(fs.readFileSync(scriptPath, 'utf8'), context);
     return context;
 }
+
+test('dashboard always opens in light mode and keeps dark mode as a manual toggle', () => {
+    const context = loadDashboardContext({ storedTheme: 'dark' });
+    const htmlPath = path.join(__dirname, '..', 'dashboard.html');
+    const html = fs.readFileSync(htmlPath, 'utf8');
+
+    assert.equal(vm.runInContext('currentTheme', context), 'light');
+    assert.deepEqual(context.themeWrites, []);
+    assert.match(html, /<html lang="vi" data-theme="light">/);
+    assert.match(html, /<span class="theme-label">Sáng<\/span>/);
+    assert.doesNotMatch(html, /connectionStatus|Backend trực tuyến/);
+
+    vm.runInContext('toggleTheme()', context);
+    assert.equal(vm.runInContext('currentTheme', context), 'dark');
+    vm.runInContext('toggleTheme()', context);
+    assert.equal(vm.runInContext('currentTheme', context), 'light');
+});
 
 test('parseNodeIdList removes invalid and duplicate waypoint IDs', () => {
     const context = loadDashboardContext();
@@ -397,4 +420,3 @@ test('waypoint stops can be added, moved and removed in order', () => {
     assert.deepEqual(Array.from(state.afterRemove), [202, 303]);
     assert.deepEqual(Array.from(state.afterClear), []);
 });
-

@@ -58,7 +58,7 @@ def solve_simulated_annealing(
         best_route = [start_city, end_city]
         best_cost = calculate_route_cost(best_route, distance_matrix)
     else:
-        # Create an initial route
+        # Khởi tạo route với start/end cố định, chỉ xáo trộn waypoint.
         current_route = [start_city] + remaining[:] + [end_city]
         rng.shuffle(current_route[1:-1])
         current_cost = calculate_route_cost(current_route, distance_matrix)
@@ -68,7 +68,7 @@ def solve_simulated_annealing(
 
         temp = initial_temperature
 
-        # Parameters are tuned for small routes (7-10 waypoints typically).
+        # Các tham số mặc định phù hợp với route nhỏ khoảng 7-10 waypoint.
         while temp > min_temperature:
             for _ in range(iterations_per_temp):
                 neighbor = _get_neighbor(current_route, rng)
@@ -76,7 +76,7 @@ def solve_simulated_annealing(
 
                 delta_cost = neighbor_cost - current_cost
 
-                # Accept the neighbor if it's better, or probabilistically if it's worse
+                # Có thể nhận nghiệm xấu hơn để thoát khỏi cực trị cục bộ.
                 if delta_cost < 0 or rng.random() < math.exp(-delta_cost / temp):
                     current_route = neighbor
                     current_cost = neighbor_cost
@@ -121,14 +121,13 @@ def _get_neighbor(route: list[Any], rng: random.Random) -> list[Any]:
     if len(neighbor) <= 3:
         return neighbor
 
-    # Select two distinct indices between 1 and len(route)-2 inclusive
+    # Chỉ chọn chỉ số waypoint, không đụng vào start/end.
     i, j = rng.sample(range(1, len(neighbor) - 1), 2)
     
-    # Ensure i < j
     if i > j:
         i, j = j, i
         
-    # Reverse the subsegment between i and j inclusive
+    # Phép 2-opt đảo đoạn waypoint được chọn.
     neighbor[i : j + 1] = reversed(neighbor[i : j + 1])
     
     return neighbor

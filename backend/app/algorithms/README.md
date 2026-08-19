@@ -1,81 +1,64 @@
-# Algorithms workspace
+# Thuật toán
 
-Mỗi thuật toán có một folder riêng để thành viên có thể code, test và review độc lập. Thuật toán trong đây là Python thuần: không import FastAPI, Supabase, Leaflet hoặc gọi API bên ngoài.
+## English
 
-## Phân nhóm và owner hiện tại
+Algorithms in this directory are framework-free Python. They must not depend
+on FastAPI, pandas, databases, or the frontend.
 
-| Nhóm | Folder | Thuật toán | Owner | Branch đề xuất |
-|---|---|---|---|---|
-| Graph search | `graph_search/astar/` | A* Search | Phong | `feature/astar-search` |
-| Graph search | `graph_search/bfs/` | Breadth-First Search | Ngọc | `feature/bfs-search` |
-| Graph search | `graph_search/dfs/` | Depth-First Search | Kiên | `feature/dfs-search` |
-| Graph search | `graph_search/dijkstra/` | Dijkstra | Hòa | `feature/dijkstra-search` |
-| Graph search | `graph_search/ucs/` | Uniform Cost Search | Nhân | `feature/ucs-search` |
-| Optimization | `optimization/hill_climbing/` | Hill Climbing | Phong | `feature/hill-climbing` |
-| Optimization | `optimization/simulated_annealing/` | Simulated Annealing | Nhân | `feature/simulated-annealing` |
-| Optimization | `optimization/nearest_neighbor/` | Nearest Neighbor | Shared | `temp/trace-history-merge-dev` |
-| Optimization | `optimization/held_karp/` | Held-Karp Dynamic Programming | Shared | `temp/trace-history-merge-dev` |
+| Group | Algorithms |
+| --- | --- |
+| `graph_search/` | BFS, DFS, UCS, Dijkstra, A* |
+| `optimization/` | Hill Climbing, Nearest Neighbor, Held-Karp, Genetic Algorithm, Simulated Annealing |
 
-## Cấu trúc chuẩn của một folder
+Hill Climbing is used for two-location routing but remains under optimization
+because it is a local-search method.
 
-Khi bắt đầu implementation, thành viên thêm file theo nhu cầu:
+Two-location algorithms receive a graph, start node, goal node, and optional
+cost/heuristic settings. Successful results share `path`, `visited_order`,
+`trace_history`, route metrics, timing, optimality, and explanation fields. On
+no-route cases, graph-search methods raise `SearchFailure` with a partial trace
+in `error.result`. Randomized algorithms must accept a caller-provided `seed`.
 
-```text
-<algorithm>/
-├── README.md          # Mục tiêu, giả định và checklist có sẵn
-├── __init__.py        # Public export của thuật toán
-├── algorithm.py       # Entry point chính
-└── helpers.py         # Chỉ tạo nếu logic phụ đủ lớn để tách
-```
+When adding or changing an algorithm, reuse the shared graph/cost/trace helpers,
+add mirrored tests under `backend/tests/unit/algorithms/`, update the design
+documentation, and run focused tests before the full backend suite.
 
-Không bắt buộc tạo `helpers.py`. A* có thể dùng `heuristic.py`; Simulated Annealing có thể dùng `temperature.py`. Tránh tạo nhiều file rỗng chỉ để giống cây mẫu.
+---
+
+## Tiếng Việt
+
+Các thuật toán trong thư mục này là Python thuần, không phụ thuộc FastAPI,
+pandas, database hoặc giao diện.
+
+## Phân nhóm
+
+| Nhóm | Thuật toán |
+| --- | --- |
+| `graph_search/` | BFS, DFS, UCS, Dijkstra, A* |
+| `optimization/` | Hill Climbing, Nearest Neighbor, Held–Karp, Genetic Algorithm, Simulated Annealing |
+
+Hill Climbing đang được dùng cho bài toán tìm đường hai điểm nhưng được đặt
+trong nhóm optimization vì là local search.
 
 ## Contract chung
 
-Graph-search algorithms phải dùng cùng input và trả cùng một SearchResult. Tối thiểu cần có:
+Thuật toán tìm đường nhận graph, node bắt đầu, node đích và tùy chọn cost hoặc
+heuristic. Kết quả thành công dùng cùng nhóm field:
 
-```text
-Input:
-- graph
-- start_node_id
-- goal_node_id
-- cost_profile
-- optional heuristic/config
+- `path`, `visited_order`, `trace_history`;
+- `total_distance`, `estimated_time`, `total_cost`;
+- `explored_nodes`, `processing_time_ms`, `is_optimal`;
+- `explanation_data`.
 
-Output:
-- path
-- visited_order
-- trace_history
-- total_distance
-- estimated_time
-- total_cost
-- explored_nodes
-- processing_time_ms
-- is_optimal
-- explanation data
-```
+Khi không có đường, thuật toán graph search ném `SearchFailure` và đính kèm
+partial trace trong `error.result`. Thuật toán có yếu tố ngẫu nhiên phải nhận
+`seed` từ caller.
 
-Optimization algorithms cho nhiều điểm phải trả thêm visiting order và nhận `seed` nếu có yếu tố ngẫu nhiên.
+## Thêm hoặc sửa thuật toán
 
-Contract chính xác sẽ nằm trong domain/algorithm common modules sau khi `feature/graph-search-contract` được merge. Không tự tạo contract tạm chỉ dùng riêng cho folder của mình.
-
-## Quy trình cho một thành viên
-
-1. Đồng bộ `dev` và tạo branch ghi trong bảng owner.
-2. Đọc README trong folder thuật toán được giao.
-3. Đọc contract chung và dataset mẫu.
-4. Viết design, pseudocode và flowchart trong `docs/algorithms/`.
-5. Implement trong `algorithm.py`; giữ entry point nhỏ và có type hints.
-6. Viết unit test trong folder đối xứng dưới `backend/tests/unit/algorithms/`.
-7. Chạy test, ghi benchmark tối thiểu và tự review diff.
-8. Mở pull request vào `dev`, không vào `main`.
-
-## Definition of Done cho thuật toán
-
-- Dùng đúng Graph, cost và result contract chung.
-- Không gọi mạng/database và không sửa graph đầu vào.
-- Có test: đường hợp lệ, không có đường, start bằng goal, đồ thị có hướng và cạnh bị chặn/rủi ro cao.
-- Có `visited_order` và search events đủ cho frontend mô phỏng.
-- Có giải thích tính complete/optimal/approximate trong README hoặc tài liệu thiết kế.
-- Thuật toán ngẫu nhiên nhận seed và test tái lập được.
-- Có số liệu chạy trên cùng dataset mẫu để so sánh công bằng.
+1. Giữ entry point trong đúng folder thuật toán.
+2. Dùng helper và trace contract chung; không sao chép graph/cost model.
+3. Thêm test đối xứng dưới `backend/tests/unit/algorithms/`.
+4. Cập nhật README triển khai và tài liệu trong `docs/algorithms/` khi thay đổi
+   giả định hoặc bảo đảm tối ưu.
+5. Chạy nhóm test hẹp trước khi chạy toàn bộ backend tests.
