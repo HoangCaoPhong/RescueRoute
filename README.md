@@ -4,11 +4,7 @@
 
 ### Project and team
 
-RescueRoute is Team 4's project for the **Introduction to Artificial
-Intelligence** course at the Faculty of Information Technology, University of
-Science, Vietnam National University Ho Chi Minh City. Developed under the
-guidance of instructors **Bùi Tiến Lên, Võ Nhật Tân, and Bùi Duy Đăng**, the
-project investigates how classical and heuristic AI search methods can support
+RescueRoute is the project investigates how classical and heuristic AI search methods can support
 ambulance routing on the urban road network of Ho Chi Minh City.
 
 The system addresses two related decisions: finding a feasible route between
