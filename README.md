@@ -19,7 +19,7 @@ optimal, approximate, or incomplete.
 
 | Member | Role | Primary responsibilities |
 | --- | --- | --- |
-| Hoàng Cao Phong | Tech Lead / MLOps | A*, Hill Climbing, coordination, review, and integration |
+| Hoàng Cao Phong | Tech Lead & MLOps | A*, Hill Climbing, coordination, review, and integration |
 | Võ Mỹ Ngọc | Frontend Developer | BFS, UCS, route visualization, and presentation slides |
 | Nguyễn Trung Kiên | Backend Developer | DFS, FastAPI, routing services, and search-trace integration |
 | Huỳnh Thái Hòa | Data Engineer | Dijkstra, Genetic Algorithm, cost model, benchmarking, and report editing |
