@@ -2139,7 +2139,8 @@ function renderSearchStep(stepIndex) {
             normalizeNodeCoordinateKey(nodeId) !==
             normalizeNodeCoordinateKey(step.current_node),
     );
-    const rawFrontier = Array.isArray(step.frontier) ? step.frontier : [];
+    const targetFrontierStep = safeIndex < steps.length - 1 ? steps[safeIndex + 1] : step;
+    const rawFrontier = Array.isArray(targetFrontierStep.frontier) ? targetFrontierStep.frontier : [];
     const frontier = rawFrontier.filter(
         (item) =>
             normalizeNodeCoordinateKey(item.node_id) !==
@@ -2150,7 +2151,7 @@ function renderSearchStep(stepIndex) {
     );
     const fullFrontierCount = Math.max(
         0,
-        Number(step.frontier_size ?? rawFrontier.length) -
+        Number(targetFrontierStep.frontier_size ?? rawFrontier.length) -
         (currentWasInFrontier ? 1 : 0),
     );
     const nodeCoords = searchVisualizationData.node_coords || {};
