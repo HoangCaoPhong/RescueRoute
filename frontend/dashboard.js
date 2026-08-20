@@ -154,7 +154,7 @@ function setText(id, value) {
 
 try {
     applyTheme(currentTheme);
-} catch (e) {}
+} catch (e) { }
 
 function mountSearchPlaybackDock() {
     const dock = byId("searchPlaybackDock");
@@ -1498,6 +1498,12 @@ function renderExplanation(aggregate, input, spec) {
         compText = `Đã tối ưu thứ tự ghé thăm bằng ${visitOrderLabel(input.visitOrderMode)}, giúp giảm chi phí so với thứ tự ban đầu. Bấm "So sánh 6 thuật toán" để xem chi tiết đối chứng.`;
     } else if (input.algorithm === "dijkstra") {
         compText = `So với A* và UCS (chọn đường né kẹt xe), tuyến Dijkstra có cự ly ngắn hơn (${chosenDist}) nhưng có thể mất nhiều thời gian hơn nếu đi qua các điểm tắc đường.`;
+    } else if (input.algorithm === "dfs") {
+        compText = `So với các phương án tìm kiếm tối ưu (Dijkstra, A*, UCS), thuật toán DFS chỉ tìm theo nhánh duyệt sâu đầu tiên chạm tới đích (${chosenDist}, ${chosenTime}), không đảm bảo tối ưu quãng đường hay thời gian.`;
+    } else if (input.algorithm === "hill_climbing" || input.algorithm === "hill-climbing") {
+        compText = `So với các thuật toán toàn cục (Dijkstra, A*), Hill Climbing tìm kiếm tham lam theo hướng giảm khoảng cách nhanh nhất tại mỗi ngã rẽ (${chosenDist}, ${chosenTime}), có thể rơi vào tối ưu cục bộ.`;
+    } else if (input.algorithm === "bfs") {
+        compText = `So với phương án tối ưu cự ly (Dijkstra) hoặc tối ưu chi phí (A*, UCS), BFS ưu tiên đường đi có ít chặng rẽ nhất (${aggregate.totalHops} chặng), chấp nhận quãng đường (${chosenDist}) có thể dài hơn.`;
     } else {
         compText = `So với phương án chỉ xét cự ly hình học (Dijkstra) hoặc số chặng rẽ (BFS), thuật toán ${spec.label} mang lại sự cân bằng tối ưu giữa quãng đường (${chosenDist}) và thời gian (${chosenTime}).`;
     }
@@ -2018,7 +2024,7 @@ function estimateMissingRouteCoordinates(trace) {
                 previousIndex >= 0 &&
                 !normalizeMapCoords(
                     trace.node_coords[
-                        normalizeNodeCoordinateKey(pathNodes[previousIndex])
+                    normalizeNodeCoordinateKey(pathNodes[previousIndex])
                     ],
                 )
             ) {
@@ -2029,7 +2035,7 @@ function estimateMissingRouteCoordinates(trace) {
                 nextIndex < pathNodes.length &&
                 !normalizeMapCoords(
                     trace.node_coords[
-                        normalizeNodeCoordinateKey(pathNodes[nextIndex])
+                    normalizeNodeCoordinateKey(pathNodes[nextIndex])
                     ],
                 )
             ) {
@@ -2039,12 +2045,12 @@ function estimateMissingRouteCoordinates(trace) {
 
             const previousCoords = normalizeMapCoords(
                 trace.node_coords[
-                    normalizeNodeCoordinateKey(pathNodes[previousIndex])
+                normalizeNodeCoordinateKey(pathNodes[previousIndex])
                 ],
             );
             const nextCoords = normalizeMapCoords(
                 trace.node_coords[
-                    normalizeNodeCoordinateKey(pathNodes[nextIndex])
+                normalizeNodeCoordinateKey(pathNodes[nextIndex])
                 ],
             );
             const ratio =
@@ -2588,7 +2594,7 @@ async function compareAlgorithms() {
                 `Đang chạy ${ALGORITHM_SPECS[algorithm].label} (${index + 1}/${algorithms.length})…`,
             );
             try {
-                const segments = await runOrderedRoute(nodeOrder, algorithm, () => {}, input.criterion);
+                const segments = await runOrderedRoute(nodeOrder, algorithm, () => { }, input.criterion);
                 results.push({
                     algorithm,
                     aggregate: aggregateSegments(segments, nodeOrder),
@@ -2698,7 +2704,7 @@ function renderHospitalsOnMap() {
     poisData.forEach((poi) => {
         const type = String(poi.type || poi.category || "Cơ sở y tế");
         const isMedical = Boolean(poi.is_hospital);
-        
+
         let marker;
         if (isMedical) {
             const isHospital =
@@ -2707,17 +2713,17 @@ function renderHospitalsOnMap() {
             const emoji = isHospital ? "🏥" : "✚";
             const icon = showPOIIcons
                 ? L.divIcon({
-                      className: `custom-div-icon ${isHospital ? "icon-hospital" : "icon-clinic"}`,
-                      html: `<span>${emoji}</span>`,
-                      iconSize: [34, 34],
-                      iconAnchor: [17, 17],
-                  })
+                    className: `custom-div-icon ${isHospital ? "icon-hospital" : "icon-clinic"}`,
+                    html: `<span>${emoji}</span>`,
+                    iconSize: [34, 34],
+                    iconAnchor: [17, 17],
+                })
                 : L.divIcon({
-                      className: `poi-dot-icon ${isHospital ? "dot-hospital" : "dot-clinic"}`,
-                      html: '<span class="poi-dot-inner"></span>',
-                      iconSize: [14, 14],
-                      iconAnchor: [7, 7],
-                  });
+                    className: `poi-dot-icon ${isHospital ? "dot-hospital" : "dot-clinic"}`,
+                    html: '<span class="poi-dot-inner"></span>',
+                    iconSize: [14, 14],
+                    iconAnchor: [7, 7],
+                });
             marker = L.marker([poi.lat, poi.lng], {
                 icon,
                 zIndexOffset: showPOIIcons ? 1000 : 800,
