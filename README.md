@@ -4,11 +4,7 @@
 
 ### Project and team
 
-RescueRoute is Team 4's project for the **Introduction to Artificial
-Intelligence** course at the Faculty of Information Technology, University of
-Science, Vietnam National University Ho Chi Minh City. Developed under the
-guidance of instructors **Bùi Tiến Lên, Võ Nhật Tân, and Bùi Duy Đăng**, the
-project investigates how classical and heuristic AI search methods can support
+RescueRoute is the project investigates how classical and heuristic AI search methods can support
 ambulance routing on the urban road network of Ho Chi Minh City.
 
 The system addresses two related decisions: finding a feasible route between
@@ -19,7 +15,7 @@ optimal, approximate, or incomplete.
 
 | Member | Role | Primary responsibilities |
 | --- | --- | --- |
-| Hoàng Cao Phong | Tech Lead / MLOps | A*, Hill Climbing, coordination, review, and integration |
+| Hoàng Cao Phong | Tech Lead & MLOps | A*, Hill Climbing, coordination, review, and integration |
 | Võ Mỹ Ngọc | Frontend Developer | BFS, UCS, route visualization, and presentation slides |
 | Nguyễn Trung Kiên | Backend Developer | DFS, FastAPI, routing services, and search-trace integration |
 | Huỳnh Thái Hòa | Data Engineer | Dijkstra, Genetic Algorithm, cost model, benchmarking, and report editing |
